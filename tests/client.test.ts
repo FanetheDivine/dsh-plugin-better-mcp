@@ -17,6 +17,7 @@ import { McpPanel, ServerItem, statusParts } from '../src/client/panel.tsx';
 import {
   definitionFromValues,
   emptyForm,
+  fieldForError,
   parseArgs,
   parseHeaders,
   ServerForm,
@@ -189,8 +190,19 @@ describe('服务器表单辅助函数', () => {
   });
 });
 
+describe('表单错误定位', () => {
+  it('把校验错误映射到对应字段', () => {
+    expect(fieldForError('nameInvalid')).toBe('name');
+    expect(fieldForError('descriptionRequired')).toBe('description');
+    expect(fieldForError('urlInvalid')).toBe('url');
+    expect(fieldForError('headersInvalid')).toBe('headersText');
+    expect(fieldForError('commandRequired')).toBe('command');
+    expect(fieldForError('redirectInvalid')).toBe('redirectUri');
+  });
+});
+
 describe('ServerForm', () => {
-  it('静态渲染创建标题与名称字段', () => {
+  it('静态渲染稳定字段关联与密钥自动完成语义', () => {
     const html = renderToStaticMarkup(
       createElement(
         ServerForm as never,
@@ -200,14 +212,15 @@ describe('ServerForm', () => {
           isEdit: false,
           busy: false,
           onSubmit: () => undefined,
-          onCancel: () => undefined,
         } as never,
       ),
     );
     expect(html).toContain('data-testid="better-mcp-form"');
-    expect(html).toContain(zh.createTitle);
-    expect(html).toContain(zh.name);
-    expect(html).toContain(zh.description);
+    expect(html).toContain('for="better-mcp-name"');
+    expect(html).toContain('id="better-mcp-name"');
+    expect(html).toContain('name="clientSecret"');
+    expect(html).toContain('autoComplete="new-password"');
+    expect(html).toContain('aria-busy="false"');
   });
 });
 

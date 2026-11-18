@@ -209,6 +209,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<EditingState | undefined>(undefined);
+  const [deleting, setDeleting] = useState<ServerRow | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
   const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
 
@@ -226,18 +227,20 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     void load();
   }, [load]);
 
-  /** 执行一个带忙态的操作。 */
+  /** 执行一个带忙态的操作并返回是否成功。 */
   const run = async (
     key: string,
     operation: () => Promise<PanelSnapshot | undefined>,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     setBusy(key);
     setActionError(undefined);
     try {
       const result = await operation();
       if (result !== undefined) setSnapshot(result);
+      return true;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setBusy(undefined);
     }
@@ -289,10 +292,30 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     }
   };
 
-  /** 删除服务器。 */
+  /** 关闭新增或编辑表单。 */
+  const closeForm = (): void => {
+    if (busy === 'form') return;
+    setFormError(undefined);
+    setEditing(undefined);
+  };
+
+  /** 打开删除确认。 */
   const deleteServer = (row: ServerRow): void => {
-    if (!window.confirm(t('deleteConfirm', { name: row.name }))) return;
-    void run(row.name, () => removeServer(row.name));
+    setActionError(undefined);
+    setDeleting(row);
+  };
+
+  /** 关闭删除确认。 */
+  const closeDelete = (): void => {
+    if (busy === deleting?.name) return;
+    setActionError(undefined);
+    setDeleting(undefined);
+  };
+
+  /** 确认删除服务器。 */
+  const confirmDelete = async (): Promise<void> => {
+    if (deleting === undefined) return;
+    if (await run(deleting.name, () => removeServer(deleting.name))) setDeleting(undefined);
   };
 
   const addButton = (
@@ -344,17 +367,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           </a>
         </div>
       ) : null}
-      {editing !== undefined ? (
-        <ServerForm
-          t={t}
-          initial={editing.values}
-          isEdit={editing.mode === 'edit'}
-          busy={busy === 'form'}
-          error={formError}
-          onSubmit={(values) => void submitForm(values)}
-          onCancel={() => setEditing(undefined)}
-        />
-      ) : null}
       {snapshot === undefined && loadError === undefined ? (
         <div className="better-mcp-feedback" role="status">
           {t('loading')}
@@ -402,6 +414,78 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     </div>
   );
 
+  const dialogs = (
+    <>
+      <Modal
+        open={editing !== undefined}
+        onClose={closeForm}
+        title={editing?.mode === 'edit' ? t('editTitle') : t('createTitle')}
+        closeLabel={t('close')}
+        className="better-mcp-dialog-form"
+        testId="better-mcp-form-modal"
+        footer={
+          <>
+            <Button size="lg" disabled={busy === 'form'} onClick={closeForm}>
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              type="submit"
+              form="better-mcp-server-form"
+              busy={busy === 'form'}
+            >
+              {t('save')}
+            </Button>
+          </>
+        }
+      >
+        {editing !== undefined ? (
+          <ServerForm
+            t={t}
+            initial={editing.values}
+            isEdit={editing.mode === 'edit'}
+            busy={busy === 'form'}
+            error={formError}
+            onSubmit={(values) => void submitForm(values)}
+          />
+        ) : null}
+      </Modal>
+      <Modal
+        open={deleting !== undefined}
+        onClose={closeDelete}
+        title={t('deleteTitle')}
+        closeLabel={t('close')}
+        description={
+          deleting === undefined ? undefined : t('deleteConfirm', { name: deleting.name })
+        }
+        className="better-mcp-dialog-confirm"
+        testId="better-mcp-delete-modal"
+        footer={
+          <>
+            <Button size="lg" disabled={busy === deleting?.name} onClick={closeDelete}>
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              busy={busy === deleting?.name}
+              onClick={() => void confirmDelete()}
+            >
+              {t('delete')}
+            </Button>
+          </>
+        }
+      >
+        {deleting !== undefined && actionError !== undefined ? (
+          <div className="better-mcp-feedback better-mcp-feedback-error" role="alert">
+            {actionError}
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+
   if (variant === 'page') {
     return (
       <div className="better-mcp-page" data-testid="better-mcp-panel">
@@ -414,6 +498,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           </div>
           {body}
         </section>
+        {dialogs}
       </div>
     );
   }
@@ -434,6 +519,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
       >
         {body}
       </Modal>
+      {dialogs}
     </>
   );
 }

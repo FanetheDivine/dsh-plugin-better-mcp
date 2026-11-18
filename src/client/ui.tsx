@@ -175,13 +175,15 @@ export interface ModalProps {
   /** 标题栏操作。 */
   actions?: ReactNode;
   /** 补充说明。 */
-  description?: string;
+  description?: string | undefined;
   /** 固定底部操作。 */
   footer?: ReactNode;
   /** 弹层附加类名。 */
   className?: string;
   /** 正文附加类名。 */
   bodyClassName?: string;
+  /** 弹层测试选择器。 */
+  testId?: string;
   /** 弹层内容。 */
   children?: ReactNode;
 }
@@ -197,6 +199,7 @@ export function Modal({
   footer,
   className,
   bodyClassName,
+  testId = 'better-mcp-modal',
   children,
 }: ModalProps): JSX.Element | null {
   const dialog = useRef<HTMLDivElement>(null);
@@ -214,7 +217,7 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={dialogClasses}
-        data-testid="better-mcp-modal"
+        data-testid={testId}
       >
         <div className="better-mcp-dialog-content">
           <div className="better-mcp-dialog-header">

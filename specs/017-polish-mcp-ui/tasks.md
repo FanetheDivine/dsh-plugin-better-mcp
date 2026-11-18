@@ -59,12 +59,12 @@ description: "Task list for MCP 管理界面视觉优化"
 
 ### Tests for User Story 2
 
-- [ ] T007 [US2] 在 tests/client.test.ts 添加字段错误映射、标签关联、密钥自动完成、弹层名称与表单操作语义回归测试，并确认新增断言在当前实现上失败
+- [x] T007 [US2] 在 tests/client.test.ts 添加字段错误映射、标签关联、密钥自动完成、弹层名称与表单操作语义回归测试，并确认新增断言在当前实现上失败
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] 在 src/client/server-form.tsx 实现主题化字段、稳定标签关联、字段级校验错误、首个无效字段聚焦与独立滚动内容
-- [ ] T009 [P] [US2] 在 src/client/panel.tsx 与 src/client/locales.ts 接入新增/编辑表单弹层和删除确认弹层，保留保存、授权、删除与取消流程
+- [x] T008 [P] [US2] 在 src/client/server-form.tsx 实现主题化字段、稳定标签关联、字段级校验错误、首个无效字段聚焦与独立滚动内容
+- [x] T009 [P] [US2] 在 src/client/panel.tsx 与 src/client/locales.ts 接入新增/编辑表单弹层和删除确认弹层，保留保存、授权、删除与取消流程
 
 **Checkpoint**: US2 的两种入口、校验和弹层操作检查通过，提交表单阶段。
 
