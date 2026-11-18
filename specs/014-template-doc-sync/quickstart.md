@@ -22,8 +22,8 @@
 ## 3. 核对主工作区流程
 
 1. 在 `AGENTS.md` 确认主工作区位于 `main`、保持干净、只运行 fetch 与 pull，全部变更位于 worktree。
-2. 在 worktree 创建说明中确认创建前同步、停止条件与结果输出。
-3. 在 worktree 结束说明中确认交付与放弃后的清理阶段均包含同步。
+2. 在 worktree 创建说明中确认 Spec Kit 流程最前的 `/speckit-specify` 前同步、停止条件与结果输出。
+3. 在 worktree 结束说明中确认 Spec Kit 流程最后的交付与放弃清理阶段均包含同步。
 4. 确认 `.dsh/skills/` 与 `.specify/extensions/worktree/commands/` 的对应说明一致。
 
 ## 4. 运行质量门禁

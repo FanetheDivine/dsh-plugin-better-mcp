@@ -21,6 +21,8 @@ DSH 插件 `dsh-plugin-better-mcp`：按服务器懒加载 MCP、可视化 OAuth
 - 主工作区 MUST 保持干净，`git status --porcelain` 输出为空。
 - 在主工作区只运行 `git fetch` 与 `git pull`。
 - 任何变更 MUST 在 worktree 中进行，文档、配置、spec 与代码同样适用。
+- Spec Kit 流程最前 MUST 在 `/speckit-specify` 前把主工作区 `main` 同步到 `origin/main`。
+- Spec Kit 流程最后 MUST 在 `/speckit-worktree-finish` 清理后把主工作区 `main` 同步到 `origin/main`。
 
 # 开发流程
 

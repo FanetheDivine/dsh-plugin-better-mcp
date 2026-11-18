@@ -20,7 +20,7 @@
 
 ## 主工作区同步
 
-- Decision: 在 worktree 创建前与清理后，由 Agent 在主工作区检查 `main` 与干净状态，执行 `git fetch origin` 和 `git pull --ff-only`，报告提交与更新状态。
+- Decision: Spec Kit 流程最前在 `/speckit-specify` 前同步，流程最后在 `/speckit-worktree-finish` 清理后同步。Agent 检查主工作区 `main` 与干净状态，执行 `git fetch origin` 和 `git pull --ff-only`，报告提交与更新状态。
 - Rationale: 流程说明可以直接约束 Agent，满足本次只修订 spec 与文档的范围。
 - Alternatives considered: 模板的 `sync-main.sh` 与配套测试属于脚本实现，本次保持现有脚本。
 

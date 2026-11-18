@@ -155,8 +155,8 @@ then clean up with `--abandon`. A branch already pushed to the remote is left th
    reason; do not force removal in deliver mode.
 4. `REMOTE_DELETED` in the output tells whether the remote branch was deleted; `false` means it
    was already gone.
-5. Sync the primary checkout in both modes after `finish-worktree.sh` succeeds. Record its current
-   commit as `BEFORE_COMMIT`, then run:
+5. Sync the primary checkout at the end of the Spec Kit flow in both modes after
+   `finish-worktree.sh` succeeds. Record its current commit as `BEFORE_COMMIT`, then run:
 
    ```bash
    test "$(git -C "$MAIN_WORKTREE" symbolic-ref --short HEAD)" = main &&

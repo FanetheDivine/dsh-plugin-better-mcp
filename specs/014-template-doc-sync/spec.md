@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: 查看 `dsh-plugin-template` 最近两个 commit（`e417c35` 宪章精简、`fde16ee` 主工作区约束与 main 同步），仿照其修订本项目 spec 与文档。
+**Input**: 查看 `dsh-plugin-template` 最近两个 commit（`e417c35` 宪章精简、`fde16ee` 主工作区约束与 main 同步），仿照其修订本项目 spec 与文档。「同步 `origin/main`」必须明确位于 Spec Kit 整体流程的最前面与最后面。
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -45,7 +45,7 @@
 
 ### User Story 3 - 主工作区只用于同步 (Priority: P1)
 
-Agent 收到变更要求时，从 `AGENTS.md` 得知主工作区约束，在 feature worktree 中完成全部修改。worktree 创建前与清理后，Agent 按流程把主工作区 `main` 快进到 `origin/main`。
+Agent 收到变更要求时，从 `AGENTS.md` 得知主工作区约束，在 feature worktree 中完成全部修改。Spec Kit 整体流程的最前面与最后面，Agent 分别把主工作区 `main` 快进到 `origin/main`。第一次同步先于 `/speckit-specify`，第二次同步在 `/speckit-worktree-finish` 的清理阶段完成。
 
 **Why this priority**: 主工作区是所有 worktree 的创建起点与清理落点。固定分支、干净状态与同步流程保证每次需求使用最新基线。
 
@@ -54,9 +54,9 @@ Agent 收到变更要求时，从 `AGENTS.md` 得知主工作区约束，在 fea
 **Acceptance Scenarios**:
 
 1. **Given** `AGENTS.md`，**When** 查找主工作区约束，**Then** 看到主工作区 MUST 位于 `main`、保持干净，只允许 `git fetch` 与 `git pull`，全部变更在 worktree 中进行。
-2. **Given** 主工作区 `main` 落后 `origin/main`，**When** 开始新需求，**Then** 创建 worktree 前的流程要求以 fast-forward 方式同步。
+2. **Given** 主工作区 `main` 落后 `origin/main`，**When** 进入 Spec Kit 流程，**Then** 流程最前在 `/speckit-specify` 前以 fast-forward 方式同步。
 3. **Given** 主工作区位于其他分支、有未提交改动或含有远端之外的本地提交，**When** 开始新需求，**Then** 流程要求停止并报告原因。
-4. **Given** 需求交付或放弃后的 worktree 清理完成，**When** 执行结束流程，**Then** 流程要求同步主工作区 `main` 并报告结果。
+4. **Given** 需求交付或放弃后的 worktree 清理完成，**When** 执行结束流程，**Then** Spec Kit 流程最后在清理后同步主工作区 `main` 并报告结果。
 5. **Given** 结束时主工作区不满足约束，**When** 执行同步，**Then** 流程要求报告原因并保留主工作区现状。
 
 ---
@@ -88,8 +88,8 @@ Agent 收到变更要求时，从 `AGENTS.md` 得知主工作区约束，在 fea
 - **FR-008**: `AGENTS.md` MUST 规定主工作区位于 `main` 且 `git status --porcelain` 输出为空。
 - **FR-009**: `AGENTS.md` MUST 规定主工作区只运行 `git fetch` 与 `git pull`，任何变更都在 worktree 中进行。
 - **FR-010**: 主工作区约束 MUST 归属 `AGENTS.md`，宪章不增加对应原则。
-- **FR-011**: worktree 创建说明 MUST 要求创建前检查主工作区并以 fast-forward 方式同步 `origin/main`；分支不符、工作区脏或历史分叉时 MUST 停止。
-- **FR-012**: worktree 结束说明 MUST 要求交付或放弃后的清理阶段同步主工作区；约束不满足时 MUST 报告原因并保留现状。
+- **FR-011**: Spec Kit 流程最前 MUST 在 `/speckit-specify` 前检查主工作区并以 fast-forward 方式同步 `origin/main`；分支不符、工作区脏或历史分叉时 MUST 停止。
+- **FR-012**: Spec Kit 流程最后 MUST 在 `/speckit-worktree-finish` 的交付或放弃清理阶段同步主工作区；约束不满足时 MUST 报告原因并保留现状。
 - **FR-013**: 创建与结束说明 MUST 要求输出同步后的提交与是否更新。
 - **FR-014**: `docs/development.md` MUST 同步 Spec Kit 流程与原则编号说明，`CHANGELOG.md` MUST 记录本次规范与流程修订。
 - **FR-015**: 本次变更 MUST 只修改 spec、项目文档与流程说明，插件运行时代码和 worktree 脚本保持现状。

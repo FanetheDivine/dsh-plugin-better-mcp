@@ -61,7 +61,7 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 时机 | 创建 worktree 前、清理 worktree 后 |
+| 时机 | Spec Kit 流程最前的 `/speckit-specify` 前、流程最后的 `/speckit-worktree-finish` 清理后 |
 | 同步方式 | fast-forward 到 `origin/main` |
 | 输出 | 同步后的提交、是否更新 |
 | 停止条件 | 分支不符、工作区脏、历史分叉或网络失败 |

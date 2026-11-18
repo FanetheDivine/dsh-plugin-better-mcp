@@ -61,6 +61,7 @@
 - [X] T016 按 `specs/014-template-doc-sync/quickstart.md` 核对全部验收点，运行 `pnpm format && pnpm check` 与 `git diff --check`
 - [X] T017 检查 `git status --short` 与最终 diff，确认变更范围符合 `specs/014-template-doc-sync/spec.md`，提交阶段 6
 - [X] T018 串联四份 worktree 流程说明中的检查与同步命令，修正 `specs/014-template-doc-sync/quickstart.md` 的既有条目表述，复验并提交审查修正
+- [X] T019 在 `AGENTS.md`、`docs/development.md`、`specs/014-template-doc-sync/` 与四份 worktree 流程说明中明确 Spec Kit 流程最前和最后的 `origin/main` 同步，复验并提交
 
 ## Dependencies & Execution Order
 

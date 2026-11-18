@@ -6,7 +6,7 @@
 
 ## Summary
 
-把宪章收敛为五条跨流程硬约束，将宿主契约、配置、依赖与国际化规则迁入归属文档。`AGENTS.md` 与 worktree 流程说明增加主工作区约束和 `origin/main` 同步步骤。交付内容限于 spec、项目文档与流程说明。
+把宪章收敛为五条跨流程硬约束，将宿主契约、配置、依赖与国际化规则迁入归属文档。`AGENTS.md` 与 worktree 流程说明增加主工作区约束，并把 `origin/main` 同步明确放在 Spec Kit 整体流程的最前面与最后面。交付内容限于 spec、项目文档与流程说明。
 
 ## Technical Context
 

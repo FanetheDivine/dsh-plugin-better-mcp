@@ -126,13 +126,13 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 
 | 步骤 | 命令 | 产出 |
 | --- | --- | --- |
-| 1 | `/speckit-specify <需求描述>` | Agent 同步主工作区 `main`，创建分支、worktree 与 `spec.md` |
+| 1 | `/speckit-specify <需求描述>` | 流程最前：Agent 先同步主工作区 `main` 到 `origin/main`，再创建分支、worktree 与 `spec.md` |
 | 2 | `/speckit-clarify` | 写回 spec 的澄清结果 |
 | 3 | `/speckit-plan` | `plan.md` 与设计产物 |
 | 4 | `/speckit-tasks` | `tasks.md` |
 | 5 | `/speckit-analyze` | 跨产物一致性报告 |
 | 6 | `/speckit-implement` | 按阶段提交的实现 |
-| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理；Agent 在清理后同步主工作区 `main` |
+| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理；流程最后：Agent 在清理后同步主工作区 `main` 到 `origin/main` |
 
 - `base_ref` 默认为 `origin/main`，必须已包含 `.specify/` 与 `.dsh/skills/`。
 - `worktrees/` 已加入 `.gitignore`，biome 与 vitest 也会跳过它。

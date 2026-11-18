@@ -26,8 +26,9 @@ You **MUST** consider the user input before proceeding (if not empty). When invo
 2. **Generate a short name** (2-4 words, kebab-case, action-noun form, keep technical terms),
    e.g. "Fix payment processing timeout bug" → `payment-timeout`. Do not repeat the type in it.
 
-3. **Sync the primary checkout.** Determine `MAIN_WORKTREE` from the first `worktree` line of
-   `git worktree list --porcelain`. Record its current commit as `BEFORE_COMMIT`, then run:
+3. **Sync the primary checkout at the start of the Spec Kit flow.** Before `/speckit-specify`,
+   determine `MAIN_WORKTREE` from the first `worktree` line of `git worktree list --porcelain`.
+   Record its current commit as `BEFORE_COMMIT`, then run:
 
    ```bash
    test "$(git -C "$MAIN_WORKTREE" symbolic-ref --short HEAD)" = main &&
