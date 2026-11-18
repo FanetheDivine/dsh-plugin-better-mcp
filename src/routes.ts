@@ -24,7 +24,6 @@ import {
   registerClient,
 } from './oauth.ts';
 import type { PanelSnapshot, ServerManager } from './servers.ts';
-import { clearLazy, setLazy } from './state.ts';
 import type { Context, ServerRoute, SettingsReader } from './types.ts';
 import { asString, escapeHtml, isRecord, jsonResponse } from './utils.ts';
 
@@ -162,7 +161,7 @@ export class PluginRoutes {
     return this.manager.snapshot();
   }
 
-  /** 写入一台服务器的懒加载开关。 */
+  /** 写入一台服务器的懒加载开关，作为各会话的默认可见性。 */
   private async setLazy(request: Request): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const serverName = asString(body.server);
@@ -170,15 +169,13 @@ export class PluginRoutes {
       return jsonResponse({ error: `Unknown server '${String(body.server)}'` }, 400);
     }
     const lazy = body.lazy === true;
-    await setLazy(serverName, lazy);
-    if (lazy) {
-      await this.manager.unmount(serverName);
-    } else {
-      try {
-        await this.manager.mount(serverName);
-      } catch (error) {
-        return jsonResponse({ error: messageOf(error) }, 409);
-      }
+    try {
+      await this.editServers((servers) => {
+        const current = servers[serverName];
+        return isRecord(current) ? { ...servers, [serverName]: { ...current, lazy } } : servers;
+      });
+    } catch (error) {
+      return jsonResponse({ error: messageOf(error) }, 409);
     }
     return jsonResponse(await this.currentSnapshot());
   }
@@ -228,7 +225,7 @@ export class PluginRoutes {
     return jsonResponse(await this.currentSnapshot());
   }
 
-  /** 删除服务器定义，并清理授权、客户端密钥与懒加载状态。 */
+  /** 删除服务器定义，并清理授权与客户端密钥。 */
   private async removeServer(request: Request): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const serverName = asString(body.server);
@@ -247,7 +244,6 @@ export class PluginRoutes {
     }
     await deleteGrant(this.ctx, serverName);
     await deleteClientSecret(this.ctx, serverName);
-    await clearLazy(serverName);
     return jsonResponse(await this.currentSnapshot());
   }
 
@@ -418,9 +414,7 @@ export class PluginRoutes {
         authorization: context.authorization,
         authorizedAt: Date.now(),
       });
-      await this.manager.unmount(context.serverName);
-      if (!(await this.manager.isLazy(context.serverName)))
-        await this.manager.mount(context.serverName);
+      await this.manager.restart(context.serverName);
       return { ok: true, detail: `Signed in for '${context.serverName}'. You can close this tab.` };
     } catch (error) {
       return { ok: false, detail: messageOf(error) };

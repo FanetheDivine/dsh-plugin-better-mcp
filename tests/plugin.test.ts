@@ -1,24 +1,9 @@
 // 插件入口接线：导出契约、启动挂载、热更新对账、路由、卸载清理。
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Config } from '../src/config.ts';
 import { apply, inject, name } from '../src/index.ts';
 import { makeCtx, volatile } from './helpers.ts';
-
-let home: string;
-
-beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'better-mcp-plugin-'));
-  process.env.DSH_HOME = home;
-});
-
-afterEach(async () => {
-  delete process.env.DSH_HOME;
-  await rm(home, { recursive: true, force: true });
-});
 
 /** 等待一轮微任务。 */
 async function flush(): Promise<void> {
@@ -58,7 +43,7 @@ describe('apply 接线', () => {
     await flush();
   });
 
-  it('启动只挂载常驻服务器', async () => {
+  it('启动时挂载全部服务器', async () => {
     const config = refs({
       resident: {
         description: 'd',
@@ -71,7 +56,9 @@ describe('apply 接线', () => {
     });
     const ctx = makeCtx({ config });
     apply(ctx, config);
-    await vi.waitFor(() => expect([...ctx._managerRegistered.keys()]).toEqual(['resident']));
+    await vi.waitFor(() =>
+      expect([...ctx._managerRegistered.keys()].sort()).toEqual(['lazy', 'resident']),
+    );
   });
 
   it('volatile 更新后挂载新增、卸载移除、重建变更', async () => {

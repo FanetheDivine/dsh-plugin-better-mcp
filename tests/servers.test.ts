@@ -1,27 +1,11 @@
 // 服务器生命周期：挂载、卸载、快照与对账。
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PluginConfig } from '../src/config.ts';
 import { recordKey } from '../src/credentials.ts';
 import { ServerManager, statusOf } from '../src/servers.ts';
-import { setLazy } from '../src/state.ts';
 import { grantId } from '../src/utils.ts';
 import { type MockCtxState, makeCtx } from './helpers.ts';
-
-let home: string;
-
-beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'better-mcp-servers-'));
-  process.env.DSH_HOME = home;
-});
-
-afterEach(async () => {
-  delete process.env.DSH_HOME;
-  await rm(home, { recursive: true, force: true });
-});
 
 /** 配置。 */
 function settings(servers: PluginConfig['servers']): PluginConfig {
@@ -141,18 +125,6 @@ describe('snapshot', () => {
     });
   });
 
-  it('状态文件覆盖配置默认值', async () => {
-    const ctx = makeCtx();
-    await setLazy('one', false);
-    const manager = makeManager(
-      ctx,
-      settings({
-        one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
-      }),
-    );
-    expect((await manager.snapshot()).servers[0]?.lazy).toBe(false);
-  });
-
   it('快照包含脱敏定义', async () => {
     const ctx = makeCtx();
     const manager = makeManager(
@@ -195,7 +167,7 @@ describe('reconcile', () => {
     expect(ctx._managerRegistered.has('added')).toBe(true);
   });
 
-  it('懒加载新增只登记不挂载', async () => {
+  it('懒加载新增也挂载', async () => {
     const ctx = makeCtx();
     const previous = settings({});
     const next = settings({
@@ -203,7 +175,22 @@ describe('reconcile', () => {
     });
     const manager = makeManager(ctx, next);
     await manager.reconcile(previous, next);
-    expect(ctx._managerRegistered.size).toBe(0);
+    expect(ctx._managerRegistered.size).toBe(1);
+  });
+
+  it('只改简介或懒加载时保留连接', async () => {
+    const ctx = makeCtx();
+    const previous = settings({
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+    });
+    const manager = makeManager(ctx, previous);
+    await manager.mount('one');
+    const entry = ctx._managerRegistered.get('one');
+    const next = settings({
+      one: { description: 'new', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+    });
+    await manager.reconcile(previous, next);
+    expect(ctx._managerRegistered.get('one')).toBe(entry);
   });
 });
 

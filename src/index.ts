@@ -1,15 +1,17 @@
 /**
  * 插件入口。导出宿主约定的 name、inject、apply 与 Config。
  *
- * 装配顺序：读取配置 → 创建服务器管理与路由 → 注册路由 → 挂载常驻服务器 →
- * 监听热更新。
+ * 装配顺序：读取配置 → 创建服务器管理与路由 → 注册路由 → 挂载全部服务器 →
+ * 监听热更新。`agents` 与 `sessionProjections` 可用时注册 `mcp_manage` 与会话可见性。
  */
 
 import { Config, type PluginConfig, readConfig } from './config.ts';
 import { PLUGIN_LABEL, PLUGIN_ROW_ID } from './constants.ts';
 import { PluginRoutes } from './routes.ts';
 import { ServerManager } from './servers.ts';
+import { buildManageTool } from './tools.ts';
 import type { Context, PluginLogger } from './types.ts';
+import { VisibilityRuntime } from './visibility.ts';
 
 export { Config };
 
@@ -20,7 +22,7 @@ export const name = PLUGIN_ROW_ID;
 export const inject = ['tools', 'mcpManager', 'credentials'];
 
 /**
- * 插件启用时调用：解析配置、注册路由、挂载常驻服务器。
+ * 插件启用时调用：解析配置、注册路由、挂载全部服务器、接入会话可见性。
  * 保存 volatile 配置后宿主发出 `loader/volatile-update`，插件按新值对账。
  */
 export function apply(ctx: Context, config?: unknown): void {
@@ -50,7 +52,6 @@ export function apply(ctx: Context, config?: unknown): void {
     void (async () => {
       for (const serverName of Object.keys(settings.servers)) {
         if (disposed) return;
-        if (await manager.isLazy(serverName)) continue;
         try {
           await manager.mount(serverName);
         } catch (error) {
@@ -69,6 +70,32 @@ export function apply(ctx: Context, config?: unknown): void {
     };
   }, 'better-mcp: configured servers');
 
+  /** 配置对账完成后的回调，由会话可见性接入。 */
+  let afterReconcile: (() => void) | undefined;
+
+  ctx.inject(['agents', 'sessionProjections'], async (scoped: Context) => {
+    const visibility = new VisibilityRuntime(scoped, () => settings, logger);
+    await visibility.start();
+    scoped.effect(() => {
+      afterReconcile = () => visibility.syncAll();
+      return () => {
+        afterReconcile = undefined;
+        visibility.dispose();
+      };
+    }, 'better-mcp: session visibility');
+    scoped.effect(
+      () => scoped.tools.register(buildManageTool(manager, visibility, () => settings)),
+      'better-mcp: mcp_manage',
+    );
+    scoped.on('agent/created', ({ agent }) => {
+      visibility.sync(agent);
+      return undefined;
+    });
+    scoped.on('agent/disposed', ({ agent }) => visibility.forget(agent));
+    scoped.on('tools/change', () => visibility.scheduleSyncAll());
+    visibility.syncAll();
+  });
+
   ctx.on('loader/volatile-update', () => {
     let next: Readonly<PluginConfig>;
     try {
@@ -82,6 +109,7 @@ export function apply(ctx: Context, config?: unknown): void {
     reconciliation = reconciliation
       .then(async () => {
         await manager.reconcile(previous, next);
+        afterReconcile?.();
       })
       .catch((error: unknown) => {
         logger.warn(`better-mcp: config reconcile failed: ${String(error)}`);

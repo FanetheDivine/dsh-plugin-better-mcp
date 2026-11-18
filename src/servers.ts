@@ -5,9 +5,9 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
+import type { ServerDefinition } from './config.ts';
 import { readGrant, writeGrant } from './credentials.ts';
 import { refresh } from './oauth.ts';
-import { readState } from './state.ts';
 import type {
   Context,
   McpManagedServerStatus,
@@ -85,17 +85,6 @@ export class ServerManager {
       next.catch(() => undefined),
     );
     return next;
-  }
-
-  /** 服务器当前的懒加载值：运行时状态优先，配置默认兜底。 */
-  async isLazy(
-    serverName: string,
-    definition = this.getSettings().servers[serverName],
-  ): Promise<boolean> {
-    const state = await readState();
-    const stored = state.lazy[serverName];
-    if (typeof stored === 'boolean') return stored;
-    return definition?.lazy !== false;
   }
 
   /** 读取可用访问令牌，临近过期时刷新。 */
@@ -190,10 +179,36 @@ export class ServerManager {
     });
   }
 
-  /** 重连一台服务器。 */
+  /** 重连一台服务器：卸载后重新挂载。 */
   async restart(serverName: string): Promise<void> {
     await this.unmount(serverName);
-    if (!(await this.isLazy(serverName))) await this.mount(serverName);
+    await this.mount(serverName);
+  }
+
+  /** 挂载全部已配置的服务器；单台失败只记录告警。 */
+  async mountAll(reason: string): Promise<void> {
+    for (const serverName of Object.keys(this.getSettings().servers)) {
+      await this.tryMount(serverName, reason);
+    }
+  }
+
+  /** 挂载一台服务器；失败只记录告警。 */
+  private async tryMount(serverName: string, reason: string): Promise<void> {
+    try {
+      await this.mount(serverName);
+    } catch (error) {
+      this.logger.warn(
+        `better-mcp: could not mount '${serverName}' ${reason}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  /** 一台服务器当前的连接状态。 */
+  statusOf(serverName: string): StatusView {
+    const view = this.ctx.mcpManager.list().find((candidate) => candidate.name === serverName);
+    return view === undefined ? { state: 'idle' } : statusOf(view.status);
   }
 
   /** 管理器当前管理的服务器名。 */
@@ -204,7 +219,6 @@ export class ServerManager {
   /** 构造面板快照。 */
   async snapshot(): Promise<PanelSnapshot> {
     const settings = this.getSettings();
-    const state = await readState();
     const managed = new Map(this.ctx.mcpManager.list().map((view) => [view.name, view]));
     const names = new Set([...Object.keys(settings.servers), ...managed.keys()]);
     const rows: ServerRow[] = [];
@@ -213,11 +227,7 @@ export class ServerManager {
       const mine = definition !== undefined;
       const view = managed.get(serverName);
       const grant = mine ? await readGrant(this.ctx, serverName) : undefined;
-      const lazy = mine
-        ? typeof state.lazy[serverName] === 'boolean'
-          ? state.lazy[serverName]
-          : definition.lazy !== false
-        : false;
+      const lazy = mine ? definition.lazy !== false : false;
       const status = view === undefined ? { state: 'idle' } : statusOf(view.status);
       rows.push({
         name: serverName,
@@ -240,7 +250,7 @@ export class ServerManager {
     return { servers: rows };
   }
 
-  /** 按新旧配置对账：卸载移除项，挂载新增项，重建变更项。 */
+  /** 按新旧配置对账：卸载移除项，挂载新增项，重建变更项。只改简介或懒加载时保留连接。 */
   async reconcile(previous: Readonly<PluginConfig>, next: Readonly<PluginConfig>): Promise<void> {
     const names = new Set([...Object.keys(previous.servers), ...Object.keys(next.servers)]);
     for (const serverName of names) {
@@ -250,18 +260,11 @@ export class ServerManager {
         await this.unmount(serverName);
         continue;
       }
-      if (before !== undefined && isDeepStrictEqual(before, after)) continue;
-      if (before !== undefined) await this.unmount(serverName);
-      if (await this.isLazy(serverName, after)) continue;
-      try {
-        await this.mount(serverName);
-      } catch (error) {
-        this.logger.warn(
-          `better-mcp: could not mount '${serverName}' after a config change: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
+      if (before !== undefined && isDeepStrictEqual(connectionOf(before), connectionOf(after))) {
+        continue;
       }
+      if (before !== undefined) await this.unmount(serverName);
+      await this.tryMount(serverName, 'after a config change');
     }
   }
 
@@ -277,6 +280,12 @@ export class ServerManager {
     this.mounts.clear();
     this.chains.clear();
   }
+}
+
+/** 定义中影响连接的部分：去掉简介与懒加载。 */
+function connectionOf(definition: ServerDefinition): Record<string, unknown> {
+  const { description: _description, lazy: _lazy, ...rest } = definition;
+  return rest;
 }
 
 /** 去掉定义中的客户端密钥，供面板回填表单。 */

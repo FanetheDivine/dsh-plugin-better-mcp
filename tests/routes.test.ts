@@ -1,29 +1,19 @@
 // 面板路由与 OAuth 路由接线。
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readConfig } from '../src/config.ts';
 import { readClientSecret, readGrant, recordKey } from '../src/credentials.ts';
 import { PluginRoutes } from '../src/routes.ts';
 import { ServerManager } from '../src/servers.ts';
-import { readState, setLazy } from '../src/state.ts';
 import { grantId } from '../src/utils.ts';
 import { makeCtx, volatile } from './helpers.ts';
 
-let home: string;
-
-beforeEach(async () => {
-  home = await mkdtemp(join(tmpdir(), 'better-mcp-routes-'));
-  process.env.DSH_HOME = home;
+beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-afterEach(async () => {
-  delete process.env.DSH_HOME;
+afterEach(() => {
   vi.unstubAllGlobals();
-  await rm(home, { recursive: true, force: true });
 });
 
 interface Harness {
@@ -127,15 +117,15 @@ describe('status 与懒加载', () => {
     expect(Object.keys(json)).toEqual(['servers']);
   });
 
-  it('切换懒加载：打开卸载，关闭挂载', async () => {
-    const { ctx, manager } = harness({
+  it('切换懒加载写回配置，连接保持', async () => {
+    const { ctx, manager, refs } = harness({
       one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     await manager.mount('one');
-    await call(ctx, '/api/better-mcp/lazy', { server: 'one', lazy: true });
-    expect(ctx._managerRegistered.has('one')).toBe(false);
-    expect((await readState()).lazy.one).toBe(true);
-    await call(ctx, '/api/better-mcp/lazy', { server: 'one', lazy: false });
+    const response = await call(ctx, '/api/better-mcp/lazy', { server: 'one', lazy: true });
+    expect(response.status).toBe(200);
+    expect((refs.servers.get() as Record<string, Record<string, unknown>>).one?.lazy).toBe(true);
+    expect((response.json.servers as Array<Record<string, unknown>>)[0]?.lazy).toBe(true);
     expect(ctx._managerRegistered.has('one')).toBe(true);
   });
 
@@ -203,7 +193,7 @@ describe('服务器增删改', () => {
     expect((servers.one as Record<string, unknown>).command).toBe('node');
   });
 
-  it('删除同时清理授权、客户端密钥与懒加载状态', async () => {
+  it('删除同时清理授权与客户端密钥', async () => {
     const { ctx, refs } = harness({
       one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
@@ -215,13 +205,11 @@ describe('服务器增删改', () => {
       kind: 'api-key',
       key: 's',
     }));
-    await setLazy('one', true);
     const response = await call(ctx, '/api/better-mcp/servers/remove', { server: 'one' });
     expect(response.status).toBe(200);
     expect((refs.servers.get() as Record<string, unknown>).one).toBeUndefined();
     expect(await readGrant(ctx as never, 'one')).toBeUndefined();
     expect(await readClientSecret(ctx as never, 'one')).toBeUndefined();
-    expect(await readState()).toEqual({ lazy: {} });
   });
 });
 

@@ -1,4 +1,4 @@
-/** 共享常量：插件标识、路由、凭据引用与超时。 */
+/** 共享常量：插件标识、路由、凭据范围、会话目录与超时。 */
 
 /** 插件名，与 cordis.patch.yml 的 name 一致。 */
 export const PLUGIN_NAME = 'dsh-plugin-better-mcp';
@@ -12,17 +12,14 @@ export const PLUGIN_LABEL = 'better-mcp';
 /** OAuth 回调路径。 */
 export const CALLBACK_PATH = '/better-mcp/oauth/callback';
 
-/** 插件数据区内的目录名。 */
-export const DATA_DIR = 'better-mcp';
-
 /** 凭据记录的归属范围。 */
 export const CREDENTIAL_SCOPE = 'better-mcp';
-
-/** 懒加载状态文件名。 */
-export const STATE_FILE = 'state.json';
 
 /** 待处理授权的有效期。 */
 export const PENDING_TTL_MS = 10 * 60 * 1000;
 
-/** 按需挂载时等待连接的上限。 */
-export const CONNECT_TIMEOUT_MS = 25_000;
+/** MCP 工具名前缀。 */
+export const MCP_TOOL_PREFIX = 'mcp__';
+
+/** 目录消息的来源标识，也是会话投影的键。 */
+export const CATALOG_SOURCE = 'better-mcp-catalog';

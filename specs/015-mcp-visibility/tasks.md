@@ -58,14 +58,14 @@
 
 **Independent Test**: 两个模拟 Agent，一个激活懒加载服务器后其 deny 列表移除该服务器工具，另一个不变。
 
-- [ ] T016 [US1] 删除 src/state.ts、src/home.ts、tests/state.test.ts；src/servers.ts 的 `isLazy` 改为只读定义的 `lazy`，启动与对账时挂载全部服务器，重连总是重新挂载
-- [ ] T017 [US1] 在 src/routes.ts 把 `/api/better-mcp/lazy` 改为经 configEditor 写回 `servers.<name>.lazy`
-- [ ] T018 [US1] 在 src/types.ts 引入 `Agent`、`SessionEvent`、`UserMessage` 类型与 `ctx.agents`、`ctx.sessionProjections`、`tools.restrict` 所需声明
-- [ ] T019 [US1] 新建 src/visibility.ts：`VisibilityRuntime` 维护每个 Agent 的待定表与限制；`effective(agent)` 按「待定表 → projection → `!lazy`」计算；`sync(agent)` 计算 deny 列表（当前全局工具中前缀为 `mcp__<server>__` 且服务器不可见，按最长服务器名匹配），集合变化时替换 `agent.ctx.tools.restrict`；`syncAll()`；`dispose()` 解除全部限制
-- [ ] T020 [US1] 在 src/visibility.ts 注册 projection `better-mcp-catalog`（宿主私有，`stateVersion: 1`，手写 `parse`），折叠目录消息的 `seq`、`digest`、`entries`、`overrides`
-- [ ] T021 [US1] 在 src/tools.ts 实现 `buildManageTool`，按 contracts/mcp-manage.md 校验参数、写待定表、立即 `sync`，返回服务器名、可见性与连接状态
-- [ ] T022 [US1] 在 src/index.ts 的 `ctx.inject(['agents', 'sessionProjections'])` 内创建 `VisibilityRuntime`，监听 `agent/created`、`tools/change`，启用时 `syncAll()`，对账后 `syncAll()`；`inject` 与 how-it-works 一致
-- [ ] T023 [US1] 在 tests/helpers.ts 增加模拟 Agent（`ctx.tools.restrict`、`session.surface.nodes`、`session.seq`）、`ctx.agents`、`ctx.sessionProjections`；新建 tests/visibility.test.ts 覆盖 spec US1 验收场景 1–6
+- [x] T016 [US1] 删除 src/state.ts、src/home.ts、tests/state.test.ts；src/servers.ts 的 `isLazy` 改为只读定义的 `lazy`，启动与对账时挂载全部服务器，重连总是重新挂载
+- [x] T017 [US1] 在 src/routes.ts 把 `/api/better-mcp/lazy` 改为经 configEditor 写回 `servers.<name>.lazy`
+- [x] T018 [US1] 在 src/types.ts 引入 `Agent`、`SessionEvent`、`UserMessage` 类型与 `ctx.agents`、`ctx.sessionProjections`、`tools.restrict` 所需声明
+- [x] T019 [US1] 新建 src/visibility.ts：`VisibilityRuntime` 维护每个 Agent 的待定表与限制；`effective(agent)` 按「待定表 → projection → `!lazy`」计算；`sync(agent)` 计算 deny 列表（当前全局工具中前缀为 `mcp__<server>__` 且服务器不可见，按最长服务器名匹配），集合变化时替换 `agent.ctx.tools.restrict`；`syncAll()`；`dispose()` 解除全部限制
+- [x] T020 [US1] 在 src/visibility.ts 注册 projection `better-mcp-catalog`（宿主私有，`stateVersion: 1`，手写 `parse`），折叠目录消息的 `seq`、`digest`、`entries`、`overrides`
+- [x] T021 [US1] 在 src/tools.ts 实现 `buildManageTool`，按 contracts/mcp-manage.md 校验参数、写待定表、立即 `sync`，返回服务器名、可见性与连接状态
+- [x] T022 [US1] 在 src/index.ts 的 `ctx.inject(['agents', 'sessionProjections'])` 内创建 `VisibilityRuntime`，监听 `agent/created`、`tools/change`，启用时 `syncAll()`，对账后 `syncAll()`；`inject` 与 how-it-works 一致
+- [x] T023 [US1] 在 tests/helpers.ts 增加模拟 Agent（`ctx.tools.restrict`、`session.surface.nodes`、`session.seq`）、`ctx.agents`、`ctx.sessionProjections`；新建 tests/visibility.test.ts 覆盖 spec US1 验收场景 1–6
 
 **Checkpoint**: `pnpm format && pnpm check` 通过后提交。
 
