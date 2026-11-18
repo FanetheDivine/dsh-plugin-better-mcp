@@ -93,7 +93,7 @@ if [[ "$CURRENT_ROOT" != "$MAIN_WORKTREE" ]]; then
   [[ "$FEATURE_NAME" =~ ^([0-9]{3,})- ]] && FEATURE_NUM="${BASH_REMATCH[1]}"
   emit BRANCH_NAME "$BRANCH_NAME" FEATURE_NUM "$FEATURE_NUM" FEATURE_NAME "$FEATURE_NAME" \
     FEATURE_DIRECTORY "specs/$FEATURE_NAME" WORKTREE_PATH "$CURRENT_ROOT" \
-    MAIN_WORKTREE "$MAIN_WORKTREE" BASE_REF "" CREATED false IN_WORKTREE true
+    MAIN_WORKTREE "$MAIN_WORKTREE" BASE_REF "" CREATED false IN_WORKTREE true CLAIMED false
   exit 0
 fi
 
@@ -150,13 +150,34 @@ WORKTREE_PATH="$MAIN_WORKTREE/worktrees/$FEATURE_NAME"
 git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" && die "branch '$BRANCH_NAME' already exists"
 [[ -e "$WORKTREE_PATH" ]] && die "path '$WORKTREE_PATH' already exists"
 
+# release_claim BRANCH: drop a claim the flow is not going to keep.
+release_claim() {
+  git -C "$MAIN_WORKTREE" push --quiet origin --delete "$1" >/dev/null 2>&1 || true
+  git -C "$MAIN_WORKTREE" branch -D "$1" >/dev/null 2>&1 || true
+}
+
+CLAIMED=false
 CREATED=false
 if ! $DRY_RUN; then
+  # Claim the number on the remote before the worktree exists. A push failure
+  # leaves no local state.
+  git -C "$MAIN_WORKTREE" branch --no-track "$BRANCH_NAME" "$BASE_REF" >&2 ||
+    die "failed to create branch '$BRANCH_NAME'"
+  if ! git -C "$MAIN_WORKTREE" push --quiet origin "$BRANCH_NAME" >&2; then
+    git -C "$MAIN_WORKTREE" branch -D "$BRANCH_NAME" >/dev/null 2>&1
+    die "failed to push claim branch '$BRANCH_NAME' to origin"
+  fi
+  CLAIMED=true
   mkdir -p "$MAIN_WORKTREE/worktrees"
-  git -C "$MAIN_WORKTREE" worktree add --quiet --no-track -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_REF" >&2
+  if ! git -C "$MAIN_WORKTREE" worktree add --quiet "$WORKTREE_PATH" "$BRANCH_NAME" >&2; then
+    git -C "$MAIN_WORKTREE" worktree remove --force "$WORKTREE_PATH" >/dev/null 2>&1 || true
+    release_claim "$BRANCH_NAME"
+    die "failed to create worktree at '$WORKTREE_PATH'"
+  fi
   CREATED=true
 fi
 
 emit BRANCH_NAME "$BRANCH_NAME" FEATURE_NUM "$FEATURE_NUM" FEATURE_NAME "$FEATURE_NAME" \
   FEATURE_DIRECTORY "specs/$FEATURE_NAME" WORKTREE_PATH "$WORKTREE_PATH" \
-  MAIN_WORKTREE "$MAIN_WORKTREE" BASE_REF "$BASE_REF" CREATED "$CREATED" IN_WORKTREE false
+  MAIN_WORKTREE "$MAIN_WORKTREE" BASE_REF "$BASE_REF" CREATED "$CREATED" IN_WORKTREE false \
+  CLAIMED "$CLAIMED"
