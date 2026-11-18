@@ -56,6 +56,7 @@ Run inside `WORKTREE_PATH`:
 
 4. Commit any remaining changes, including the merge and lock file updates (Conventional Commit
    message, e.g. `feat: <summary>` or `chore: merge origin/main`).
+
 5. Verify the spec number is unique:
 
    ```bash
