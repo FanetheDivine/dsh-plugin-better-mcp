@@ -57,9 +57,9 @@
 
 **Purpose**: 完成变更记录与整体验证
 
-- [ ] T015 [P] 更新 `CHANGELOG.md`，记录宪章 3.0.0、规则归属与主工作区流程
-- [ ] T016 按 `specs/014-template-doc-sync/quickstart.md` 核对全部验收点，运行 `pnpm format && pnpm check` 与 `git diff --check`
-- [ ] T017 检查 `git status --short` 与最终 diff，确认变更范围符合 `specs/014-template-doc-sync/spec.md`，提交阶段 6
+- [X] T015 [P] 更新 `CHANGELOG.md`，记录宪章 3.0.0、规则归属与主工作区流程
+- [X] T016 按 `specs/014-template-doc-sync/quickstart.md` 核对全部验收点，运行 `pnpm format && pnpm check` 与 `git diff --check`
+- [X] T017 检查 `git status --short` 与最终 diff，确认变更范围符合 `specs/014-template-doc-sync/spec.md`，提交阶段 6
 
 ## Dependencies & Execution Order
 

@@ -13,6 +13,8 @@
 
 ### Changed
 
+- 宪章精简为五条原则，版本 3.0.0；宿主机制与国际化规则迁入归属文档
+- 主工作区固定为干净的 `main`，worktree 创建前与清理后由 Agent 同步 `origin/main`
 - 测试入口拆成 `test:code` 与 `test:dist`；`build` 末尾运行产物测试，产物过期时提示 `pnpm build`
 
 ## [0.1.0] - 2026-11-18
