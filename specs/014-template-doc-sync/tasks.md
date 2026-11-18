@@ -47,11 +47,11 @@
 
 **Independent Test**: 只读 AGENTS 与四份流程说明，能列全约束、同步时机、停止条件与输出要求
 
-- [ ] T010 [P] [US3] 更新 `AGENTS.md`，增加主工作区定义、main 分支、干净状态、允许操作与 worktree 变更位置
-- [ ] T011 [P] [US3] 更新 `.specify/extensions/worktree/commands/speckit.worktree.create.md` 与 `.dsh/skills/speckit-worktree-create/SKILL.md`，增加创建前 Agent 同步与失败停止步骤
-- [ ] T012 [P] [US3] 更新 `.specify/extensions/worktree/commands/speckit.worktree.finish.md` 与 `.dsh/skills/speckit-worktree-finish/SKILL.md`，增加清理后 Agent 同步，并把 CHANGELOG 规则引用改为原则 III
-- [ ] T013 [US3] 更新 `docs/development.md` 的 Spec Kit 流程与测试原则编号，使其与流程说明一致
-- [ ] T014 [US3] 核对 `AGENTS.md`、两组 worktree 流程说明与 `docs/development.md` 一致，提交阶段 5
+- [X] T010 [P] [US3] 更新 `AGENTS.md`，增加主工作区定义、main 分支、干净状态、允许操作与 worktree 变更位置
+- [X] T011 [P] [US3] 更新 `.specify/extensions/worktree/commands/speckit.worktree.create.md` 与 `.dsh/skills/speckit-worktree-create/SKILL.md`，增加创建前 Agent 同步与失败停止步骤
+- [X] T012 [P] [US3] 更新 `.specify/extensions/worktree/commands/speckit.worktree.finish.md` 与 `.dsh/skills/speckit-worktree-finish/SKILL.md`，增加清理后 Agent 同步，并把 CHANGELOG 规则引用改为原则 III
+- [X] T013 [US3] 更新 `docs/development.md` 的 Spec Kit 流程与测试原则编号，使其与流程说明一致
+- [X] T014 [US3] 核对 `AGENTS.md`、两组 worktree 流程说明与 `docs/development.md` 一致，提交阶段 5
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
