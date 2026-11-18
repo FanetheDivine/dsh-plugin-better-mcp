@@ -34,7 +34,7 @@ You **MUST** consider the user input before proceeding (if not empty). Input con
 Run inside `WORKTREE_PATH`:
 
 1. Quality gates: `pnpm format && pnpm check` (typecheck → lint → test → build). Fix failures before continuing.
-2. CHANGELOG: per principle V of `.specify/memory/constitution.md`, branches other than `main`
+2. CHANGELOG: per principle III of `.specify/memory/constitution.md`, branches other than `main`
    add their `CHANGELOG.md` entry when pushing. Add an entry under `## Unreleased` describing the
    feature, if not already present.
 3. Sync the base branch:
@@ -150,8 +150,23 @@ then clean up with `--abandon`. A branch already pushed to the remote is left th
    reason; do not force removal in deliver mode.
 4. `REMOTE_DELETED` in the output tells whether the remote branch was deleted; `false` means it
    was already gone.
+5. Sync the primary checkout at the end of the Spec Kit flow in both modes after
+   `finish-worktree.sh` succeeds. Record its current commit as `BEFORE_COMMIT`, then run:
+
+   ```bash
+   test "$(git -C "$MAIN_WORKTREE" symbolic-ref --short HEAD)" = main &&
+   test -z "$(git -C "$MAIN_WORKTREE" status --porcelain)" &&
+   git -C "$MAIN_WORKTREE" fetch origin main &&
+   git -C "$MAIN_WORKTREE" merge-base --is-ancestor main origin/main &&
+   git -C "$MAIN_WORKTREE" pull --ff-only origin main
+   ```
+
+   The primary checkout must be on `main`, clean, and an ancestor of `origin/main`. On failure,
+   report the failed command and leave the primary checkout as it is. On success, record the
+   resulting commit as `MAIN_COMMIT` and set `UPDATED` by comparing it with `BEFORE_COMMIT`.
 
 ## Output
 
 Report the outcome: PR URL, and that the worktree, local branch and remote branch were removed
-(deliver), or the discarded branch (abandon).
+(deliver), or the discarded branch (abandon). Add the primary checkout sync result: `MAIN_COMMIT`
+and `UPDATED`, or the reason the sync was skipped.

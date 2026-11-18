@@ -23,6 +23,11 @@
 | `apply(ctx, config)` | 装配运行时并挂载常驻服务器 |
 | `Config` | Schemastery schema，宿主据此校验与投影 |
 
+- `src/index.ts` 只导出这四个宿主入口。
+- `inject` 列出 `apply` 用到的全部宿主服务。
+- 需要热重载的 `Config` 字段用 `.volatile()` 标记。
+- 宿主类型经 `src/types.ts` 以 type-only 方式导入。
+
 浏览器入口导出 `inject = ['slots', 'locale']` 与 `apply`。
 
 ## 宿主运行时
@@ -37,6 +42,17 @@
 6. 监听 `loader/volatile-update`，按新配置对账。
 
 `servers` 与 `expose` 都是 volatile，保存后不重挂插件。
+
+### 配置解析
+
+`readConfig` 先把 `.volatile()` 引用展开为普通值，再交给 `resolveConfig` 做严格校验：
+
+- 配置解析是 `apply` 的第一步。
+- 缺省或 `null` 的键使用默认值。
+- 未知键与非法值抛错，插件加载失败。
+- 解析结果冻结后返回。
+
+配置错误在加载时暴露，最容易排查。
 
 ### 懒加载
 
@@ -104,3 +120,14 @@
         → ServerManager.reconcile
           → mcpManager.register / dispose
 ```
+
+## 依赖复用
+
+插件运行时使用宿主提供的 cordis、schemastery 与 dsh 服务实例。依赖分为两类，新增依赖时在 plan 中声明归属：
+
+| 归属 | 放在 | 打包 |
+| --- | --- | --- |
+| 宿主提供 | `devDependencies` | 由 `tsdown.config.ts` 的 `neverBundle` 保持 external |
+| 插件自备 | `dependencies` | 列入 `tsdown.config.ts` 的 `alwaysBundle`，打进 `dist`，由 `tests/package-pack.test.ts` 回归发布内容 |
+
+宿主依赖的版本规则见[宪章](../.specify/memory/constitution.md)原则 I。

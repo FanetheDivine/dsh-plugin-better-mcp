@@ -109,7 +109,7 @@ dsh plugin add <repo>
 | `tests/helpers.ts` | 模拟宿主与客户端 `ctx` |
 | `tests/support/dist-freshness.ts` | 构建输入与产物清单、`assertFreshDist` |
 
-测试要求见[宪章](../.specify/memory/constitution.md)原则 IV。文案与元数据的规范见 [i18n.md](./i18n.md)。
+测试要求见[宪章](../.specify/memory/constitution.md)原则 II。文案与元数据的规范见 [i18n.md](./i18n.md)。
 
 vitest 拆成 `code` 与 `dist` 两个 project。产物测试读取 `dist`，由 `build` 末尾的 `test:dist` 执行；`test:code` 不读取 `dist`。产物缺失或早于构建输入时，产物测试失败并提示运行 `pnpm build`。
 
@@ -126,13 +126,13 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 
 | 步骤 | 命令 | 产出 |
 | --- | --- | --- |
-| 1 | `/speckit-specify <需求描述>` | 分支、worktree 与 `spec.md` |
+| 1 | `/speckit-specify <需求描述>` | 流程最前：Agent 先同步主工作区 `main` 到 `origin/main`，再创建分支、worktree 与 `spec.md` |
 | 2 | `/speckit-clarify` | 写回 spec 的澄清结果 |
 | 3 | `/speckit-plan` | `plan.md` 与设计产物 |
 | 4 | `/speckit-tasks` | `tasks.md` |
 | 5 | `/speckit-analyze` | 跨产物一致性报告 |
 | 6 | `/speckit-implement` | 按阶段提交的实现 |
-| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理 |
+| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理；流程最后：Agent 在清理后同步主工作区 `main` 到 `origin/main` |
 
 - `base_ref` 默认为 `origin/main`，必须已包含 `.specify/` 与 `.dsh/skills/`。
 - `worktrees/` 已加入 `.gitignore`，biome 与 vitest 也会跳过它。
