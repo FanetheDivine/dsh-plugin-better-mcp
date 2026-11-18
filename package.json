@@ -1,16 +1,19 @@
 {
-  "name": "dsh-plugin-template",
-  "version": "0.0.2",
+  "name": "dsh-plugin-better-mcp",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "description": "Better MCP for DeepSeek Harness: per-server lazy mounting, in-app OAuth sign-in, and an HTTP MCP endpoint that exposes this harness's own tools to external MCP clients.",
+  "icon": "./icon.svg",
   "keywords": [
     "dsh",
     "deepseek",
     "harness",
     "plugin",
-    "template"
+    "mcp",
+    "oauth"
   ],
   "exports": {
     ".": {
@@ -20,11 +23,15 @@
     "./client": {
       "types": "./dist/client/index.d.ts",
       "default": "./dist/client.js"
-    }
+    },
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "files": [
     "dist",
     "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
     "README.md"
   ],
   "dsh": {
@@ -35,10 +42,9 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-plugin-manager",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-sidebar"
       ]
     }
   },
@@ -72,7 +78,13 @@
     "@deepseek-ai/dsh-client-ui-primitives": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-client-ui-sidebar": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-config-editor": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-credentials": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-home-paths": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-mcp-manager": "0.2.2-rc.3",
     "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
     "@deepseek-ai/schemastery": "~3.19.0",
     "@types/node": "^24.19.2",

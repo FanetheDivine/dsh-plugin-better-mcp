@@ -1,70 +1,85 @@
-// package.json 打包回归测试：npm pack --dry-run 断言 tarball 只含发布所需文件。
-// files 字段（package.json）决定分发内容：dist + cordis.patch.yml + README.md；
-// src / tests / scripts 等开发文件不得进包。
+// 发布内容回归：npm pack --dry-run 断言 tarball 只含发布所需文件。
+// files 字段决定分发内容；src / tests / scripts / specs 不得进包。
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-/** 仓库根目录（tests/ 的上一级）。 */
+/** 仓库根目录。 */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** 打包结果的缓存：同一进程内只执行一次 npm pack。 */
+/** 打包结果缓存。 */
 let cachedPaths: Set<string> | undefined;
 
-/** 执行 npm pack --dry-run --json，返回 tarball 内文件路径集合。 */
+/** 执行 npm pack --dry-run --json，返回文件路径集合。 */
 function packedPaths(): Set<string> {
   if (cachedPaths !== undefined) return cachedPaths;
-  // pack 依赖 dist（构建产物）；未构建时先 build，保证测试独立可跑
   if (!existsSync(path.join(ROOT, 'dist', 'index.mjs'))) {
     const build = spawnSync('pnpm', ['build'], {
       cwd: ROOT,
       encoding: 'utf8',
-      // Windows 下 pnpm 是 pnpm.cmd，需经 shell 启动
       shell: process.platform === 'win32',
     });
-    if (build.status !== 0) {
-      throw new Error(`pnpm build 失败：${String(build.stderr ?? build.stdout ?? '未知错误')}`);
-    }
+    if (build.status !== 0)
+      throw new Error(`pnpm build 失败：${String(build.stderr ?? build.stdout)}`);
   }
-  const res = spawnSync('npm', ['pack', '--dry-run', '--json'], {
+  const result = spawnSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024,
-    // Windows 下 npm 是 npm.cmd，需经 shell 启动
     shell: process.platform === 'win32',
   });
-  if (res.status !== 0) {
-    throw new Error(`npm pack --dry-run 失败：${String(res.stderr ?? res.stdout ?? '未知错误')}`);
-  }
-  // npm pack --json 输出数组（单个包 = 单元素数组），取所有包的文件列表
-  const report = JSON.parse(String(res.stdout ?? '[]')) as Array<{
+  if (result.status !== 0)
+    throw new Error(`npm pack --dry-run 失败：${String(result.stderr ?? result.stdout)}`);
+  const report = JSON.parse(String(result.stdout ?? '[]')) as Array<{
     files?: Array<{ path: string }>;
   }>;
-  cachedPaths = new Set(report.flatMap((p) => p.files ?? []).map((f) => f.path));
+  cachedPaths = new Set(report.flatMap((entry) => entry.files ?? []).map((file) => file.path));
   return cachedPaths;
 }
 
-describe('npm 包内容（npm pack --dry-run）', () => {
-  it('tarball 含 dist/cordis.patch.yml/README.md，不含 src/tests/scripts', () => {
+describe('npm 包内容', () => {
+  it('包含运行产物、补丁、图标、字典与 README', () => {
     const packed = packedPaths();
-    expect(packed.has('dist/index.mjs')).toBe(true);
-    expect(packed.has('dist/index.d.ts')).toBe(true);
-    expect(packed.has('dist/client.js')).toBe(true);
-    expect(packed.has('cordis.patch.yml')).toBe(true);
-    expect(packed.has('README.md')).toBe(true);
-    expect([...packed].some((p) => p.startsWith('src/'))).toBe(false);
-    expect([...packed].some((p) => p.startsWith('tests/'))).toBe(false);
-    expect([...packed].some((p) => p.startsWith('scripts/'))).toBe(false);
+    for (const required of [
+      'dist/index.mjs',
+      'dist/index.d.ts',
+      'dist/client.js',
+      'cordis.patch.yml',
+      'README.md',
+      'icon.svg',
+      'locale/en.json',
+      'locale/zh.json',
+    ]) {
+      expect(packed.has(required), required).toBe(true);
+    }
+  });
+
+  it('不包含开发目录', () => {
+    const packed = packedPaths();
+    for (const prefix of ['src/', 'tests/', 'scripts/', 'specs/', 'docs/', 'worktrees/']) {
+      expect(
+        [...packed].some((file) => file.startsWith(prefix)),
+        prefix,
+      ).toBe(false);
+    }
   }, 30_000);
 
-  it('前端产物以包名注册闭包工厂', () => {
-    // 打包会先构建；读取的产物与包内容一致
+  it('补丁插入 better-mcp 行且服务器留空', () => {
+    const patch = readFileSync(path.join(ROOT, 'cordis.patch.yml'), 'utf8');
+    expect(patch).toContain('id: better-mcp');
+    expect(patch).toContain('name: dsh-plugin-better-mcp');
+    expect(patch).toContain('servers: {}');
+  });
+});
+
+describe('前端产物', () => {
+  it('以包名注册闭包工厂并保留导出', () => {
     packedPaths();
     const client = readFileSync(path.join(ROOT, 'dist', 'client.js'), 'utf8');
     expect(client).toContain('window.__ModuleLoader__.load(');
-    expect(client).toContain('id: "dsh-plugin-template"');
+    expect(client).toContain('id: "dsh-plugin-better-mcp"');
     expect(client).toContain('exports.inject');
     expect(client).toContain('exports.apply');
   });
