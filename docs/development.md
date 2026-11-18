@@ -126,15 +126,18 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 
 | 步骤 | 命令 | 产出 |
 | --- | --- | --- |
-| 1 | `/speckit-specify <需求描述>` | 流程最前：Agent 先同步主工作区 `main` 到 `origin/main`，再创建分支、worktree 与 `spec.md` |
+| 1 | `/speckit-specify <需求描述>` | 流程最前：Agent 先同步主工作区 `main` 到 `origin/main`，再创建占号分支、worktree 与 `spec.md` |
 | 2 | `/speckit-clarify` | 写回 spec 的澄清结果 |
 | 3 | `/speckit-plan` | `plan.md` 与设计产物 |
 | 4 | `/speckit-tasks` | `tasks.md` |
 | 5 | `/speckit-analyze` | 跨产物一致性报告 |
 | 6 | `/speckit-implement` | 按阶段提交的实现 |
-| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理；流程最后：Agent 在清理后同步主工作区 `main` 到 `origin/main` |
+| 7 | `/speckit-worktree-finish` | 基线同步、编号校验、PR、等待合并与清理；流程最后：Agent 在清理后同步主工作区 `main` 到 `origin/main` |
 
 - `base_ref` 默认为 `origin/main`，必须已包含 `.specify/` 与 `.dsh/skills/`。
+- 创建 spec 时，`create-worktree.sh` 先同步远程全部分支，再推送 `<type>/<NNN>-<name>` 占号，最后创建 worktree。
+- 同号分支按完整分支名排序，保留第一个，其余自动改号；占号失败时中止，不留下分支与 worktree。
+- `/speckit-worktree-finish` 在推送与 PR 前运行 `check-spec-number.sh`，发现同号时停止。
 - `worktrees/` 已加入 `.gitignore`，biome 与 vitest 也会跳过它。
 
 ## 维护 worktree 扩展
@@ -147,6 +150,10 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 2. 运行 `specify extension add --dev <临时目录> --force`。
 
 脚本行为由 `tests/worktree-extension.test.ts` 覆盖。
+
+- `scripts/bash/spec-number-lib.sh`：编号解析与同号分支匹配。
+- `scripts/bash/check-spec-number.sh`：交付前的编号唯一性校验。
+- 修改 `commands/` 后同步 `.dsh/skills/speckit-worktree-*/SKILL.md` 的正文，保留 front matter。
 
 ## 文件地图
 
