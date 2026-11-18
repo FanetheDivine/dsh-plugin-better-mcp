@@ -11,9 +11,15 @@ export interface ServerRow {
   lazy: boolean;
   authorized: boolean;
   mounted: boolean;
+  /** 连接状态名。 */
   state: string;
-  detail?: string;
   toolCount?: number;
+  connectedAt?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  /** 宿主返回的原始错误文本。 */
+  error?: string;
+  cleanup?: 'failed' | 'unconfirmed';
   definition?: Record<string, unknown>;
 }
 

@@ -195,13 +195,32 @@ describe('reconcile', () => {
 });
 
 describe('statusOf', () => {
-  it('压缩各状态', () => {
-    expect(statusOf(undefined).state).toBe('idle');
-    expect(statusOf({ state: 'connected', toolCount: 2, connectedAt: 0 })).toMatchObject({
+  it('输出结构化状态字段', () => {
+    expect(statusOf(undefined)).toEqual({ state: 'idle' });
+    expect(statusOf({ state: 'connected', toolCount: 2, connectedAt: 5 })).toEqual({
       state: 'connected',
       toolCount: 2,
+      connectedAt: 5,
     });
-    expect(statusOf({ state: 'failed', reason: 'cleanup' }).detail).toBe('cleanup did not finish');
-    expect(statusOf({ state: 'closed', result: { closeConfirmed: true } }).state).toBe('closed');
+    expect(
+      statusOf({
+        state: 'reconnecting',
+        attempt: 1,
+        maxAttempts: 3,
+        nextRetryAtMs: 0,
+        lastError: 'boom',
+      }),
+    ).toEqual({ state: 'reconnecting', attempt: 1, maxAttempts: 3, error: 'boom' });
+    expect(statusOf({ state: 'failed', reason: 'cleanup' })).toEqual({
+      state: 'failed',
+      cleanup: 'failed',
+    });
+    expect(statusOf({ state: 'closed', result: { closeConfirmed: false } })).toEqual({
+      state: 'closed',
+      cleanup: 'unconfirmed',
+    });
+    expect(statusOf({ state: 'closed', result: { closeConfirmed: true } })).toEqual({
+      state: 'closed',
+    });
   });
 });

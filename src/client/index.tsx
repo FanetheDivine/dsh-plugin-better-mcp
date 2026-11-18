@@ -80,7 +80,7 @@ function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }
           <circle cx="12" cy="19" r="1.6" />
           <path d="M12 6.6v2.9M12 14.5v2.9" />
         </svg>
-        {wide ? <span>MCP</span> : null}
+        {wide ? <span>{t('title')}</span> : null}
       </button>
       {open ? <McpPanel t={t} variant="modal" onClose={() => setOpen(false)} /> : null}
     </>

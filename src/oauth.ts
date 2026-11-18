@@ -7,6 +7,7 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 
+import { PLUGIN_NAME, PLUGIN_VERSION } from './constants.ts';
 import type { PluginLogger } from './types.ts';
 import { asString, isRecord } from './utils.ts';
 
@@ -21,7 +22,7 @@ const PROBE_BODY = {
   params: {
     protocolVersion: '2025-06-18',
     capabilities: {},
-    clientInfo: { name: 'dsh-plugin-better-mcp', version: '0.1.0' },
+    clientInfo: { name: PLUGIN_NAME, version: PLUGIN_VERSION },
   },
 };
 

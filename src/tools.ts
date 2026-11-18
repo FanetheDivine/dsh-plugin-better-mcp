@@ -97,7 +97,7 @@ export function buildManageTool(
         active,
         state: status.state,
         ...(status.toolCount === undefined ? {} : { toolCount: status.toolCount }),
-        ...(status.detail === undefined ? {} : { detail: status.detail }),
+        ...(status.error === undefined ? {} : { detail: status.error }),
       };
       return result as never;
     },

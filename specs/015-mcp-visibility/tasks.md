@@ -92,12 +92,12 @@
 
 **Independent Test**: tests/client.test.ts 与 tests/metadata.test.ts 断言新键集、描述与外部服务器无操作。
 
-- [ ] T028 [P] [US5] locale/zh.json 描述改为「可视化地对MCP进行管理和鉴权；提供MCP懒加载能力」；locale/en.json 描述改为 `Visually manage and authorize MCP servers, with lazy loading.`；package.json `description` 与英文一致
-- [ ] T029 [US5] 在 src/servers.ts 把状态改为结构化字段 `state`、`toolCount`、`connectedAt`、`attempt`、`maxAttempts`、`error`、`cleanup`，同步 src/client/api.ts 的 `ServerRow`
-- [ ] T030 [US5] 在 src/client/locales.ts 删除未使用的键，新增状态、状态说明、工具数、刷新、认证方式选项的键；英文徽标与开关使用 sentence case；面板标题改为「MCP 服务器 / MCP servers」
-- [ ] T031 [US5] 在 src/client/panel.tsx 删除品牌字、头部按钮改用 `refresh`、按字典格式化状态与工具数、外部服务器行不显示操作按钮
-- [ ] T032 [US5] 在 src/client/server-form.tsx 认证方式选项改用字典
-- [ ] T033 [US5] 更新 tests/client.test.ts、tests/metadata.test.ts
+- [x] T028 [P] [US5] locale/zh.json 描述改为「可视化地对MCP进行管理和鉴权；提供MCP懒加载能力」；locale/en.json 描述改为 `Visually manage and authorize MCP servers, with lazy loading.`；package.json `description` 与英文一致
+- [x] T029 [US5] 在 src/servers.ts 把状态改为结构化字段 `state`、`toolCount`、`connectedAt`、`attempt`、`maxAttempts`、`error`、`cleanup`，同步 src/client/api.ts 的 `ServerRow`
+- [x] T030 [US5] 在 src/client/locales.ts 删除未使用的键，新增状态、状态说明、工具数、刷新、认证方式选项的键；英文徽标与开关使用 sentence case；面板标题改为「MCP 服务器 / MCP servers」
+- [x] T031 [US5] 在 src/client/panel.tsx 删除品牌字、头部按钮改用 `refresh`、按字典格式化状态与工具数、外部服务器行不显示操作按钮
+- [x] T032 [US5] 在 src/client/server-form.tsx 认证方式选项改用字典
+- [x] T033 [US5] 更新 tests/client.test.ts、tests/metadata.test.ts
 
 **Checkpoint**: `pnpm format && pnpm check` 通过后提交。
 

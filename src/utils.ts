@@ -40,6 +40,18 @@ export function isValidServerName(name: string): boolean {
   return SERVER_NAME_PATTERN.test(name);
 }
 
+/** 回环 http 地址：协议为 http，主机为 127.0.0.1 或 localhost。 */
+export function isLoopbackHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'http:' && (url.hostname === '127.0.0.1' || url.hostname === 'localhost')
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** 稳定的凭据记录 id：小写连字符化，加服务器名摘要。 */
 export function grantId(serverName: string): string {
   const base =

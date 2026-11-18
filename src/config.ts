@@ -6,7 +6,13 @@ import Schema from '@deepseek-ai/schemastery';
 
 import { PLUGIN_LABEL } from './constants.ts';
 import type { Volatile } from './types.ts';
-import { asString, isPositiveInteger, isRecord, isValidServerName } from './utils.ts';
+import {
+  asString,
+  isLoopbackHttpUrl,
+  isPositiveInteger,
+  isRecord,
+  isValidServerName,
+} from './utils.ts';
 
 /** OAuth 客户端配置。 */
 export interface OAuthClientConfig {
@@ -164,15 +170,9 @@ function normalizeOAuth(name: string, raw: unknown): OAuthClientConfig {
 
 /** 固定回调必须是回环 http 地址。 */
 function assertLoopbackRedirect(name: string, redirectUri: string): void {
-  let url: URL;
-  try {
-    url = new URL(redirectUri);
-  } catch {
-    throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must be an absolute URL`);
-  }
-  if (url.protocol !== 'http:' || (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')) {
+  if (!isLoopbackHttpUrl(redirectUri)) {
     throw new Error(
-      `${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must point at 127.0.0.1 or localhost`,
+      `${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must be an http URL on 127.0.0.1 or localhost`,
     );
   }
 }

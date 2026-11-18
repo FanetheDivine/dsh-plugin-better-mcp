@@ -262,8 +262,8 @@ export function ServerForm({
             update('transport', event.target.value === 'stdio' ? 'stdio' : 'streamable-http')
           }
         >
-          <option value="streamable-http">streamable-http</option>
-          <option value="stdio">stdio</option>
+          <option value="streamable-http">{t('transportHttp')}</option>
+          <option value="stdio">{t('transportStdio')}</option>
         </select>
       </label>
       {values.transport === 'streamable-http' ? (
@@ -292,8 +292,8 @@ export function ServerForm({
               value={values.auth}
               onChange={(event) => update('auth', event.target.value === 'none' ? 'none' : 'oauth')}
             >
-              <option value="oauth">OAuth</option>
-              <option value="none">{t('auth')}: none</option>
+              <option value="oauth">{t('authOAuth')}</option>
+              <option value="none">{t('authNone')}</option>
             </select>
           </label>
           {values.auth === 'oauth' ? (

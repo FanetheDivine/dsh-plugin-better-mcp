@@ -18,7 +18,7 @@ import type {
 import { isRecord } from './utils.ts';
 
 /** 面板里的一台服务器。 */
-export interface ServerRow {
+export interface ServerRow extends StatusView {
   /** 服务器名。 */
   name: string;
   /** 是否由本插件配置。 */
@@ -37,12 +37,6 @@ export interface ServerRow {
   authorized: boolean;
   /** 是否已由本插件挂载。 */
   mounted: boolean;
-  /** 运行时状态。 */
-  state: string;
-  /** 状态说明。 */
-  detail?: string;
-  /** 已连接时的工具数。 */
-  toolCount?: number;
   /** 已脱敏的定义，只随面板快照返回。 */
   definition?: Record<string, unknown>;
 }
@@ -53,14 +47,22 @@ export interface PanelSnapshot {
   servers: ServerRow[];
 }
 
-/** 连接状态压缩视图。 */
+/** 连接状态的结构化视图，由面板按字典格式化。 */
 export interface StatusView {
   /** 状态名。 */
   state: string;
-  /** 说明文本。 */
-  detail?: string;
-  /** 工具数。 */
+  /** 已连接时的工具数。 */
   toolCount?: number;
+  /** 已连接时的时间戳。 */
+  connectedAt?: number;
+  /** 连接或重连次数。 */
+  attempt?: number;
+  /** 重连上限。 */
+  maxAttempts?: number;
+  /** 宿主返回的原始错误文本。 */
+  error?: string;
+  /** 清理异常。 */
+  cleanup?: 'failed' | 'unconfirmed';
 }
 
 /** 服务器管理。 */
@@ -305,41 +307,33 @@ export function statusOf(status: McpManagedServerStatus | undefined): StatusView
   if (status === undefined) return { state: 'idle' };
   switch (status.state) {
     case 'connected':
-      return {
-        state: 'connected',
-        toolCount: status.toolCount,
-        detail: `connected at ${new Date(status.connectedAt).toISOString()}`,
-      };
+      return { state: 'connected', toolCount: status.toolCount, connectedAt: status.connectedAt };
     case 'connecting':
-      return {
-        state: 'connecting',
-        ...(status.attempt > 0 ? { detail: `attempt ${status.attempt}` } : {}),
-      };
+      return { state: 'connecting', ...(status.attempt > 0 ? { attempt: status.attempt } : {}) };
     case 'reconnecting':
       return {
         state: 'reconnecting',
-        detail: `${status.attempt}/${status.maxAttempts} · ${status.lastError}`,
+        attempt: status.attempt,
+        maxAttempts: status.maxAttempts,
+        error: status.lastError,
       };
     case 'waiting-credentials':
-      return { state: 'waiting-credentials', detail: status.lastError };
+      return { state: 'waiting-credentials', error: status.lastError };
     case 'failed':
+      if (status.reason === 'cleanup') return { state: 'failed', cleanup: 'failed' };
       return {
         state: 'failed',
-        detail:
-          status.reason === 'cleanup'
-            ? 'cleanup did not finish'
-            : typeof status.lastError === 'string'
-              ? status.lastError
-              : status.reason,
+        error: typeof status.lastError === 'string' ? status.lastError : status.reason,
       };
     case 'disabled':
       return { state: 'disabled' };
-    case 'closed': {
-      const detail =
-        status.result.cleanupError ??
-        (status.result.closeConfirmed === false ? 'close unconfirmed' : undefined);
-      return detail === undefined ? { state: 'closed' } : { state: 'closed', detail };
-    }
+    case 'closed':
+      if (status.result.cleanupError !== undefined) {
+        return { state: 'closed', cleanup: 'failed', error: status.result.cleanupError };
+      }
+      return status.result.closeConfirmed === false
+        ? { state: 'closed', cleanup: 'unconfirmed' }
+        : { state: 'closed' };
     default:
       return { state: String((status as { state?: string }).state) };
   }

@@ -25,7 +25,10 @@ import {
 } from './oauth.ts';
 import type { PanelSnapshot, ServerManager } from './servers.ts';
 import type { Context, ServerRoute, SettingsReader } from './types.ts';
-import { asString, escapeHtml, isRecord, jsonResponse } from './utils.ts';
+import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from './utils.ts';
+
+/** 固定回调地址不合法时的错误文本。 */
+const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
 
 /** 待完成授权上下文。 */
 interface PendingContext extends PendingAuthorization {
@@ -256,18 +259,8 @@ export class PluginRoutes {
     }
     const clientId = asString(body.clientId);
     const redirectUri = asString(body.redirectUri);
-    if (redirectUri !== undefined) {
-      try {
-        const url = new URL(redirectUri);
-        if (
-          url.protocol !== 'http:' ||
-          (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')
-        ) {
-          throw new Error('redirectUri must point at 127.0.0.1 or localhost');
-        }
-      } catch (error) {
-        return jsonResponse({ error: messageOf(error) }, 400);
-      }
+    if (redirectUri !== undefined && !isLoopbackHttpUrl(redirectUri)) {
+      return jsonResponse({ error: LOOPBACK_REDIRECT_ERROR }, 400);
     }
     try {
       await this.editServers((servers) => {
@@ -423,10 +416,8 @@ export class PluginRoutes {
 
   /** 在固定回环端口监听一次回调。 */
   private async startLoopbackListener(redirectUri: string): Promise<Server> {
+    if (!isLoopbackHttpUrl(redirectUri)) throw new Error(LOOPBACK_REDIRECT_ERROR);
     const redirect = new URL(redirectUri);
-    if (redirect.hostname !== '127.0.0.1' && redirect.hostname !== 'localhost') {
-      throw new Error('A fixed OAuth redirect must point at 127.0.0.1 or localhost.');
-    }
     const server = createServer(async (req, res) => {
       const incoming = new URL(req.url ?? '/', `${redirect.protocol}//${redirect.host}`);
       if (incoming.pathname !== redirect.pathname) {

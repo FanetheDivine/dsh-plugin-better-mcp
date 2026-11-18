@@ -5,7 +5,7 @@
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "description": "Better MCP for DeepSeek Harness: per-server lazy mounting, in-app OAuth sign-in, and an HTTP MCP endpoint that exposes this harness's own tools to external MCP clients.",
+  "description": "Visually manage and authorize MCP servers, with lazy loading.",
   "icon": "./icon.svg",
   "keywords": [
     "dsh",

@@ -1,7 +1,12 @@
 /** 共享常量：插件标识、路由、凭据范围、会话目录与超时。 */
 
+import packageJson from '../package.json' with { type: 'json' };
+
 /** 插件名，与 cordis.patch.yml 的 name 一致。 */
 export const PLUGIN_NAME = 'dsh-plugin-better-mcp';
+
+/** 插件版本，取自 package.json。 */
+export const PLUGIN_VERSION: string = packageJson.version;
 
 /** 插件行 id，与 cordis.patch.yml 的 id 一致。 */
 export const PLUGIN_ROW_ID = 'better-mcp';

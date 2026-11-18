@@ -1,4 +1,7 @@
 // 前端入口接线测试：服务声明、中英字典、槽位注册参数、表单辅助函数与静态渲染。
+
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import type {} from '@deepseek-ai/dsh-client-locale/client';
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client';
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
@@ -10,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PanelSnapshot } from '../src/client/api.ts';
 import { apply, inject, PACKAGE_NAME, ROW_ID, ROW_KEY } from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
-import { McpPanel } from '../src/client/panel.tsx';
+import { McpPanel, ServerItem, statusParts } from '../src/client/panel.tsx';
 import {
   definitionFromValues,
   emptyForm,
@@ -90,6 +93,21 @@ describe('字典', () => {
   it('中英文键集一致且覆盖面板与表单文案', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
     expect(Object.keys(zh)).toEqual(expect.arrayContaining(['title', 'add', 'delete', 'save']));
+  });
+
+  it('每个键都被前端源码引用', () => {
+    const dir = path.join(import.meta.dirname, '..', 'src', 'client');
+    const source = readdirSync(dir)
+      .filter((file) => file.endsWith('.tsx'))
+      .map((file) => readFileSync(path.join(dir, file), 'utf8'))
+      .join('\n');
+    for (const key of Object.keys(zh)) expect(source, key).toContain(`'${key}'`);
+  });
+
+  it('英文徽标与开关使用 sentence case', () => {
+    for (const key of ['lazy', 'managed', 'external', 'authorized', 'needsAuth'] as const) {
+      expect(en[key].charAt(0)).toBe(en[key].charAt(0).toUpperCase());
+    }
   });
 });
 
@@ -230,6 +248,77 @@ describe('McpPanel', () => {
     expect(html).toContain('Loading…');
     // 静态渲染不执行 useEffect，因此不会发起状态请求。
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/** 渲染一行服务器。 */
+function renderRow(row: Record<string, unknown>, dict: Record<string, string> = zh): string {
+  const noop = () => undefined;
+  return renderToStaticMarkup(
+    createElement(
+      ServerItem as never,
+      {
+        t: translate(dict),
+        row: {
+          name: 'alpha',
+          managed: true,
+          lazy: true,
+          authorized: false,
+          mounted: true,
+          state: 'idle',
+          ...row,
+        },
+        busy: undefined,
+        onLazy: noop,
+        onRestart: noop,
+        onAuth: noop,
+        onSignOut: noop,
+        onEdit: noop,
+        onDelete: noop,
+      } as never,
+    ),
+  );
+}
+
+describe('服务器行', () => {
+  it('状态按字典格式化', () => {
+    expect(
+      statusParts(translate(zh), {
+        name: 'a',
+        managed: true,
+        lazy: true,
+        authorized: false,
+        mounted: true,
+        state: 'connected',
+        toolCount: 3,
+      }),
+    ).toEqual(['已连接', '3 个工具']);
+    expect(
+      statusParts(translate(en), {
+        name: 'a',
+        managed: true,
+        lazy: true,
+        authorized: false,
+        mounted: true,
+        state: 'reconnecting',
+        attempt: 2,
+        maxAttempts: 5,
+        error: 'HTTP 502',
+      }),
+    ).toEqual(['Reconnecting', 'Reconnect 2 of 5', 'HTTP 502']);
+  });
+
+  it('本插件服务器显示简介与操作', () => {
+    const html = renderRow({ description: 'Alpha tools' });
+    expect(html).toContain('Alpha tools');
+    expect(html).toContain(zh.restart);
+    expect(html).toContain(zh.edit);
+  });
+
+  it('其他来源的服务器只显示状态', () => {
+    const html = renderRow({ managed: false });
+    expect(html).toContain(zh.external);
+    expect(html).not.toContain('<button');
   });
 });
 
