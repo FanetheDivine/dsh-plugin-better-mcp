@@ -24,9 +24,8 @@ jobs:
       - name: Run Full check
         run: pnpm run full-check
 
-  # 模板阶段禁用发布：模板本身不是可用插件。
-  # 模板转化时解禁，步骤见 .specify/memory/constitution.md 原则 VII：
-  # -> 提醒用户把 npm Trusted Publisher 绑定到新仓库与 .github/workflows/ci.yml。
+  # 通过 npm Trusted Publishing（OIDC）发布：包设置里已绑定本仓库与 ci.yml。
+  # 改动 workflow 文件名或仓库位置时，必须同步更新 trusted publisher 配置。
   publish:
     name: Publish to npm (trusted publishing)
     needs: check
