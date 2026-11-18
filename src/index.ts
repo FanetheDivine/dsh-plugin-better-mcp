@@ -6,7 +6,7 @@
  */
 
 import { Config, type PluginConfig, readConfig } from './config.ts';
-import { PLUGIN_LABEL, PLUGIN_ROW_ID } from './constants.ts';
+import { CATALOG_SOURCE, PLUGIN_LABEL, PLUGIN_ROW_ID } from './constants.ts';
 import { PluginRoutes } from './routes.ts';
 import { ServerManager } from './servers.ts';
 import { buildManageTool } from './tools.ts';
@@ -92,6 +92,17 @@ export function apply(ctx: Context, config?: unknown): void {
       return undefined;
     });
     scoped.on('agent/disposed', ({ agent }) => visibility.forget(agent));
+    scoped.on('agent/pre-step', async ({ agent }, next) => {
+      const decision = await next();
+      if (decision.kind === 'reject') return decision;
+      const catalog = visibility.catalogFor(agent);
+      if (catalog === undefined) return decision;
+      // 每步最多一条目录消息。
+      const rest = decision.messages.filter(
+        (message) => (message.source as { kind?: unknown }).kind !== CATALOG_SOURCE,
+      );
+      return { ...decision, messages: [...rest, catalog] };
+    });
     scoped.on('tools/change', () => visibility.scheduleSyncAll());
     visibility.syncAll();
   });

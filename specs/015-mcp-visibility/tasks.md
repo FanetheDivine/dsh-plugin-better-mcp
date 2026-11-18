@@ -77,10 +77,10 @@
 
 **Independent Test**: 模拟 pre-step：首次追加完整目录；无变化不追加；移出 surface 后补写；激活后追加更新消息。
 
-- [ ] T024 [P] [US2] 新建 src/catalog.ts：`catalogEntries`、`catalogDigest`、`renderCatalog`、`renderCatalogUpdate`，文本与转义按 contracts/catalog-message.md；消息对象按 `UserMessage` 结构构造并冻结
-- [ ] T025 [US2] 在 src/visibility.ts 监听 `agent/pre-step`：`next()` 之后按 research R4 决定不写、写完整目录或写更新消息；写入后清除已落入消息的待定项
-- [ ] T026 [US2] 在 src/types.ts 用 `MessageSourceMap` 声明 `better-mcp-catalog` 来源
-- [ ] T027 [US2] 新建 tests/catalog.test.ts 覆盖渲染与摘要；在 tests/visibility.test.ts 覆盖 spec US2 验收场景 1–7
+- [x] T024 [P] [US2] 新建 src/catalog.ts：`catalogEntries`、`catalogDigest`、`renderCatalog`、`renderCatalogUpdate`，文本与转义按 contracts/catalog-message.md；消息对象按 `UserMessage` 结构构造并冻结
+- [x] T025 [US2] 在 src/visibility.ts 监听 `agent/pre-step`：`next()` 之后按 research R4 决定不写、写完整目录或写更新消息；写入后清除已落入消息的待定项
+- [x] T026 [US2] 在 src/types.ts 用 `MessageSourceMap` 声明 `better-mcp-catalog` 来源
+- [x] T027 [US2] 新建 tests/catalog.test.ts 覆盖渲染与摘要；在 tests/visibility.test.ts 覆盖 spec US2 验收场景 1–7
 
 **Checkpoint**: `pnpm format && pnpm check` 通过后提交。
 

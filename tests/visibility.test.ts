@@ -162,3 +162,111 @@ describe('工具与配置变化', () => {
     expect(agent._restrictionCount()).toBe(0);
   });
 });
+
+/** 执行一次 pre-step，提交写入的目录消息并返回它的正文。 */
+async function step(
+  ctx: Awaited<ReturnType<typeof setup>>['ctx'],
+  agent: FakeAgent,
+): Promise<string | undefined> {
+  const decision = (await ctx._waterfall(
+    'agent/pre-step',
+    { agent, messages: [] },
+    { kind: 'enter', messages: [] },
+  )) as { messages: Array<{ source: unknown; content: Array<{ text: string }> }> };
+  const catalog = decision.messages.find(
+    (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+  );
+  if (catalog === undefined) return undefined;
+  agent._commit(catalog);
+  return catalog.content[0]?.text;
+}
+
+describe('目录消息', () => {
+  it('首步写入完整目录', async () => {
+    const agent = makeAgent();
+    const { ctx } = await setup([agent]);
+    const text = await step(ctx, agent);
+    expect(text).toContain('- `eager` (active): Eager tools');
+    expect(text).toContain('- `lazy` (inactive): Lazy tools');
+    expect(text).toContain('`mcp_manage`');
+  });
+
+  it('状态不变且消息可见时不写', async () => {
+    const agent = makeAgent();
+    const { ctx } = await setup([agent]);
+    await step(ctx, agent);
+    expect(await step(ctx, agent)).toBeUndefined();
+  });
+
+  it('压缩移出目录后补写完整目录', async () => {
+    const agent = makeAgent();
+    const { ctx } = await setup([agent]);
+    await step(ctx, agent);
+    agent._compact();
+    const text = await step(ctx, agent);
+    expect(text).toContain('The following MCP servers are configured');
+  });
+
+  it('激活与停用各写一条更新消息', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    expect(await step(ctx, agent)).toContain(
+      'Now active: `lazy`. Call its tools directly with the mcp__lazy__ prefix.',
+    );
+    expect(await step(ctx, agent)).toBeUndefined();
+    await manage(agent, { server: 'lazy', command: 'inactive' });
+    expect(await step(ctx, agent)).toContain('Now inactive: `lazy`');
+  });
+
+  it('显式选择从会话日志恢复', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    await step(ctx, agent);
+    const restored = makeAgent('restored');
+    restored.session.events.push(...agent.session.events);
+    restored.session.surface.nodes.push(...agent.session.surface.nodes);
+    ctx._agents.push(restored);
+    ctx._emit('agent/created', { agent: restored, source: 'resume' });
+    expect(restored._deny()).toEqual([]);
+    expect(await step(ctx, restored)).toBeUndefined();
+  });
+
+  it('配置变化后写更新消息', async () => {
+    const agent = makeAgent();
+    const { ctx, config } = await setup([agent]);
+    await step(ctx, agent);
+    config.servers.set({ ...SERVERS, eager: { ...SERVERS.eager, description: 'Renamed' } });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(async () =>
+      expect(await step(ctx, agent)).toContain('The MCP server list changed.'),
+    );
+  });
+
+  it('没有服务器且从未发布时不写；删光服务器后写空目录', async () => {
+    const agent = makeAgent();
+    const { ctx, config } = await setup([agent]);
+    await step(ctx, agent);
+    config.servers.set({});
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(async () =>
+      expect(await step(ctx, agent)).toContain('No MCP servers are available.'),
+    );
+    const fresh = makeAgent('fresh');
+    expect(await step(ctx, fresh)).toBeUndefined();
+  });
+
+  it('拒绝的步骤保持原样', async () => {
+    const agent = makeAgent();
+    const { ctx } = await setup([agent]);
+    const decision = await ctx._waterfall(
+      'agent/pre-step',
+      { agent, messages: [] },
+      { kind: 'reject' },
+    );
+    expect(decision).toEqual({ kind: 'reject' });
+  });
+});

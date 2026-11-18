@@ -1,7 +1,9 @@
 /**
- * 会话可见性：每个 Agent 对本插件服务器的 active / inactive 选择，以及据此维护的工具限制。
+ * 会话可见性：每个 Agent 对本插件服务器的 active / inactive 选择、据此维护的工具限制，
+ * 以及每步检查并写入的 MCP 目录消息。
  * 导出 VisibilityRuntime、CatalogEntry、CatalogSource、CatalogState 与工具名归属函数。
  */
+import { catalogMessage, renderCatalog, renderCatalogUpdate, sameEntries } from './catalog.ts';
 import { CATALOG_SOURCE, MCP_TOOL_PREFIX } from './constants.ts';
 import type {
   Agent,
@@ -11,6 +13,7 @@ import type {
   ProjectionHandle,
   SessionEvent,
   SettingsReader,
+  UserMessage,
 } from './types.ts';
 import { isRecord } from './utils.ts';
 
@@ -246,6 +249,28 @@ export class VisibilityRuntime {
       this.restrictions.delete(agent);
       this.logger.warn(`better-mcp: could not restrict MCP tools: ${String(error)}`);
     }
+  }
+
+  /**
+   * 本步需要写入的目录消息。
+   * - 目录未变且上次的消息仍在模型可见区：不写。
+   * - 上次的消息已被压缩移出：写完整目录。
+   * - 目录变化：写更新消息。
+   * - 从未发布且没有服务器：不写。
+   * @param agent - 即将进入下一步的 Agent。
+   * @returns 目录消息；无需写入时为 undefined。
+   */
+  catalogFor(agent: Agent): UserMessage | undefined {
+    const entries = this.entriesOf(agent);
+    const state = this.catalogState(agent);
+    const visible = state.seq !== null && agent.session.surface.nodes.includes(state.seq as never);
+    if (visible && sameEntries(state.entries, entries)) return undefined;
+    if (state.seq === null && entries.length === 0) return undefined;
+    if (!visible && entries.length === 0) return undefined;
+    const overrides = this.overridesOf(agent);
+    return visible
+      ? catalogMessage(renderCatalogUpdate(state.entries, entries), entries, overrides, true)
+      : catalogMessage(renderCatalog(entries), entries, overrides, false);
   }
 
   /** 重算全部在线 Agent 的工具限制。 */

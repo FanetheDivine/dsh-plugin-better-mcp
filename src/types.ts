@@ -19,8 +19,8 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session';
 // Type-only：拉取 `ctx.sessionProjections` 声明。
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
-
 import type { PluginConfig } from './config.ts';
+import type { CatalogSource } from './visibility.ts';
 
 /** 插件配置类型。 */
 export type { PluginConfig } from './config.ts';
@@ -61,6 +61,13 @@ export interface HostFetchRoute {
 }
 
 /** `ctx.connection` 的 fetch 部分；宿主包未导出类型，这里按服务契约声明。 */
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** 本插件写入的会话 MCP 目录。 */
+    'better-mcp-catalog': CatalogSource;
+  }
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     connection: {
