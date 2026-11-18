@@ -39,16 +39,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] 在 `tests/client-bundle.test.ts` 删除 `readBundle()` 中的条件构建，改为读取产物前调用 `assertFreshDist()`，保留现有断言
-- [ ] T005 [P] [US1] 在 `tests/package-pack.test.ts` 删除 `packedPaths()` 中的条件构建，改为调用 `assertFreshDist()`，保留 tarball 断言
+- [X] T004 [P] [US1] 在 `tests/client-bundle.test.ts` 删除 `readBundle()` 中的条件构建，改为读取产物前调用 `assertFreshDist()`，保留现有断言
+- [X] T005 [P] [US1] 在 `tests/package-pack.test.ts` 删除 `packedPaths()` 中的条件构建，改为调用 `assertFreshDist()`，保留 tarball 断言
 
 ### Implementation for User Story 1
 
-- [ ] T006 [P] [US1] 在 `vitest.config.ts` 用 `test.projects` 声明 `code`（含 `tests/**/*.test.ts` 与 `tests/**/*.test.mjs`，排除两个产物测试）与 `dist`（只含 `tests/client-bundle.test.ts` 与 `tests/package-pack.test.ts`），均 `extends: true`，保留 primitives alias 与 `worktrees/` 排除
-- [ ] T007 [US1] 在 `package.json` 删除 `test`，新增 `test:code`（`vitest run --project code`）与 `test:dist`（`vitest run --project dist`），`check` 末项改为 `test:code`，`build` 末尾追加 `&& pnpm run test:dist`
-- [ ] T008 [US1] 更新 `docs/development.md` 的命令表：`build` 说明末尾跑 `test:dist`，`check` 只跑 `test:code`，移除 `test`，补一行门禁说明
-- [ ] T009 [US1] 更新 `.github/workflows/ci.yml` 的 `check` job 名称，体现 `test:code` 与产物测试随构建执行
-- [ ] T010 [US1] 运行验证：删除 `dist` 后 `pnpm test:code` 通过、`pnpm test:dist` 失败并含 `pnpm build`；`pnpm build` 一次通过；`touch src/index.ts` 后 `pnpm test:dist` 报告过期；恢复后 `pnpm check` 在无 `dist` 时通过；提交阶段 2
+- [X] T006 [P] [US1] 在 `vitest.config.ts` 用 `test.projects` 声明 `code`（含 `tests/**/*.test.ts` 与 `tests/**/*.test.mjs`，排除两个产物测试）与 `dist`（只含 `tests/client-bundle.test.ts` 与 `tests/package-pack.test.ts`），均 `extends: true`，保留 primitives alias 与 `worktrees/` 排除
+- [X] T007 [US1] 在 `package.json` 删除 `test`，新增 `test:code`（`vitest run --project code`）与 `test:dist`（`vitest run --project dist`），`check` 末项改为 `test:code`，`build` 末尾追加 `&& pnpm run test:dist`
+- [X] T008 [US1] 更新 `docs/development.md` 的命令表：`build` 说明末尾跑 `test:dist`，`check` 只跑 `test:code`，移除 `test`，补一行门禁说明
+- [X] T009 [US1] 更新 `.github/workflows/ci.yml` 的 `check` job 名称，体现 `test:code` 与产物测试随构建执行
+- [X] T010 [US1] 运行验证：删除 `dist` 后 `pnpm test:code` 通过、`pnpm test:dist` 失败并含 `pnpm build`；`pnpm build` 一次通过；`touch src/index.ts` 后 `pnpm test:dist` 报告过期；恢复后 `pnpm check` 在无 `dist` 时通过；提交阶段 2
 
 **Checkpoint**: US1 完成，`check` 与 `build` 各自可独立验证
 

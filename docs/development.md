@@ -61,15 +61,18 @@ dsh plugin add <repo>
 | 命令 | 作用 |
 | --- | --- |
 | `pnpm dev` | 监听并构建 |
-| `pnpm build` | 打包并生成类型声明 |
-| `pnpm check` | 依次运行类型检查、lint 与测试 |
+| `pnpm build` | 打包、生成类型声明并运行 `test:dist` |
+| `pnpm check` | 依次运行类型检查、lint 和 `test:code` |
 | `pnpm full-check` | `check` 加构建 |
 | `pnpm typecheck` | 类型检查 |
 | `pnpm lint` | biome 检查 |
 | `pnpm lint:fix` | biome 检查并自动修复 |
 | `pnpm format` | biome 格式化 |
-| `pnpm test` | 运行 vitest |
+| `pnpm test:code` | 只运行源码测试 |
+| `pnpm test:dist` | 只运行产物测试，要求 `dist` 新鲜 |
 | `pnpm run release` | 检查、格式化、升版本、归档 CHANGELOG 并推送 tag |
+
+代码质量门禁是 `pnpm check`；`test:code` 与 `test:dist` 用于局部验证。
 
 ## CI
 
