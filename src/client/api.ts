@@ -4,36 +4,28 @@
 export interface ServerRow {
   name: string;
   managed: boolean;
+  description?: string;
   transport?: string;
   url?: string;
   auth?: string;
   lazy: boolean;
   authorized: boolean;
   mounted: boolean;
+  /** 连接状态名。 */
   state: string;
-  detail?: string;
   toolCount?: number;
+  connectedAt?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  /** 宿主返回的原始错误文本。 */
+  error?: string;
+  cleanup?: 'failed' | 'unconfirmed';
   definition?: Record<string, unknown>;
-}
-
-/** 一个聚合端点组。 */
-export interface GroupView {
-  name: string;
-  title: string;
-  url: string;
-  include: string[];
-  exclude: string[];
 }
 
 /** 面板快照。 */
 export interface PanelSnapshot {
   servers: ServerRow[];
-  expose: {
-    enabled: boolean;
-    endpoint: string;
-    groups: GroupView[];
-    token: string;
-  };
 }
 
 /** 服务器定义（面板提交的结构）。 */
@@ -118,9 +110,4 @@ export function configureClient(input: {
   redirectUri?: string;
 }): Promise<PanelSnapshot> {
   return call('/api/better-mcp/oauth/client', { method: 'POST', body: input });
-}
-
-/** 轮换访问令牌。 */
-export function rotateEndpointToken(): Promise<{ token: string }> {
-  return call('/api/better-mcp/endpoint/rotate', { method: 'POST' });
 }

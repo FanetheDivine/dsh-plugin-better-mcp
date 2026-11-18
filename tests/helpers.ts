@@ -35,7 +35,7 @@ export interface RegisteredTool {
 /** 宿主 mocked 服务选项。 */
 export interface MockCtxOptions {
   /** 传给 apply 的 volatile 配置引用。 */
-  config?: { servers: FakeVolatile<unknown>; expose: FakeVolatile<unknown> };
+  config?: { servers: FakeVolatile<unknown> };
   /** 初始管理器状态。 */
   statuses?: Record<string, McpManagedServerStatus>;
   /** 外部插件管理的服务器。 */
@@ -48,11 +48,74 @@ export interface MockCtxOptions {
   noConfigEditor?: boolean;
   /** 工具执行结果。 */
   executeResult?: { content: unknown[]; isError: boolean };
+  /** 不提供 agents 与 sessionProjections 服务。 */
+  noAgents?: boolean;
+}
+
+/** 一条模拟会话事件。 */
+export interface FakeEvent {
+  seq: number;
+  type: string;
+  data: Record<string, unknown>;
+}
+
+/** 可编程 Agent 模拟。 */
+export interface FakeAgent {
+  id: string;
+  session: { events: FakeEvent[]; surface: { nodes: number[] }; readonly seq: number };
+  ctx: { tools: { restrict(filter: { allow?: string[]; deny?: string[] }): () => void } };
+  /** 当前生效的 deny 列表。 */
+  _deny(): string[];
+  /** 当前生效的限制数。 */
+  _restrictionCount(): number;
+  /** 把消息写入会话日志并放进可见区。 */
+  _commit(message: { source: unknown; content?: unknown }): number;
+  /** 模拟压缩：清空可见区。 */
+  _compact(): void;
+}
+
+/** 构造一个模拟 Agent。 */
+export function makeAgent(id = 'agent-1'): FakeAgent {
+  const restrictions = new Set<{ deny?: string[] }>();
+  const events: FakeEvent[] = [];
+  const session = {
+    events,
+    surface: { nodes: [] as number[] },
+    get seq() {
+      return events.length;
+    },
+  };
+  return {
+    id,
+    session,
+    ctx: {
+      tools: {
+        restrict(filter) {
+          restrictions.add(filter);
+          return () => {
+            restrictions.delete(filter);
+          };
+        },
+      },
+    },
+    _deny: () => [...restrictions].flatMap((filter) => filter.deny ?? []).sort(),
+    _restrictionCount: () => restrictions.size,
+    _commit(message) {
+      const seq = events.length;
+      events.push({ seq, type: 'user/message', data: { role: 'user', ...message } });
+      session.surface.nodes.push(seq);
+      return seq;
+    },
+    _compact() {
+      session.surface.nodes = [];
+    },
+  };
 }
 
 /** 可编程宿主 ctx 模拟的观测字段。 */
 export interface MockCtxState {
   _registeredTools: RegisteredTool[];
+  _agents: FakeAgent[];
   _effects: string[];
   _listeners: Map<string, Array<(...args: unknown[]) => void>>;
   _routes: Array<Record<string, unknown>>;
@@ -67,6 +130,8 @@ export interface MockCtxState {
   _setStatus(name: string, status: McpManagedServerStatus): void;
   _setExecuteResult(result: { content: unknown[]; isError: boolean }): void;
   _emit(type: string, ...args: unknown[]): void;
+  /** 依注册顺序执行一个 waterfall 事件。 */
+  _waterfall(type: string, payload: unknown, base: unknown): Promise<unknown>;
   _dispose(): void;
 }
 
@@ -74,6 +139,7 @@ export interface MockCtxState {
 export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
   const state = {
     _registeredTools: [] as RegisteredTool[],
+    _agents: [] as FakeAgent[],
     _effects: [] as string[],
     _listeners: new Map<string, Array<(...args: unknown[]) => void>>(),
     _routes: [] as Array<Record<string, unknown>>,
@@ -220,7 +286,6 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
         (ctx as unknown as MockCtxState)._configEdits.push(structuredClone(next));
         if (options.config !== undefined) {
           options.config.servers.set(next.servers);
-          options.config.expose.set(next.expose);
           (ctx as unknown as MockCtxState)._emit('loader/volatile-update', [['servers']]);
         }
       },
@@ -243,6 +308,25 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
         return () => {
           const index = state._routes.indexOf(route);
           if (index >= 0) state._routes.splice(index, 1);
+        };
+      },
+    },
+    agents: {
+      list: () => [...state._agents],
+    },
+    sessionProjections: {
+      async register(definition: {
+        init(): unknown;
+        apply(state: unknown, event: FakeEvent): unknown;
+      }) {
+        return {
+          stateOf(session: { events: FakeEvent[] }) {
+            let current = definition.init();
+            for (const event of session.events) current = definition.apply(current, event);
+            return current;
+          },
+          readerFor: () => () => undefined,
+          dispose: async () => undefined,
         };
       },
     },
@@ -269,6 +353,10 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
   if (options.noConnection === true) delete (ctx as Record<string, unknown>).connection;
   if (options.noWebServer === true) delete (ctx as Record<string, unknown>).webServer;
   if (options.noConfigEditor === true) delete (ctx as Record<string, unknown>).configEditor;
+  if (options.noAgents === true) {
+    delete (ctx as Record<string, unknown>).agents;
+    delete (ctx as Record<string, unknown>).sessionProjections;
+  }
 
   return Object.assign(ctx, state, {
     _setStatus(name: string, status: McpManagedServerStatus) {
@@ -281,6 +369,18 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
     },
     _emit(type: string, ...args: unknown[]) {
       for (const listener of state._listeners.get(type) ?? []) listener(...args);
+    },
+    async _waterfall(type: string, payload: unknown, base: unknown): Promise<unknown> {
+      const listeners = state._listeners.get(type) ?? [];
+      const run = async (index: number): Promise<unknown> => {
+        const listener = listeners[index];
+        if (listener === undefined) return base;
+        return (listener as (payload: unknown, next: () => Promise<unknown>) => unknown)(
+          payload,
+          () => run(index + 1),
+        );
+      };
+      return run(0);
     },
     _dispose() {
       for (const disposer of effectDisposers.splice(0)) disposer();

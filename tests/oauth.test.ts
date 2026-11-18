@@ -257,7 +257,11 @@ describe('registerClient', () => {
       },
     );
 
-    expect(result).toEqual({ clientId: 'cid', clientSecret: 'csecret' });
+    expect(result).toEqual({
+      clientId: 'cid',
+      clientSecret: 'csecret',
+      tokenAuthMethod: 'client_secret_post',
+    });
     expect(calls[0]?.url).toBe(`${AS}/register`);
     expect(calls[0]?.init.method).toBe('POST');
     const body = JSON.parse(String(calls[0]?.init.body)) as Record<string, unknown>;
@@ -390,6 +394,24 @@ describe('exchangeCode', () => {
     expect(form.get('client_id')).toBeNull();
     expect(form.get('client_secret')).toBeNull();
     expect(form.get('code_verifier')).toBe(makePending().verifier);
+  });
+
+  it('注册方式优先于元数据：声明 basic 但注册为 post 时用请求体', async () => {
+    const calls = stubFetch({ [TOKEN_URL]: () => json({ access_token: 'at' }) });
+    await exchangeCode(
+      makePending({
+        clientSecret: 's3cret',
+        tokenAuthMethod: 'client_secret_post',
+        authorization: {
+          token_endpoint: TOKEN_URL,
+          token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+        },
+      }),
+      'the-code',
+    );
+
+    expect(headersOf(calls[0]).authorization).toBeUndefined();
+    expect(formOf(calls[0]).get('client_secret')).toBe('s3cret');
   });
 
   it('HTTP 失败时错误包含状态码', async () => {

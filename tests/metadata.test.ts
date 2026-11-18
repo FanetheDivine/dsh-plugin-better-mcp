@@ -78,6 +78,14 @@ describe('插件元数据资源', () => {
     }
   });
 
+  it('描述与 package.json 一致', () => {
+    const zhMeta = asRecord(asRecord(readLocale('zh').data).meta);
+    const enMeta = asRecord(asRecord(readLocale('en').data).meta);
+    const manifest = asRecord(JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
+    expect(zhMeta.description).toBe('可视化地对MCP进行管理和鉴权；提供MCP懒加载能力');
+    expect(manifest.description).toBe(enMeta.description);
+  });
+
   it('package.json 导出并打包全部元数据资源', () => {
     const manifest = asRecord(JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
     expect(asRecord(manifest['exports'])['./locale/*.json']).toBe('./locale/*.json');

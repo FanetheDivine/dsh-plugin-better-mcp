@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Better MCP",
-    "description": "Per-server lazy mounting, in-app OAuth sign-in for MCP servers, and one HTTP MCP endpoint that exposes this harness's own plugin tools. Adds a sidebar MCP panel beside the Restart button: connection state per server, a lazy switch, Sign in / Sign out, and add, edit, or remove server definitions. Aggregate endpoints use a bearer token stored in the credentials store; tools that need an agent session report an error when called from an external MCP client."
+    "description": "Visually manage and authorize MCP servers, with lazy loading."
   }
 }

@@ -1,158 +1,105 @@
 /**
- * 面向模型的两个工具：`mcp_servers` 查看状态，`mcp_call` 按需挂载并调用。
- * 导出 buildServerTool、buildCallTool 与参数解析函数。
+ * 面向模型的唯一工具 `mcp_manage`：切换本会话中一台 MCP 服务器的可见性。
+ * 导出 buildManageTool 与参数解析函数 parseManageArgs。
  */
 
-import type { PanelSnapshot, ServerManager } from './servers.ts';
-import type { PluginLogger, SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
+import type { ServerManager } from './servers.ts';
+import type { SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
 import { isRecord } from './utils.ts';
+import type { VisibilityRuntime } from './visibility.ts';
 
-/** 一次 `mcp_call` 的已校验参数。 */
-export interface CallArgs {
+/** 一次 `mcp_manage` 的已校验参数。 */
+export interface ManageArgs {
   /** 服务器名。 */
   server: string;
-  /** 原始工具名。 */
-  tool: string;
-  /** 工具参数。 */
-  arguments: Record<string, unknown>;
+  /** 设为可见或不可见。 */
+  command: 'active' | 'inactive';
 }
 
-/** `mcp_call` 参数解析结果。 */
-export type CallArgsResult = { ok: true; args: CallArgs } | { ok: false; error: string };
+/** `mcp_manage` 的返回值。 */
+export interface ManageResult {
+  /** 服务器名。 */
+  server: string;
+  /** 本会话的新可见性。 */
+  active: boolean;
+  /** 连接状态。 */
+  state: string;
+  /** 已连接时的工具数。 */
+  toolCount?: number;
+  /** 未连接时的原因。 */
+  detail?: string;
+}
 
-/** 校验 `mcp_call` 参数。 */
-export function parseCallArgs(raw: unknown): CallArgsResult {
-  if (!isRecord(raw)) return { ok: false, error: 'arguments must be an object' };
-  const server = typeof raw.server === 'string' ? raw.server.trim() : '';
-  const tool = typeof raw.tool === 'string' ? raw.tool.trim() : '';
-  if (server === '') return { ok: false, error: 'server must not be empty' };
-  if (tool === '') return { ok: false, error: 'tool must not be empty' };
-  if (raw.arguments !== undefined && raw.arguments !== null && !isRecord(raw.arguments)) {
-    return { ok: false, error: 'arguments must be an object' };
+/** 校验 `mcp_manage` 参数；不合法时抛错。 */
+export function parseManageArgs(raw: unknown, available: readonly string[]): ManageArgs {
+  const args = isRecord(raw) ? raw : {};
+  const server = typeof args.server === 'string' ? args.server.trim() : '';
+  if (!available.includes(server)) {
+    throw new Error(
+      `No MCP server named '${server}'. Available: ${available.join(', ') || '(none)'}`,
+    );
   }
-  return {
-    ok: true,
-    args: { server, tool, arguments: isRecord(raw.arguments) ? raw.arguments : {} },
-  };
+  if (args.command !== 'active' && args.command !== 'inactive') {
+    throw new Error('command must be active or inactive.');
+  }
+  return { server, command: args.command };
 }
 
-/** 拼接内容中的文本块。 */
-function textOf(content: ReadonlyArray<unknown>): string {
-  return content
-    .filter(
-      (item): item is { type: 'text'; text: string } =>
-        isRecord(item) && item.type === 'text' && typeof item.text === 'string',
-    )
-    .map((item) => item.text)
-    .join('\n');
+/** 把返回值渲染为给模型的一行说明。 */
+export function renderManageResult(result: ManageResult): string {
+  const { server } = result;
+  if (!result.active) return `${server} is now inactive. Do not call mcp__${server}__ tools.`;
+  if (result.state === 'connected') {
+    return `${server} is now active. Its ${result.toolCount ?? 0} tools are available as mcp__${server}__<tool> from the next step.`;
+  }
+  const reason = result.detail === undefined ? '' : `: ${result.detail}`;
+  return `${server} is now active, but it is ${result.state}${reason}. Its tools appear once it connects.`;
 }
 
-/** 构造 `mcp_servers` 工具。 */
-export function buildServerTool(manager: ServerManager): ToolDefinition {
-  return {
-    name: 'mcp_servers',
-    description:
-      "List this profile's MCP servers with connection state, tool counts, lazy and authorization flags. Use it before mcp_call when a server may be lazy or need sign-in.",
-    parameters: { type: 'object', properties: {}, additionalProperties: false },
-    output: {
-      schema: {},
-      render: (_args, value) => {
-        const snapshot = value as unknown as PanelSnapshot;
-        const lines: string[] = [];
-        for (const server of snapshot.servers) {
-          const flags = [
-            server.managed ? 'managed' : 'external',
-            server.lazy ? 'lazy' : 'resident',
-          ];
-          if (server.auth === 'oauth') flags.push(server.authorized ? 'authorized' : 'needs-auth');
-          const detail =
-            server.state === 'connected'
-              ? `${server.toolCount ?? 0} tool(s)`
-              : (server.detail ?? '');
-          lines.push(
-            `${server.name} — ${server.state}${detail === '' ? '' : ` (${detail})`} [${flags.join(', ')}]`,
-          );
-        }
-        if (snapshot.servers.length === 0) lines.push('(no MCP servers)');
-        lines.push('', 'Aggregate endpoint:');
-        for (const group of snapshot.expose.groups) lines.push(`  ${group.url} — ${group.title}`);
-        return [{ type: 'text', text: lines.join('\n') }];
-      },
-    },
-    async execute() {
-      return manager.snapshot(false);
-    },
-  };
-}
-
-/** 构造 `mcp_call` 工具。 */
-export function buildCallTool(
+/** 构造 `mcp_manage` 工具。 */
+export function buildManageTool(
   manager: ServerManager,
+  visibility: VisibilityRuntime,
   getSettings: SettingsReader,
-  logger: PluginLogger,
 ): ToolDefinition {
   return {
-    name: 'mcp_call',
+    name: 'mcp_manage',
     description:
-      "Call one tool on an MCP server by name, mounting a lazy server on first use. Prefer the server's native mcp__<server>__<tool> tool when it is already connected; use this when the server is lazy, or to reach a server that is not currently mounted.",
+      "Show or hide one MCP server's tools in this session. Active servers expose their tools as mcp__<server>__<tool> from the next step; inactive servers' tools are removed. The session's MCP catalog lists the servers.",
     parameters: {
       type: 'object',
       properties: {
-        server: { type: 'string', description: 'MCP server name. mcp_servers lists them.' },
-        tool: {
+        server: { type: 'string', description: 'MCP server name from the MCP catalog.' },
+        command: {
           type: 'string',
-          description: 'Raw tool name on that server, without the mcp__<server>__ prefix.',
-        },
-        arguments: {
-          type: 'object',
-          description: 'Tool arguments as a JSON object. Defaults to an empty object.',
-          additionalProperties: true,
+          enum: ['active', 'inactive'],
+          description: 'active shows the server tools; inactive hides them.',
         },
       },
-      required: ['server', 'tool'],
+      required: ['server', 'command'],
       additionalProperties: false,
     },
     output: {
       schema: {},
-      render: (_args, value) => {
-        const outcome = value as unknown as {
-          server: string;
-          tool: string;
-          isError: boolean;
-          content: ReadonlyArray<unknown>;
-        };
-        return [
-          {
-            type: 'text',
-            text: `${outcome.server}.${outcome.tool}: ${outcome.isError ? 'error' : 'ok'}\n${textOf(outcome.content)}`,
-          },
-        ];
-      },
+      render: (_args: unknown, value: unknown) => [
+        { type: 'text', text: renderManageResult(value as unknown as ManageResult) },
+      ],
     },
     async execute(args: unknown, exec: ToolRunContext) {
-      const parsed = parseCallArgs(args);
-      if (!parsed.ok) throw new Error(parsed.error);
-      const { server: serverName, tool, arguments: callArguments } = parsed.args;
-      const settings = getSettings();
-      if (settings.servers[serverName] === undefined) {
-        const managed = manager.listManagedNames();
-        throw new Error(
-          `No configured MCP server named '${serverName}'. Configured: ${
-            Object.keys(settings.servers).join(', ') || '(none)'
-          }; managed: ${managed.join(', ') || '(none)'}`,
-        );
-      }
-      await manager.mount(serverName);
-      await manager.waitConnected(serverName, exec.signal);
-      const publicName = manager.publicToolName(serverName, tool);
-      logger.info(`better-mcp: calling '${publicName}'`);
-      const outcome = await manager.execute(publicName, callArguments, exec.signal);
-      return {
-        server: serverName,
-        tool,
-        isError: outcome.isError,
-        content: outcome.content,
+      const agent = exec.agent;
+      if (agent === undefined) throw new Error('mcp_manage needs an agent session.');
+      const parsed = parseManageArgs(args, Object.keys(getSettings().servers).sort());
+      const active = parsed.command === 'active';
+      visibility.setActive(agent, parsed.server, active);
+      const status = manager.statusOf(parsed.server);
+      const result: ManageResult = {
+        server: parsed.server,
+        active,
+        state: status.state,
+        ...(status.toolCount === undefined ? {} : { toolCount: status.toolCount }),
+        ...(status.error === undefined ? {} : { detail: status.error }),
       };
+      return result as never;
     },
-  };
+  } as unknown as ToolDefinition;
 }

@@ -86,11 +86,32 @@ node mcp-cases.mjs
 | 用例 | 断言 |
 | --- | --- |
 | M1 装载 | 插件已激活 |
-| M2 工具 | `mcp_servers` 与 `mcp_call` 出现在工具表 |
+| M2 工具 | 工具表含 `mcp_manage`，不含 `mcp_servers` 与 `mcp_call` |
 | M3 浏览器产物 | 客户端模块图包含本插件 |
-| M4 配置 | 默认 `servers` 为空，`expose.enabled` 为真 |
-| M5 volatile 写入 | 新增懒加载服务器后 `fiber.uid` 不变，懒加载服务器不挂载 |
+| M4 配置 | 默认 `servers` 为空，配置没有 `expose` |
+| M5 volatile 写入 | 新增懒加载服务器后 `fiber.uid` 不变，服务器照常挂载 |
 | M6 删除定义 | 删除后配置回空，插件实例不变 |
+
+可见性用例（需要至少一台已连接的本插件服务器）：
+
+```sh
+RDT_SERVER=deepwiki node visibility-cases.mjs
+```
+
+| 用例 | 断言 |
+| --- | --- |
+| V0 服务器就绪 | 全局工具表出现 `mcp__<server>__*` |
+| V1 目录提醒 | 首个请求含 `<mcp_servers>` 目录、简介与 `mcp_manage` 用法 |
+| V2 默认隐藏 | 懒加载服务器的工具不在请求的工具表里 |
+| V3 激活 | `mcp_manage` 后下一步请求带 `mcp__<server>__*`，工具结果说明前缀 |
+| V4 会话隔离 | 另一个会话仍看不到 |
+| V5 变化提醒 | 写入 `Now active` 与 `mcp__<server>__` 前缀 |
+| V6 无变化 | 状态未变的步骤不写新提醒 |
+| V7 压缩补写 | 压缩后目录消息离开可见区，下一步重新写入完整目录 |
+| V8 停用 | 工具移除，提醒写 `Now inactive` 与禁止调用 |
+| V9 无会话 | `mcp_manage` 报错 |
+
+mock provider 的标记见 [mock-provider.mjs](scripts/mock-provider.mjs) 文件头：`MCP_TOOLS`、`MCP_MANAGE:<server>:<cmd>`、`MCP_CALL:<tool>|<json>`。
 
 浏览器用例：
 

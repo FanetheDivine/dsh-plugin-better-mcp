@@ -1,31 +1,30 @@
 /**
- * 服务器生命周期：按需挂载、卸载、重连、连接等待与面板快照。
+ * 服务器生命周期：挂载、卸载、重连与面板快照。
  *
  * 挂载通过 `ctx.mcpManager.register()` 完成，连接、重连、工具发现与拆除仍由管理器负责。
  */
-import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-import { CONNECT_TIMEOUT_MS } from './constants.ts';
+import type { ServerDefinition } from './config.ts';
 import { readGrant, writeGrant } from './credentials.ts';
 import { refresh } from './oauth.ts';
-import { readState } from './state.ts';
 import type {
   Context,
   McpManagedServerStatus,
   PluginConfig,
   PluginLogger,
   SettingsReader,
-  ToolSchemaView,
 } from './types.ts';
 import { isRecord } from './utils.ts';
 
 /** 面板里的一台服务器。 */
-export interface ServerRow {
+export interface ServerRow extends StatusView {
   /** 服务器名。 */
   name: string;
   /** 是否由本插件配置。 */
   managed: boolean;
+  /** 本插件服务器的简介。 */
+  description?: string;
   /** 传输方式。 */
   transport?: string;
   /** 端点地址。 */
@@ -38,67 +37,32 @@ export interface ServerRow {
   authorized: boolean;
   /** 是否已由本插件挂载。 */
   mounted: boolean;
-  /** 运行时状态。 */
-  state: string;
-  /** 状态说明。 */
-  detail?: string;
-  /** 已连接时的工具数。 */
-  toolCount?: number;
   /** 已脱敏的定义，只随面板快照返回。 */
   definition?: Record<string, unknown>;
-}
-
-/** 一个聚合端点组。 */
-export interface GroupView {
-  /** 组名。 */
-  name: string;
-  /** 显示标题。 */
-  title: string;
-  /** 组地址。 */
-  url: string;
-  /** 包含通配符。 */
-  include: string[];
-  /** 排除通配符。 */
-  exclude: string[];
 }
 
 /** 面板快照。 */
 export interface PanelSnapshot {
   /** 服务器行。 */
   servers: ServerRow[];
-  /** 聚合端点。 */
-  expose: {
-    /** 是否启用。 */
-    enabled: boolean;
-    /** 端点前缀。 */
-    endpoint: string;
-    /** 组视图。 */
-    groups: GroupView[];
-  };
 }
 
-/** 带令牌的完整快照，只用于同源面板路由。 */
-export interface PanelSnapshotWithToken extends PanelSnapshot {
-  /** 聚合端点信息与令牌。 */
-  expose: PanelSnapshot['expose'] & { token: string };
-}
-
-/** 一次工具调用的结果。 */
-export interface ToolOutcome {
-  /** 内容块。 */
-  content: ReadonlyArray<unknown>;
-  /** 是否被工具标记为错误。 */
-  isError: boolean;
-}
-
-/** 连接状态压缩视图。 */
+/** 连接状态的结构化视图，由面板按字典格式化。 */
 export interface StatusView {
   /** 状态名。 */
   state: string;
-  /** 说明文本。 */
-  detail?: string;
-  /** 工具数。 */
+  /** 已连接时的工具数。 */
   toolCount?: number;
+  /** 已连接时的时间戳。 */
+  connectedAt?: number;
+  /** 连接或重连次数。 */
+  attempt?: number;
+  /** 重连上限。 */
+  maxAttempts?: number;
+  /** 宿主返回的原始错误文本。 */
+  error?: string;
+  /** 清理异常。 */
+  cleanup?: 'failed' | 'unconfirmed';
 }
 
 /** 服务器管理。 */
@@ -125,17 +89,6 @@ export class ServerManager {
     return next;
   }
 
-  /** 服务器当前的懒加载值：运行时状态优先，配置默认兜底。 */
-  async isLazy(
-    serverName: string,
-    definition = this.getSettings().servers[serverName],
-  ): Promise<boolean> {
-    const state = await readState();
-    const stored = state.lazy[serverName];
-    if (typeof stored === 'boolean') return stored;
-    return definition?.lazy !== false;
-  }
-
   /** 读取可用访问令牌，临近过期时刷新。 */
   async accessTokenOf(serverName: string): Promise<string | undefined> {
     const grant = await readGrant(this.ctx, serverName);
@@ -152,6 +105,7 @@ export class ServerManager {
         refreshToken,
         ...(grant.resource === undefined ? {} : { resource: grant.resource }),
         ...(grant.authorization === undefined ? {} : { authorization: grant.authorization }),
+        ...(grant.tokenAuthMethod === undefined ? {} : { tokenAuthMethod: grant.tokenAuthMethod }),
       });
       const next = {
         ...grant,
@@ -175,7 +129,7 @@ export class ServerManager {
     if (definition === undefined) {
       throw new Error(`No configured MCP server named '${serverName}'.`);
     }
-    const { lazy: _lazy, auth, oauth: _oauth, ...rest } = definition;
+    const { description: _description, lazy: _lazy, auth, oauth: _oauth, ...rest } = definition;
     const entry: Record<string, unknown> = { ...rest };
     if (auth === 'oauth' || auth === undefined) {
       const token = await this.accessTokenOf(serverName);
@@ -228,38 +182,36 @@ export class ServerManager {
     });
   }
 
-  /** 重连一台服务器。 */
+  /** 重连一台服务器：卸载后重新挂载。 */
   async restart(serverName: string): Promise<void> {
     await this.unmount(serverName);
-    if (!(await this.isLazy(serverName))) await this.mount(serverName);
+    await this.mount(serverName);
   }
 
-  /** 等待一台已挂载服务器进入已连接状态。 */
-  async waitConnected(serverName: string, signal?: AbortSignal): Promise<{ toolCount: number }> {
-    const deadline = Date.now() + CONNECT_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      if (signal?.aborted === true) throw new Error('cancelled');
-      const view = this.ctx.mcpManager.list().find((candidate) => candidate.name === serverName);
-      const status = view?.status;
-      if (status?.state === 'connected') return { toolCount: status.toolCount };
-      if (status?.state === 'failed') {
-        throw new Error(
-          `MCP server '${serverName}' failed: ${statusDetail(status) || String(status.reason)}`,
-        );
-      }
-      if (status?.state === 'waiting-credentials') {
-        throw new Error(
-          `MCP server '${serverName}' is waiting for credentials: ${status.lastError}`,
-        );
-      }
-      if (status?.state === 'reconnecting' && /401|unauthorized/i.test(status.lastError ?? '')) {
-        throw new Error(
-          `MCP server '${serverName}' rejected the token (401). Open the MCP panel and sign in.`,
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
+  /** 挂载全部已配置的服务器；单台失败只记录告警。 */
+  async mountAll(reason: string): Promise<void> {
+    for (const serverName of Object.keys(this.getSettings().servers)) {
+      await this.tryMount(serverName, reason);
     }
-    throw new Error(`Timed out waiting for MCP server '${serverName}' to connect.`);
+  }
+
+  /** 挂载一台服务器；失败只记录告警。 */
+  private async tryMount(serverName: string, reason: string): Promise<void> {
+    try {
+      await this.mount(serverName);
+    } catch (error) {
+      this.logger.warn(
+        `better-mcp: could not mount '${serverName}' ${reason}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  /** 一台服务器当前的连接状态。 */
+  statusOf(serverName: string): StatusView {
+    const view = this.ctx.mcpManager.list().find((candidate) => candidate.name === serverName);
+    return view === undefined ? { state: 'idle' } : statusOf(view.status);
   }
 
   /** 管理器当前管理的服务器名。 */
@@ -267,58 +219,9 @@ export class ServerManager {
     return this.ctx.mcpManager.list().map((view) => view.name);
   }
 
-  /** 把服务器发布的工具名解析为注册名。 */
-  publicToolName(serverName: string, rawName: string): string {
-    const prefix = `mcp__${serverName}__`;
-    const schemas = this.ctx.tools.schemas() as unknown as ReadonlyArray<ToolSchemaView>;
-    const candidates = schemas
-      .map((schema) => schema.name)
-      .filter((name) => name.startsWith(prefix));
-    if (candidates.includes(`${prefix}${rawName}`)) return `${prefix}${rawName}`;
-    const normalized = candidates.find(
-      (name) => name.slice(prefix.length).replace(/_[0-9a-f]{12}$/, '') === rawName,
-    );
-    if (normalized !== undefined) return normalized;
-    const available = candidates.map((name) => name.slice(prefix.length)).join(', ') || '(none)';
-    throw new Error(
-      `Server '${serverName}' has no tool named '${rawName}'. Available: ${available}`,
-    );
-  }
-
-  /** 执行一个注册工具并返回规范化结果。 */
-  async execute(
-    toolName: string,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<ToolOutcome> {
-    const batch = await this.ctx.tools.execute({
-      calls: [
-        {
-          type: 'tool-call',
-          id: `better-mcp-${randomUUID()}`,
-          name: toolName,
-          arguments: JSON.stringify(args ?? {}),
-        },
-      ] as never,
-      signal,
-    });
-    const result = batch.results[0]?.result;
-    if (result === undefined) throw new Error(`Tool '${toolName}' produced no result.`);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content, isError: false };
-  }
-
   /** 构造面板快照。 */
-  async snapshot(includeToken: false): Promise<PanelSnapshot>;
-  async snapshot(includeToken: true, token: () => Promise<string>): Promise<PanelSnapshotWithToken>;
-  async snapshot(
-    includeToken: boolean,
-    token?: () => Promise<string>,
-  ): Promise<PanelSnapshot | PanelSnapshotWithToken> {
+  async snapshot(): Promise<PanelSnapshot> {
     const settings = this.getSettings();
-    const state = await readState();
     const managed = new Map(this.ctx.mcpManager.list().map((view) => [view.name, view]));
     const names = new Set([...Object.keys(settings.servers), ...managed.keys()]);
     const rows: ServerRow[] = [];
@@ -327,18 +230,13 @@ export class ServerManager {
       const mine = definition !== undefined;
       const view = managed.get(serverName);
       const grant = mine ? await readGrant(this.ctx, serverName) : undefined;
-      const lazy = mine
-        ? typeof state.lazy[serverName] === 'boolean'
-          ? state.lazy[serverName]
-          : definition.lazy !== false
-        : false;
+      const lazy = mine ? definition.lazy !== false : false;
       const status = view === undefined ? { state: 'idle' } : statusOf(view.status);
       rows.push({
         name: serverName,
         managed: mine,
-        ...(includeToken && definition !== undefined
-          ? { definition: publicDefinition(definition) }
-          : {}),
+        ...(definition === undefined ? {} : { description: definition.description }),
+        ...(definition === undefined ? {} : { definition: publicDefinition(definition) }),
         ...(typeof definition?.transport === 'string' ? { transport: definition.transport } : {}),
         ...(typeof definition?.url === 'string' ? { url: definition.url } : {}),
         ...(typeof definition?.auth === 'string'
@@ -352,24 +250,10 @@ export class ServerManager {
         ...status,
       });
     }
-    const expose = {
-      enabled: settings.expose.enabled,
-      endpoint: settings.expose.endpoint,
-      groups: Object.entries(settings.expose.groups).map(([groupName, group]) => ({
-        name: groupName,
-        title: group.title ?? groupName,
-        url: `${settings.expose.endpoint}/${groupName}`,
-        include: group.include,
-        exclude: group.exclude,
-      })),
-    };
-    if (includeToken && token !== undefined) {
-      return { servers: rows, expose: { ...expose, token: await token() } };
-    }
-    return { servers: rows, expose };
+    return { servers: rows };
   }
 
-  /** 按新旧配置对账：卸载移除项，挂载新增项，重建变更项。 */
+  /** 按新旧配置对账：卸载移除项，挂载新增项，重建变更项。只改简介或懒加载时保留连接。 */
   async reconcile(previous: Readonly<PluginConfig>, next: Readonly<PluginConfig>): Promise<void> {
     const names = new Set([...Object.keys(previous.servers), ...Object.keys(next.servers)]);
     for (const serverName of names) {
@@ -379,18 +263,11 @@ export class ServerManager {
         await this.unmount(serverName);
         continue;
       }
-      if (before !== undefined && isDeepStrictEqual(before, after)) continue;
-      if (before !== undefined) await this.unmount(serverName);
-      if (await this.isLazy(serverName, after)) continue;
-      try {
-        await this.mount(serverName);
-      } catch (error) {
-        this.logger.warn(
-          `better-mcp: could not mount '${serverName}' after a config change: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
+      if (before !== undefined && isDeepStrictEqual(connectionOf(before), connectionOf(after))) {
+        continue;
       }
+      if (before !== undefined) await this.unmount(serverName);
+      await this.tryMount(serverName, 'after a config change');
     }
   }
 
@@ -406,6 +283,12 @@ export class ServerManager {
     this.mounts.clear();
     this.chains.clear();
   }
+}
+
+/** 定义中影响连接的部分：去掉简介与懒加载。 */
+function connectionOf(definition: ServerDefinition): Record<string, unknown> {
+  const { description: _description, lazy: _lazy, ...rest } = definition;
+  return rest;
 }
 
 /** 去掉定义中的客户端密钥，供面板回填表单。 */
@@ -425,47 +308,34 @@ export function statusOf(status: McpManagedServerStatus | undefined): StatusView
   if (status === undefined) return { state: 'idle' };
   switch (status.state) {
     case 'connected':
-      return {
-        state: 'connected',
-        toolCount: status.toolCount,
-        detail: `connected at ${new Date(status.connectedAt).toISOString()}`,
-      };
+      return { state: 'connected', toolCount: status.toolCount, connectedAt: status.connectedAt };
     case 'connecting':
-      return {
-        state: 'connecting',
-        ...(status.attempt > 0 ? { detail: `attempt ${status.attempt}` } : {}),
-      };
+      return { state: 'connecting', ...(status.attempt > 0 ? { attempt: status.attempt } : {}) };
     case 'reconnecting':
       return {
         state: 'reconnecting',
-        detail: `${status.attempt}/${status.maxAttempts} · ${status.lastError}`,
+        attempt: status.attempt,
+        maxAttempts: status.maxAttempts,
+        error: status.lastError,
       };
     case 'waiting-credentials':
-      return { state: 'waiting-credentials', detail: status.lastError };
+      return { state: 'waiting-credentials', error: status.lastError };
     case 'failed':
+      if (status.reason === 'cleanup') return { state: 'failed', cleanup: 'failed' };
       return {
         state: 'failed',
-        detail:
-          status.reason === 'cleanup'
-            ? 'cleanup did not finish'
-            : typeof status.lastError === 'string'
-              ? status.lastError
-              : status.reason,
+        error: typeof status.lastError === 'string' ? status.lastError : status.reason,
       };
     case 'disabled':
       return { state: 'disabled' };
-    case 'closed': {
-      const detail =
-        status.result.cleanupError ??
-        (status.result.closeConfirmed === false ? 'close unconfirmed' : undefined);
-      return detail === undefined ? { state: 'closed' } : { state: 'closed', detail };
-    }
+    case 'closed':
+      if (status.result.cleanupError !== undefined) {
+        return { state: 'closed', cleanup: 'failed', error: status.result.cleanupError };
+      }
+      return status.result.closeConfirmed === false
+        ? { state: 'closed', cleanup: 'unconfirmed' }
+        : { state: 'closed' };
     default:
       return { state: String((status as { state?: string }).state) };
   }
-}
-
-/** 失败状态的说明文本。 */
-function statusDetail(status: McpManagedServerStatus): string | undefined {
-  return statusOf(status).detail;
 }

@@ -1,6 +1,6 @@
 # 项目说明
 
-DSH 插件 `dsh-plugin-better-mcp`：按服务器懒加载 MCP、可视化 OAuth 登录与无状态 HTTP MCP 端点。用 TypeScript 开发，用 tsdown 构建，用 biome 检查代码质量，用 vitest 运行测试。
+DSH 插件 `dsh-plugin-better-mcp`：可视化地管理 MCP 服务器与 OAuth 鉴权，按会话控制 MCP 工具的可见性。用 TypeScript 开发，用 tsdown 构建，用 biome 检查代码质量，用 vitest 运行测试。
 
 - 常用 pnpm 脚本：`dev`、`build`、`check`、`full-check`、`release`、`test:code`、`test:dist`、`lint`、`lint:fix`、`format`。
 - 命令说明见 [development.md](./docs/development.md#命令)。

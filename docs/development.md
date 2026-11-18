@@ -92,14 +92,14 @@ dsh plugin add <repo>
 | 文件 | 覆盖内容 |
 | --- | --- |
 | `tests/plugin.test.ts` | 入口契约、启动挂载、volatile 对账、卸载清理 |
+| `tests/visibility.test.ts` | 会话可见性、`mcp_manage`、工具限制与目录消息时机 |
+| `tests/catalog.test.ts` | 目录消息渲染、转义与消息结构 |
 | `tests/config.test.ts` | 默认值、严格校验、服务器定义规则、volatile 读取 |
-| `tests/state.test.ts` | 懒加载状态读写与损坏回退 |
-| `tests/credentials.test.ts` | 授权、客户端密钥、聚合令牌 |
+| `tests/credentials.test.ts` | 授权与客户端密钥 |
 | `tests/oauth.test.ts` | 发现、动态注册、PKCE、换码与刷新 |
-| `tests/aggregate.test.ts` | 组匹配、鉴权、JSON-RPC 方法与批量 |
-| `tests/servers.test.ts` | 挂载、等待连接、工具名解析、快照与对账 |
-| `tests/routes.test.ts` | 面板路由、OAuth 路由、回调与端点接线 |
-| `tests/client.test.ts` | 字典、槽位注册、表单校验与静态渲染 |
+| `tests/servers.test.ts` | 挂载、状态、快照与对账 |
+| `tests/routes.test.ts` | 面板路由、OAuth 路由与回调 |
+| `tests/client.test.ts` | 字典、槽位注册、表单校验、状态格式化与静态渲染 |
 | `tests/client-bundle.test.ts` | `dist/client.js` 的注册契约与导出（产物测试） |
 | `tests/package-pack.test.ts` | npm 包内容与补丁（产物测试） |
 | `tests/metadata.test.ts` | 插件元数据的结构、键集、禁用字符与清单声明 |
@@ -157,17 +157,16 @@ locale/                     # 插件元数据，规范见 i18n.md
 src/
 ├── index.ts                # 宿主入口：装配、挂载、热更新对账
 ├── config.ts               # Config schema、默认值、严格校验
-├── constants.ts            # 插件标识、路径、超时与批量上限
+├── constants.ts            # 插件标识、路由、凭据范围与目录来源
 ├── types.ts                # 宿主类型再导出与路由契约
-├── utils.ts                # 对象读取、JSON 响应、glob、grantId
-├── home.ts                 # DSH 家目录解析
-├── state.ts                # 懒加载状态
-├── credentials.ts          # 授权、客户端密钥、聚合令牌
+├── utils.ts                # 对象读取、JSON 响应、回环地址、grantId
+├── credentials.ts          # 授权与客户端密钥
 ├── oauth.ts                # 发现、注册、PKCE、换码与刷新
-├── aggregate.ts            # 无状态 MCP 端点处理器
-├── servers.ts              # 挂载、连接等待、工具解析与快照
-├── routes.ts               # /api 路由、回调与端点注册
-├── tools.ts                # mcp_servers 与 mcp_call
+├── servers.ts              # 挂载、对账、状态与面板快照
+├── routes.ts               # /api 路由与 OAuth 回调
+├── visibility.ts           # 会话可见性、工具限制与目录投影
+├── catalog.ts              # 目录消息渲染
+├── tools.ts                # mcp_manage
 └── client/
     ├── index.tsx           # 浏览器入口：字典、侧栏动作、配置页
     ├── panel.tsx           # 共享面板

@@ -1,5 +1,5 @@
 /**
- * 共享 MCP 面板：服务器状态、懒加载、重连、授权、增删改与聚合端点。
+ * 共享 MCP 面板：服务器状态、懒加载、重连、授权与增删改。
  * 侧栏弹窗与插件页配置页使用同一个组件。
  */
 
@@ -12,14 +12,13 @@ import {
   type PanelSnapshot,
   removeServer,
   restart,
-  rotateEndpointToken,
   type ServerRow,
   setLazy,
   signOut,
   startOAuth,
   upsertServer,
 } from './api.ts';
-import type { NS } from './locales.ts';
+import type { McpKey, NS } from './locales.ts';
 import {
   definitionFromValues,
   emptyForm,
@@ -64,8 +63,48 @@ function stateColor(state: string): string {
   }
 }
 
+/** 连接状态名到字典键。 */
+const STATE_KEYS: Record<string, McpKey> = {
+  idle: 'stateIdle',
+  connecting: 'stateConnecting',
+  connected: 'stateConnected',
+  reconnecting: 'stateReconnecting',
+  'waiting-credentials': 'stateWaitingCredentials',
+  failed: 'stateFailed',
+  disabled: 'stateDisabled',
+  closed: 'stateClosed',
+};
+
+/**
+ * 把服务器状态格式化为一行说明的各段。
+ * @param t - 翻译函数。
+ * @param row - 服务器行。
+ * @returns 依次显示、以「 · 」连接的文本段。
+ */
+export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[] {
+  const key = STATE_KEYS[row.state];
+  const parts = [key === undefined ? row.state : t(key)];
+  if (row.state === 'connected') {
+    parts.push(t('toolCount', { count: row.toolCount ?? 0 }));
+    if (row.connectedAt !== undefined) {
+      parts.push(t('connectedAt', { time: new Date(row.connectedAt).toLocaleString() }));
+    }
+  }
+  if (row.attempt !== undefined) {
+    parts.push(
+      row.maxAttempts === undefined
+        ? t('attempt', { attempt: row.attempt })
+        : t('attemptOf', { attempt: row.attempt, max: row.maxAttempts }),
+    );
+  }
+  if (row.cleanup === 'failed') parts.push(t('cleanupFailed'));
+  if (row.cleanup === 'unconfirmed') parts.push(t('cleanupUnconfirmed'));
+  if (row.error !== undefined && row.error !== '') parts.push(row.error);
+  return parts;
+}
+
 /** 服务器行。 */
-function ServerItem(props: {
+export function ServerItem(props: {
   t: TranslateNS<typeof NS>;
   row: ServerRow;
   busy: string | undefined;
@@ -93,7 +132,7 @@ function ServerItem(props: {
         ))}
         <span style={styles.spacer} />
         {row.managed ? (
-          <label style={styles.switch} title={t('lazy')}>
+          <label style={styles.switch} title={t('lazyHint')}>
             <input
               type="checkbox"
               checked={row.lazy}
@@ -104,37 +143,39 @@ function ServerItem(props: {
           </label>
         ) : null}
       </div>
-      <div style={styles.serverDetail}>
-        <span>{row.state}</span>
-        {row.detail !== undefined ? <span> · {row.detail}</span> : null}
-        {row.state === 'connected' ? <span> · {row.toolCount ?? 0} tools</span> : null}
-      </div>
+      {row.description !== undefined ? (
+        <div style={styles.serverDescription}>{row.description}</div>
+      ) : null}
+      <div style={styles.serverDetail}>{statusParts(t, row).join(' · ')}</div>
       {row.url !== undefined ? <div style={styles.serverUrl}>{row.url}</div> : null}
-      <div style={styles.rowActions}>
-        <button type="button" style={styles.button} disabled={working} onClick={props.onRestart}>
-          {working ? '…' : t('restart')}
-        </button>
-        {row.auth === 'oauth' ? (
-          <button type="button" style={styles.button} disabled={working} onClick={props.onAuth}>
-            {row.authorized ? t('reauthorize') : t('authorize')}
+      {row.managed ? (
+        <div style={styles.rowActions}>
+          <button type="button" style={styles.button} disabled={working} onClick={props.onRestart}>
+            {working ? t('working') : t('restart')}
           </button>
-        ) : null}
-        {row.auth === 'oauth' && row.authorized ? (
-          <button type="button" style={styles.button} disabled={working} onClick={props.onSignOut}>
-            {t('signout')}
+          {row.auth === 'oauth' ? (
+            <button type="button" style={styles.button} disabled={working} onClick={props.onAuth}>
+              {row.authorized ? t('reauthorize') : t('authorize')}
+            </button>
+          ) : null}
+          {row.auth === 'oauth' && row.authorized ? (
+            <button
+              type="button"
+              style={styles.button}
+              disabled={working}
+              onClick={props.onSignOut}
+            >
+              {t('signout')}
+            </button>
+          ) : null}
+          <button type="button" style={styles.button} disabled={working} onClick={props.onEdit}>
+            {t('edit')}
           </button>
-        ) : null}
-        {row.managed ? (
-          <>
-            <button type="button" style={styles.button} disabled={working} onClick={props.onEdit}>
-              {t('edit')}
-            </button>
-            <button type="button" style={styles.danger} disabled={working} onClick={props.onDelete}>
-              {t('delete')}
-            </button>
-          </>
-        ) : null}
-      </div>
+          <button type="button" style={styles.danger} disabled={working} onClick={props.onDelete}>
+            {t('delete')}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -147,8 +188,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<EditingState | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
-  const [reveal, setReveal] = useState(false);
-  const [copied, setCopied] = useState<string | undefined>(undefined);
   const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
 
   /** 重新读取快照。 */
@@ -179,17 +218,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(undefined);
-    }
-  };
-
-  /** 复制文本。 */
-  const copy = async (text: string, key: string): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(key);
-      setTimeout(() => setCopied(undefined), 1500);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -299,6 +327,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
               values: valuesFromDefinition(
                 row.name,
                 row.definition ?? {
+                  description: row.description ?? '',
                   transport: row.transport ?? 'streamable-http',
                   auth: row.auth,
                   lazy: row.lazy,
@@ -311,57 +340,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           onDelete={() => deleteServer(row)}
         />
       ))}
-      {snapshot !== undefined ? (
-        <div style={styles.aggregate}>
-          <div style={styles.sectionTitle}>{t('aggregate')}</div>
-          {!snapshot.expose.enabled ? <div style={styles.muted}>{t('aggregate')}: off</div> : null}
-          {snapshot.expose.groups.map((group) => (
-            <div key={group.name} style={styles.endpointRow}>
-              <code style={styles.code}>{group.url}</code>
-              <span style={styles.muted}>{group.title}</span>
-              <button
-                type="button"
-                style={styles.button}
-                onClick={() => void copy(group.url, `url:${group.name}`)}
-              >
-                {copied === `url:${group.name}` ? t('copied') : t('copy')}
-              </button>
-            </div>
-          ))}
-          <div style={styles.endpointRow}>
-            <span style={styles.label}>{t('token')}</span>
-            <code style={styles.code}>{reveal ? snapshot.expose.token : '••••••••••••••••'}</code>
-            <button
-              type="button"
-              style={styles.button}
-              onClick={() => setReveal((value) => !value)}
-            >
-              {reveal ? t('hide') : t('reveal')}
-            </button>
-            <button
-              type="button"
-              style={styles.button}
-              onClick={() => void copy(snapshot.expose.token, 'token')}
-            >
-              {copied === 'token' ? t('copied') : t('copy')}
-            </button>
-            <button
-              type="button"
-              style={styles.button}
-              disabled={busy === 'rotate'}
-              onClick={() =>
-                void run('rotate', async () => {
-                  const result = await rotateEndpointToken();
-                  const current = await fetchStatus();
-                  setSnapshot({ ...current, expose: { ...current.expose, token: result.token } });
-                })
-              }
-            >
-              {t('rotate')}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 
@@ -380,7 +358,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
 
   const header = (
     <div style={styles.header}>
-      <span style={styles.brand}>MCP</span>
       <span style={styles.title}>{t('title')}</span>
       <span style={styles.spacer} />
       {addButton}
@@ -390,7 +367,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
         onClick={() => void load()}
         disabled={busy === 'reload'}
       >
-        {t('retry')}
+        {t('refresh')}
       </button>
       {variant === 'modal' && onClose !== undefined ? (
         <button type="button" style={styles.iconButton} aria-label={t('close')} onClick={onClose}>
@@ -454,7 +431,6 @@ const styles = {
     padding: '10px 14px',
     borderBottom: '1px solid var(--dsh-border, #33353a)',
   },
-  brand: { fontWeight: 700, color: '#5b7cfa', fontSize: 13 },
   title: { fontSize: 13, fontWeight: 600 },
   spacer: { flex: 1 },
   body: {
@@ -484,6 +460,7 @@ const styles = {
   },
   switch: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.9 },
   serverDetail: { fontSize: 12, opacity: 0.75 },
+  serverDescription: { fontSize: 12, opacity: 0.85 },
   serverUrl: {
     fontSize: 12,
     fontFamily: 'ui-monospace, monospace',
@@ -491,18 +468,6 @@ const styles = {
     wordBreak: 'break-all',
   },
   rowActions: { display: 'flex', gap: 6, marginTop: 2 },
-  aggregate: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    marginTop: 6,
-    paddingTop: 10,
-    borderTop: '1px solid var(--dsh-border, #33353a)',
-  },
-  sectionTitle: { fontSize: 12, fontWeight: 600, opacity: 0.85 },
-  endpointRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 },
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12, wordBreak: 'break-all' },
-  label: { fontSize: 12, opacity: 0.75 },
   muted: { fontSize: 12, opacity: 0.6 },
   button: {
     padding: '4px 10px',

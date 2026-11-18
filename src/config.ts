@@ -4,9 +4,15 @@
  */
 import Schema from '@deepseek-ai/schemastery';
 
-import { DEFAULT_GROUP, ENDPOINT_DEFAULT, PLUGIN_LABEL } from './constants.ts';
+import { PLUGIN_LABEL } from './constants.ts';
 import type { Volatile } from './types.ts';
-import { asString, isPositiveInteger, isRecord, isValidServerName } from './utils.ts';
+import {
+  asString,
+  isLoopbackHttpUrl,
+  isPositiveInteger,
+  isRecord,
+  isValidServerName,
+} from './utils.ts';
 
 /** OAuth 客户端配置。 */
 export interface OAuthClientConfig {
@@ -26,6 +32,8 @@ export interface OAuthClientConfig {
 
 /** 一台 MCP 服务器定义。 */
 export interface ServerDefinition {
+  /** 简介，写入会话的 MCP 目录。 */
+  description: string;
   /** 传输方式。 */
   transport: 'stdio' | 'streamable-http';
   /** stdio：启动命令。 */
@@ -42,7 +50,7 @@ export interface ServerDefinition {
   headers?: Record<string, string>;
   /** 认证方式，缺省 oauth。 */
   auth: 'oauth' | 'none';
-  /** 是否按需挂载，缺省 true。 */
+  /** 是否默认对会话隐藏，缺省 true。 */
   lazy: boolean;
   /** OAuth 参数。 */
   oauth?: OAuthClientConfig;
@@ -58,40 +66,16 @@ export interface ServerDefinition {
   [key: string]: unknown;
 }
 
-/** 一个聚合工具组。 */
-export interface ToolGroup {
-  /** 面板显示名。 */
-  title?: string;
-  /** 包含通配符。 */
-  include: string[];
-  /** 排除通配符。 */
-  exclude: string[];
-}
-
-/** 聚合端点配置。 */
-export interface ExposeConfig {
-  /** 是否启用。 */
-  enabled: boolean;
-  /** 端点前缀。 */
-  endpoint: string;
-  /** 组定义。 */
-  groups: Record<string, ToolGroup>;
-}
-
 /** 配置项的实时取值。 */
 export interface PluginConfig {
   /** 本插件管理的服务器。 */
   servers: Record<string, ServerDefinition>;
-  /** 聚合端点。 */
-  expose: ExposeConfig;
 }
 
 /** 宿主传给 apply 的配置：每个字段是热重载引用。 */
 export interface Config {
   /** 服务器定义。 */
   servers: Volatile<Record<string, ServerDefinition> | undefined>;
-  /** 聚合端点。 */
-  expose: Volatile<ExposeConfig | undefined>;
 }
 
 /** OAuth 参数 schema；只声明字段，不做默认值填充。 */
@@ -107,6 +91,7 @@ const OAuthSchema = Schema.object({
 /** 单服务器 schema：声明已知字段，其余字段透传给管理器。 */
 const ServerSchema = Schema.intersect([
   Schema.object({
+    description: Schema.string(),
     transport: Schema.union(['stdio', 'streamable-http']).required(),
     command: Schema.string(),
     args: Schema.array(Schema.string()),
@@ -125,28 +110,13 @@ const ServerSchema = Schema.intersect([
   Schema.dict(Schema.any()),
 ]);
 
-/** 工具组 schema。 */
-const GroupSchema = Schema.object({
-  title: Schema.string(),
-  include: Schema.array(Schema.string()),
-  exclude: Schema.array(Schema.string()),
-});
-
-/** 聚合端点 schema。 */
-const ExposeSchema = Schema.object({
-  enabled: Schema.boolean(),
-  endpoint: Schema.string(),
-  groups: Schema.dict(GroupSchema),
-});
-
-/** 配置 schema。两个字段都是 volatile：写入后就地生效。 */
+/** 配置 schema。`servers` 是 volatile：写入后就地生效。 */
 export const Config: Schema<Config> = Schema.object({
   servers: Schema.dict(ServerSchema).volatile(),
-  expose: ExposeSchema.volatile(),
 }) as unknown as Schema<Config>;
 
 /** 合法的顶层配置键。 */
-const CONFIG_KEYS = new Set<string>(['servers', 'expose']);
+const CONFIG_KEYS = new Set<string>(['servers']);
 
 /** 把缺省或 null 的输入转为空对象。 */
 function normalizeInput(raw: unknown): Record<string, unknown> {
@@ -200,15 +170,9 @@ function normalizeOAuth(name: string, raw: unknown): OAuthClientConfig {
 
 /** 固定回调必须是回环 http 地址。 */
 function assertLoopbackRedirect(name: string, redirectUri: string): void {
-  let url: URL;
-  try {
-    url = new URL(redirectUri);
-  } catch {
-    throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must be an absolute URL`);
-  }
-  if (url.protocol !== 'http:' || (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')) {
+  if (!isLoopbackHttpUrl(redirectUri)) {
     throw new Error(
-      `${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must point at 127.0.0.1 or localhost`,
+      `${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must be an http URL on 127.0.0.1 or localhost`,
     );
   }
 }
@@ -225,8 +189,13 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
   if (transport !== 'stdio' && transport !== 'streamable-http') {
     throw new Error(`${PLUGIN_LABEL}: servers.${name}.transport must be stdio or streamable-http`);
   }
+  const description = asString(raw.description)?.trim();
+  if (description === undefined || description === '') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.description is required`);
+  }
   const config: ServerDefinition = {
     ...raw,
+    description,
     transport,
     auth:
       raw.auth === undefined
@@ -315,64 +284,6 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
   return config;
 }
 
-/** 校验并规范化聚合端点配置。 */
-function normalizeExpose(raw: unknown): ExposeConfig {
-  if (raw === undefined || raw === null) {
-    return {
-      enabled: true,
-      endpoint: ENDPOINT_DEFAULT,
-      groups: { harness: { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] } },
-    };
-  }
-  if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: expose must be an object`);
-  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') {
-    throw new Error(`${PLUGIN_LABEL}: expose.enabled must be a boolean`);
-  }
-  const endpoint = raw.endpoint === undefined ? ENDPOINT_DEFAULT : asString(raw.endpoint);
-  if (endpoint === undefined) throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a string`);
-  const normalizedEndpoint = endpoint.replace(/\/+$/, '');
-  if (normalizedEndpoint === '' || !normalizedEndpoint.startsWith('/')) {
-    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a path starting with /`);
-  }
-  if (normalizedEndpoint.includes('?') || normalizedEndpoint.includes('#')) {
-    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must not carry a query or fragment`);
-  }
-  const groups: Record<string, ToolGroup> = {};
-  if (raw.groups !== undefined) {
-    if (!isRecord(raw.groups)) throw new Error(`${PLUGIN_LABEL}: expose.groups must be an object`);
-    for (const [groupName, definition] of Object.entries(raw.groups)) {
-      if (groupName === '')
-        throw new Error(`${PLUGIN_LABEL}: expose.groups keys must not be empty`);
-      if (!isRecord(definition)) {
-        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName} must be an object`);
-      }
-      if (definition.title !== undefined && typeof definition.title !== 'string') {
-        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName}.title must be a string`);
-      }
-      const include = definition.include === undefined ? [] : stringArray(definition.include);
-      const exclude = definition.exclude === undefined ? [] : stringArray(definition.exclude);
-      if (include === undefined || exclude === undefined) {
-        throw new Error(
-          `${PLUGIN_LABEL}: expose.groups.${groupName} include/exclude must be string arrays`,
-        );
-      }
-      groups[groupName] = {
-        ...(definition.title === undefined ? {} : { title: definition.title }),
-        include,
-        exclude,
-      };
-    }
-  }
-  if (Object.keys(groups).length === 0) {
-    groups.harness = { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] };
-  }
-  return {
-    enabled: raw.enabled === undefined ? true : raw.enabled,
-    endpoint: normalizedEndpoint,
-    groups,
-  };
-}
-
 /** 递归冻结。 */
 function deepFreeze<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -399,7 +310,7 @@ export function resolveConfig(raw?: unknown): Readonly<PluginConfig> {
       servers[name] = normalizeServerDefinition(name, definition);
     }
   }
-  return deepFreeze({ servers, expose: normalizeExpose(input.expose) });
+  return deepFreeze({ servers });
 }
 
 /** 判断值是否是热重载引用。 */

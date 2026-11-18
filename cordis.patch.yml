@@ -1,22 +1,16 @@
 # better-mcp: one Host row plus its browser half.
 #
-# The row owns the MCP servers this plugin manages (lazy mounting and OAuth),
-# the panel routes, the OAuth callback route, and the aggregate MCP endpoint.
+# The row owns the MCP servers this plugin manages (OAuth and per-session
+# visibility), the panel routes, and the OAuth callback route.
 # The browser half is declared by the package's `dsh.client` block and mounts a
 # sidebar footer action beside the Restart button plus the plugin row page.
 #
 # `servers` stays empty on install: configure your own servers in the panel or
-# in the row config. Tokens and OAuth client secrets live in the credentials
+# in the row config. Each server needs a `description`; the model reads it in
+# the session's MCP catalog. Tokens and OAuth client secrets live in the credentials
 # store, never in this file.
 - insert:
     - id: better-mcp
       name: dsh-plugin-better-mcp
       config:
         servers: {}
-        expose:
-          enabled: true
-          groups:
-            harness:
-              title: DSH harness tools
-              include: ['workspace_*', 'session_*']
-              exclude: []

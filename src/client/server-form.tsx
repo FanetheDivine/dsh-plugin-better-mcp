@@ -12,6 +12,8 @@ import type { NS } from './locales.ts';
 export interface ServerFormValues {
   /** 服务器名。 */
   name: string;
+  /** 简介。 */
+  description: string;
   /** 传输方式。 */
   transport: 'stdio' | 'streamable-http';
   /** http 地址。 */
@@ -39,6 +41,7 @@ export interface ServerFormValues {
 /** 校验失败时返回的文案键。 */
 export type FormErrorKey =
   | 'nameInvalid'
+  | 'descriptionRequired'
   | 'urlInvalid'
   | 'commandRequired'
   | 'headersInvalid'
@@ -48,6 +51,7 @@ export type FormErrorKey =
 export function emptyForm(): ServerFormValues {
   return {
     name: '',
+    description: '',
     transport: 'streamable-http',
     url: '',
     headersText: '',
@@ -70,6 +74,7 @@ export function valuesFromDefinition(name: string, definition: ServerDefinition)
     : [];
   return {
     name,
+    description: typeof definition.description === 'string' ? definition.description : '',
     transport: definition.transport === 'stdio' ? 'stdio' : 'streamable-http',
     url: typeof definition.url === 'string' ? definition.url : '',
     headersText: isRecord(definition.headers)
@@ -117,6 +122,7 @@ export function parseArgs(text: string): string[] {
 /** 校验表单，返回第一个失败的文案键。 */
 export function validateValues(values: ServerFormValues): FormErrorKey | undefined {
   if (!/^[A-Za-z0-9_-]{1,32}$/.test(values.name)) return 'nameInvalid';
+  if (values.description.trim() === '') return 'descriptionRequired';
   if (values.transport === 'streamable-http') {
     if (values.url.trim() === '') return 'urlInvalid';
     try {
@@ -148,6 +154,7 @@ export function validateValues(values: ServerFormValues): FormErrorKey | undefin
 /** 把表单值转换为提交给宿主的定义。 */
 export function definitionFromValues(values: ServerFormValues): ServerDefinition {
   const definition: ServerDefinition = {
+    description: values.description.trim(),
     transport: values.transport,
     lazy: values.lazy,
     auth: values.transport === 'stdio' ? 'none' : values.auth,
@@ -238,6 +245,15 @@ export function ServerForm({
         />
       </label>
       <label style={styles.field}>
+        <span style={styles.label}>{t('description')}</span>
+        <textarea
+          style={styles.textarea}
+          value={values.description}
+          placeholder={t('descriptionPlaceholder')}
+          onChange={(event) => update('description', event.target.value)}
+        />
+      </label>
+      <label style={styles.field}>
         <span style={styles.label}>{t('transport')}</span>
         <select
           style={styles.input}
@@ -246,8 +262,8 @@ export function ServerForm({
             update('transport', event.target.value === 'stdio' ? 'stdio' : 'streamable-http')
           }
         >
-          <option value="streamable-http">streamable-http</option>
-          <option value="stdio">stdio</option>
+          <option value="streamable-http">{t('transportHttp')}</option>
+          <option value="stdio">{t('transportStdio')}</option>
         </select>
       </label>
       {values.transport === 'streamable-http' ? (
@@ -276,8 +292,8 @@ export function ServerForm({
               value={values.auth}
               onChange={(event) => update('auth', event.target.value === 'none' ? 'none' : 'oauth')}
             >
-              <option value="oauth">OAuth</option>
-              <option value="none">{t('auth')}: none</option>
+              <option value="oauth">{t('authOAuth')}</option>
+              <option value="none">{t('authNone')}</option>
             </select>
           </label>
           {values.auth === 'oauth' ? (

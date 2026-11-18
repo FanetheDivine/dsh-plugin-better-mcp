@@ -1,14 +1,12 @@
-// 凭据：授权、客户端密钥与聚合令牌。
+// 凭据：授权与客户端密钥。
 import { describe, expect, it } from 'vitest';
 
 import {
   deleteClientSecret,
   deleteGrant,
-  ensureEndpointToken,
   readClientSecret,
   readGrant,
   recordKey,
-  rotateEndpointToken,
   writeClientSecret,
   writeGrant,
 } from '../src/credentials.ts';
@@ -61,22 +59,5 @@ describe('客户端密钥', () => {
     expect(await readClientSecret(ctx, 'figma')).toBe('secret');
     await deleteClientSecret(ctx, 'figma');
     expect(await readClientSecret(ctx, 'figma')).toBeUndefined();
-  });
-});
-
-describe('聚合端点令牌', () => {
-  it('首次读取时创建并复用', async () => {
-    const ctx = makeCtx();
-    const first = await ensureEndpointToken(ctx);
-    expect(first).toMatch(/^[A-Za-z0-9_-]{20,}$/);
-    expect(await ensureEndpointToken(ctx)).toBe(first);
-  });
-
-  it('轮换后换新令牌', async () => {
-    const ctx = makeCtx();
-    const first = await ensureEndpointToken(ctx);
-    const second = await rotateEndpointToken(ctx);
-    expect(second).not.toBe(first);
-    expect(await ensureEndpointToken(ctx)).toBe(second);
   });
 });

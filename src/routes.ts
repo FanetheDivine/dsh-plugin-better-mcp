@@ -1,27 +1,18 @@
 /**
- * 面板路由、OAuth 回调与聚合端点注册。
+ * 面板路由与 OAuth 回调注册。
  *
- * /api/better-mcp/* 走同源 fetch 路由；OAuth 回调与聚合端点是 Web 载体的
- * 普通路由。服务器定义的写入经宿主 config editor 落回 profile 用户层。
+ * /api/better-mcp/* 走同源 fetch 路由；OAuth 回调是 Web 载体的普通路由。
+ * 服务器定义的写入经宿主 config editor 落回 profile 用户层。
  */
 import { createServer, type Server } from 'node:http';
 
-import { type AggregateOptions, createGroupHandler } from './aggregate.ts';
 import type { OAuthClientConfig, ServerDefinition } from './config.ts';
 import { normalizeServerDefinition } from './config.ts';
-import {
-  AGGREGATE_CALL_TIMEOUT_MS,
-  CALLBACK_PATH,
-  ENDPOINT_DEFAULT,
-  PENDING_TTL_MS,
-  PLUGIN_LABEL,
-} from './constants.ts';
+import { CALLBACK_PATH, PENDING_TTL_MS } from './constants.ts';
 import {
   deleteClientSecret,
   deleteGrant,
-  ensureEndpointToken,
   readClientSecret,
-  rotateEndpointToken,
   writeClientSecret,
   writeGrant,
 } from './credentials.ts';
@@ -32,16 +23,12 @@ import {
   type PendingAuthorization,
   registerClient,
 } from './oauth.ts';
-import type { PanelSnapshotWithToken, ServerManager } from './servers.ts';
-import { clearLazy, setLazy } from './state.ts';
-import type {
-  Context,
-  PluginLogger,
-  ServerRoute,
-  SettingsReader,
-  ToolSchemaView,
-} from './types.ts';
-import { asString, escapeHtml, isRecord, jsonResponse } from './utils.ts';
+import type { PanelSnapshot, ServerManager } from './servers.ts';
+import type { Context, ServerRoute, SettingsReader } from './types.ts';
+import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from './utils.ts';
+
+/** 固定回调地址不合法时的错误文本。 */
+const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
 
 /** 待完成授权上下文。 */
 interface PendingContext extends PendingAuthorization {
@@ -60,12 +47,6 @@ export class PluginRoutes {
   private readonly pending = new Map<string, PendingContext>();
   /** 仍等待回调的回环监听器。 */
   private readonly listeners = new Set<Server>();
-  /** 组名 → 聚合处理器。 */
-  private readonly handlers = new Map<string, ReturnType<typeof createGroupHandler>>();
-  /** 聚合端点前缀路由的 disposer。 */
-  private aggregateDispose: (() => void) | undefined;
-  /** 已注册的前缀路径。 */
-  private aggregatePath: string | undefined;
   /** 释放函数。 */
   private readonly disposers: Array<() => void | Promise<void>> = [];
 
@@ -73,7 +54,6 @@ export class PluginRoutes {
     private readonly ctx: Context,
     private readonly getSettings: SettingsReader,
     private readonly manager: ServerManager,
-    private readonly logger: PluginLogger,
     private readonly waitIdle: () => Promise<void> = async () => undefined,
   ) {}
 
@@ -85,7 +65,7 @@ export class PluginRoutes {
           path: '/api/better-mcp/status',
           methods: ['GET'],
           requestBody: 'buffered',
-          fetch: async () => jsonResponse(await this.snapshotWithToken()),
+          fetch: async () => jsonResponse(await this.currentSnapshot()),
         },
         {
           path: '/api/better-mcp/lazy',
@@ -129,12 +109,6 @@ export class PluginRoutes {
           requestBody: 'buffered',
           fetch: async (request: Request) => this.configureClient(request),
         },
-        {
-          path: '/api/better-mcp/endpoint/rotate',
-          methods: ['POST'],
-          requestBody: 'buffered',
-          fetch: async () => jsonResponse({ token: await rotateEndpointToken(this.ctx) }),
-        },
       ] as const;
       for (const route of routes) {
         this.disposers.push(
@@ -146,7 +120,7 @@ export class PluginRoutes {
     });
   }
 
-  /** 注册回调与聚合端点路由。 */
+  /** 注册 OAuth 回调路由。 */
   registerWeb(): void {
     this.ctx.inject(['webServer'], (serverCtx) => {
       this.disposers.push(
@@ -169,71 +143,7 @@ export class PluginRoutes {
           },
         } satisfies ServerRoute),
       );
-      this.syncAggregateRoute();
     });
-  }
-
-  /** 按当前配置重建聚合端点路由。 */
-  syncAggregateRoute(): void {
-    const webServer = this.ctx.get('webServer');
-    if (webServer === undefined) return;
-    const endpoint = this.getSettings().expose.endpoint;
-    if (this.aggregateDispose !== undefined && this.aggregatePath === endpoint) return;
-    this.aggregateDispose?.();
-    this.aggregateDispose = webServer.register({
-      kind: 'prefix',
-      path: endpoint,
-      handler: async (req, res) => {
-        const settings = this.getSettings();
-        if (!settings.expose.enabled) {
-          res.writeHead(404, {
-            'content-type': 'application/json; charset=utf-8',
-            'cache-control': 'no-store',
-          });
-          res.end(JSON.stringify({ error: 'The aggregate MCP endpoint is disabled.' }));
-          return;
-        }
-        const url = new URL(req.url ?? '/', 'http://localhost');
-        const suffix = url.pathname.slice(settings.expose.endpoint.length).replace(/^\/+/, '');
-        const groupName =
-          suffix === ''
-            ? Object.keys(settings.expose.groups)[0]
-            : decodeURIComponent(suffix.split('/')[0] ?? '');
-        if (groupName === undefined || settings.expose.groups[groupName] === undefined) {
-          res.writeHead(404, {
-            'content-type': 'application/json; charset=utf-8',
-            'cache-control': 'no-store',
-          });
-          res.end(
-            JSON.stringify({
-              error: `Unknown group '${groupName ?? ''}'. Known: ${Object.keys(settings.expose.groups).join(', ')}`,
-            }),
-          );
-          return;
-        }
-        await this.handlerFor(groupName)(req, res);
-      },
-    } satisfies ServerRoute);
-    this.aggregatePath = endpoint;
-  }
-
-  /** 取得一个组的处理器。 */
-  private handlerFor(groupName: string): ReturnType<typeof createGroupHandler> {
-    let handler = this.handlers.get(groupName);
-    if (handler !== undefined) return handler;
-    const options: AggregateOptions = {
-      group: groupName,
-      groupDefinition: () =>
-        this.getSettings().expose.groups[groupName] ?? { include: [], exclude: [] },
-      token: () => ensureEndpointToken(this.ctx, this.logger),
-      tools: () => this.ctx.tools.schemas() as unknown as ReadonlyArray<ToolSchemaView>,
-      call: (name, args, signal) =>
-        this.manager.execute(name, args, signal ?? AbortSignal.timeout(AGGREGATE_CALL_TIMEOUT_MS)),
-      logger: this.logger,
-    };
-    handler = createGroupHandler(options);
-    this.handlers.set(groupName, handler);
-    return handler;
   }
 
   /** 释放全部路由、监听与待处理授权。 */
@@ -241,9 +151,6 @@ export class PluginRoutes {
     for (const server of this.listeners) server.close();
     this.listeners.clear();
     this.pending.clear();
-    this.aggregateDispose?.();
-    this.aggregateDispose = undefined;
-    this.aggregatePath = undefined;
     for (const dispose of this.disposers.splice(0)) void dispose();
   }
 
@@ -251,13 +158,13 @@ export class PluginRoutes {
   // 面板路由
   // ---------------------------------------------------------------------------
 
-  /** 带令牌的快照。 */
-  private async snapshotWithToken(): Promise<PanelSnapshotWithToken> {
+  /** 等待对账完成后的面板快照。 */
+  private async currentSnapshot(): Promise<PanelSnapshot> {
     await this.waitIdle();
-    return this.manager.snapshot(true, () => ensureEndpointToken(this.ctx, this.logger));
+    return this.manager.snapshot();
   }
 
-  /** 写入一台服务器的懒加载开关。 */
+  /** 写入一台服务器的懒加载开关，作为各会话的默认可见性。 */
   private async setLazy(request: Request): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const serverName = asString(body.server);
@@ -265,17 +172,15 @@ export class PluginRoutes {
       return jsonResponse({ error: `Unknown server '${String(body.server)}'` }, 400);
     }
     const lazy = body.lazy === true;
-    await setLazy(serverName, lazy);
-    if (lazy) {
-      await this.manager.unmount(serverName);
-    } else {
-      try {
-        await this.manager.mount(serverName);
-      } catch (error) {
-        return jsonResponse({ error: messageOf(error) }, 409);
-      }
+    try {
+      await this.editServers((servers) => {
+        const current = servers[serverName];
+        return isRecord(current) ? { ...servers, [serverName]: { ...current, lazy } } : servers;
+      });
+    } catch (error) {
+      return jsonResponse({ error: messageOf(error) }, 409);
     }
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
   /** 重连一台服务器。 */
@@ -290,7 +195,7 @@ export class PluginRoutes {
     } catch (error) {
       return jsonResponse({ error: messageOf(error) }, 409);
     }
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
   /** 新增或更新服务器定义。 */
@@ -320,10 +225,10 @@ export class PluginRoutes {
     } catch (error) {
       return jsonResponse({ error: messageOf(error) }, 409);
     }
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
-  /** 删除服务器定义，并清理授权、客户端密钥与懒加载状态。 */
+  /** 删除服务器定义，并清理授权与客户端密钥。 */
   private async removeServer(request: Request): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const serverName = asString(body.server);
@@ -342,8 +247,7 @@ export class PluginRoutes {
     }
     await deleteGrant(this.ctx, serverName);
     await deleteClientSecret(this.ctx, serverName);
-    await clearLazy(serverName);
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
   /** 配置固定 OAuth 客户端。 */
@@ -355,18 +259,8 @@ export class PluginRoutes {
     }
     const clientId = asString(body.clientId);
     const redirectUri = asString(body.redirectUri);
-    if (redirectUri !== undefined) {
-      try {
-        const url = new URL(redirectUri);
-        if (
-          url.protocol !== 'http:' ||
-          (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')
-        ) {
-          throw new Error('redirectUri must point at 127.0.0.1 or localhost');
-        }
-      } catch (error) {
-        return jsonResponse({ error: messageOf(error) }, 400);
-      }
+    if (redirectUri !== undefined && !isLoopbackHttpUrl(redirectUri)) {
+      return jsonResponse({ error: LOOPBACK_REDIRECT_ERROR }, 400);
     }
     try {
       await this.editServers((servers) => {
@@ -384,12 +278,12 @@ export class PluginRoutes {
       if (secret === '') await deleteClientSecret(this.ctx, serverName);
       else await writeClientSecret(this.ctx, serverName, secret);
     }
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
   /** 发起 OAuth。 */
   private async startOAuth(request: Request): Promise<Response> {
-    const url = new URL(request.url, `http://${request.headers.get('host') ?? '127.0.0.1'}`);
+    const url = new URL(request.url, 'http://127.0.0.1');
     const serverName = url.searchParams.get('server') ?? '';
     const definition = this.getSettings().servers[serverName];
     if (definition === undefined)
@@ -403,7 +297,8 @@ export class PluginRoutes {
       const discovery = await discover(endpoint);
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
-      const redirectUri = oauthDefinition.redirectUri ?? `${url.origin}${CALLBACK_PATH}`;
+      const redirectUri =
+        oauthDefinition.redirectUri ?? `${this.originOf(request)}${CALLBACK_PATH}`;
       let clientId = oauthDefinition.clientId;
       let clientSecret =
         oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
@@ -457,7 +352,7 @@ export class PluginRoutes {
     if (serverName === undefined) return jsonResponse({ error: 'server is required' }, 400);
     await deleteGrant(this.ctx, serverName);
     await this.manager.unmount(serverName);
-    return jsonResponse(await this.snapshotWithToken());
+    return jsonResponse(await this.currentSnapshot());
   }
 
   /** 通过宿主 config editor 写回服务器字典。 */
@@ -509,25 +404,43 @@ export class PluginRoutes {
         clientId: context.clientId,
         ...(context.clientSecret === undefined ? {} : { clientSecret: context.clientSecret }),
         tokenEndpoint: asString(context.authorization.token_endpoint) ?? '',
+        ...(context.tokenAuthMethod === undefined
+          ? {}
+          : { tokenAuthMethod: context.tokenAuthMethod }),
         resource: context.resource,
         authorization: context.authorization,
         authorizedAt: Date.now(),
       });
-      await this.manager.unmount(context.serverName);
-      if (!(await this.manager.isLazy(context.serverName)))
-        await this.manager.mount(context.serverName);
+      await this.manager.restart(context.serverName);
       return { ok: true, detail: `Signed in for '${context.serverName}'. You can close this tab.` };
     } catch (error) {
       return { ok: false, detail: messageOf(error) };
     }
   }
 
+  /**
+   * 浏览器访问本服务的来源。
+   * Web 载体把 fetch 路由的请求 URL 解析到占位来源，真实来源只在 `host` 头里。
+   * @param request - 面板发出的请求。
+   * @returns 协议与 `host` 头拼成的来源；缺少 `host` 头时回落到监听地址。
+   */
+  private originOf(request: Request): string {
+    let fallback = 'http://127.0.0.1';
+    try {
+      fallback = this.ctx.get('webServer')?.getOrigin?.() ?? fallback;
+    } catch {
+      // 监听器尚未绑定端口，保持回环默认值。
+    }
+    const protocol = new URL(fallback).protocol;
+    const host = request.headers.get('host');
+    if (host === null || host === '') return fallback;
+    return `${protocol}//${host}`;
+  }
+
   /** 在固定回环端口监听一次回调。 */
   private async startLoopbackListener(redirectUri: string): Promise<Server> {
+    if (!isLoopbackHttpUrl(redirectUri)) throw new Error(LOOPBACK_REDIRECT_ERROR);
     const redirect = new URL(redirectUri);
-    if (redirect.hostname !== '127.0.0.1' && redirect.hostname !== 'localhost') {
-      throw new Error('A fixed OAuth redirect must point at 127.0.0.1 or localhost.');
-    }
     const server = createServer(async (req, res) => {
       const incoming = new URL(req.url ?? '/', `${redirect.protocol}//${redirect.host}`);
       if (incoming.pathname !== redirect.pathname) {
@@ -602,9 +515,3 @@ async function applyAuthorizationOverrides(
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-
-/** 端点默认值的再导出，便于调用方引用。 */
-export const DEFAULT_ENDPOINT = ENDPOINT_DEFAULT;
-
-/** 日志前缀。 */
-export const ROUTE_LABEL = PLUGIN_LABEL;

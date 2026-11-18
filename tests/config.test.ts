@@ -5,48 +5,54 @@ import { Config, normalizeServerDefinition, readConfig, resolveConfig } from '..
 import { volatile } from './helpers.ts';
 
 describe('resolveConfig', () => {
-  it('缺省为空服务器、启用聚合端点与默认组', () => {
-    const config = resolveConfig();
-    expect(config.servers).toEqual({});
-    expect(config.expose.enabled).toBe(true);
-    expect(config.expose.endpoint).toBe('/better-mcp/mcp');
-    expect(config.expose.groups.harness?.include).toEqual(['workspace_*', 'session_*']);
+  it('缺省为空服务器', () => {
+    expect(resolveConfig()).toEqual({ servers: {} });
   });
 
   it('undefined 与 null 都按缺省处理', () => {
     expect(resolveConfig(undefined).servers).toEqual({});
-    expect(resolveConfig(null).expose.enabled).toBe(true);
+    expect(resolveConfig(null).servers).toEqual({});
   });
 
   it('拒绝未知顶层键', () => {
     expect(() => resolveConfig({ bogus: 1 })).toThrow('unknown config key "bogus"');
+    expect(() => resolveConfig({ expose: {} })).toThrow('unknown config key "expose"');
     expect(() => resolveConfig([])).toThrow('config must be an object');
   });
 
   it('拒绝非法服务器名', () => {
     expect(() =>
-      resolveConfig({ servers: { 'bad name': { transport: 'stdio', command: 'x' } } }),
+      resolveConfig({
+        servers: { 'bad name': { description: 'd', transport: 'stdio', command: 'x' } },
+      }),
     ).toThrow('server name');
   });
 
   it('结果冻结', () => {
-    const config = resolveConfig({ servers: { one: { transport: 'stdio', command: 'node' } } });
+    const config = resolveConfig({
+      servers: { one: { description: 'd', transport: 'stdio', command: 'node' } },
+    });
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.servers)).toBe(true);
-    expect(Object.isFrozen(config.expose.groups)).toBe(true);
   });
 });
 
 describe('服务器定义校验', () => {
   it('stdio 需要命令，禁止 url 与请求头', () => {
-    expect(() => normalizeServerDefinition('one', { transport: 'stdio' })).toThrow(
-      'command is required',
-    );
     expect(() =>
-      normalizeServerDefinition('one', { transport: 'stdio', command: 'node', url: 'https://x' }),
+      normalizeServerDefinition('one', { description: 'd', transport: 'stdio' }),
+    ).toThrow('command is required');
+    expect(() =>
+      normalizeServerDefinition('one', {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        url: 'https://x',
+      }),
     ).toThrow('not a stdio field');
     expect(() =>
       normalizeServerDefinition('one', {
+        description: 'd',
         transport: 'stdio',
         command: 'node',
         headers: { Authorization: 'x' },
@@ -55,9 +61,9 @@ describe('服务器定义校验', () => {
   });
 
   it('http 需要 url，禁止命令、参数、环境与工作目录', () => {
-    expect(() => normalizeServerDefinition('one', { transport: 'streamable-http' })).toThrow(
-      'url is required',
-    );
+    expect(() =>
+      normalizeServerDefinition('one', { description: 'd', transport: 'streamable-http' }),
+    ).toThrow('url is required');
     for (const extra of [
       { command: 'node' },
       { args: ['x'] },
@@ -66,6 +72,7 @@ describe('服务器定义校验', () => {
     ]) {
       expect(() =>
         normalizeServerDefinition('one', {
+          description: 'd',
           transport: 'streamable-http',
           url: 'https://x',
           ...extra,
@@ -76,25 +83,52 @@ describe('服务器定义校验', () => {
 
   it('默认 auth=oauth、lazy=true，stdio 缺省 auth 归一为 none', () => {
     const http = normalizeServerDefinition('one', {
+      description: 'd',
       transport: 'streamable-http',
       url: 'https://x',
     });
     expect(http.auth).toBe('oauth');
     expect(http.lazy).toBe(true);
     expect(http.oauth).toEqual({ scopes: [] });
-    const stdio = normalizeServerDefinition('one', { transport: 'stdio', command: 'node' });
+    const stdio = normalizeServerDefinition('one', {
+      description: 'd',
+      transport: 'stdio',
+      command: 'node',
+    });
     expect(stdio.auth).toBe('none');
+  });
+
+  it('简介必填并去掉首尾空白', () => {
+    expect(() => normalizeServerDefinition('one', { transport: 'stdio', command: 'node' })).toThrow(
+      'servers.one.description is required',
+    );
+    expect(() =>
+      normalizeServerDefinition('one', { description: '  ', transport: 'stdio', command: 'node' }),
+    ).toThrow('description is required');
+    expect(
+      normalizeServerDefinition('one', {
+        description: ' Tools ',
+        transport: 'stdio',
+        command: 'node',
+      }).description,
+    ).toBe('Tools');
   });
 
   it('stdio 不接受 oauth', () => {
     expect(() =>
-      normalizeServerDefinition('one', { transport: 'stdio', command: 'node', auth: 'oauth' }),
+      normalizeServerDefinition('one', {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'oauth',
+      }),
     ).toThrow('requires streamable-http');
   });
 
   it('回调地址必须是回环 http', () => {
     expect(() =>
       normalizeServerDefinition('one', {
+        description: 'd',
         transport: 'streamable-http',
         url: 'https://x',
         oauth: { redirectUri: 'https://example.com/cb' },
@@ -102,6 +136,7 @@ describe('服务器定义校验', () => {
     ).toThrow('127.0.0.1 or localhost');
     expect(
       normalizeServerDefinition('one', {
+        description: 'd',
         transport: 'streamable-http',
         url: 'https://x',
         oauth: { redirectUri: 'http://127.0.0.1:19876/callback' },
@@ -111,6 +146,7 @@ describe('服务器定义校验', () => {
 
   it('未知字段透传，供管理器使用', () => {
     const definition = normalizeServerDefinition('one', {
+      description: 'd',
       transport: 'stdio',
       command: 'node',
       reconnect: { attempts: 3 },
@@ -121,41 +157,18 @@ describe('服务器定义校验', () => {
   });
 });
 
-describe('聚合端点校验', () => {
-  it('端点必须是以 / 开头的路径', () => {
-    expect(() => resolveConfig({ expose: { endpoint: 'mcp' } })).toThrow('path starting with /');
-  });
-
-  it('去掉末尾斜杠', () => {
-    expect(resolveConfig({ expose: { endpoint: '/custom/mcp/' } }).expose.endpoint).toBe(
-      '/custom/mcp',
-    );
-  });
-
-  it('组为空时补默认组', () => {
-    expect(resolveConfig({ expose: { groups: {} } }).expose.groups.harness).toBeDefined();
-  });
-
-  it('组名不能为空', () => {
-    expect(() => resolveConfig({ expose: { groups: { '': {} } } })).toThrow(
-      'keys must not be empty',
-    );
-  });
-});
-
 describe('readConfig', () => {
   it('展开 volatile 引用', () => {
     const config = {
-      servers: volatile({ one: { transport: 'stdio', command: 'node' } }),
-      expose: volatile(undefined),
+      servers: volatile({ one: { description: 'd', transport: 'stdio', command: 'node' } }),
     };
     expect(readConfig(config).servers.one?.command).toBe('node');
   });
 
   it('引用变化后读到新值', () => {
     const servers = volatile({});
-    const config = { servers, expose: volatile(undefined) };
-    servers.set({ two: { transport: 'stdio', command: 'npx' } } as never);
+    const config = { servers };
+    servers.set({ two: { description: 'd', transport: 'stdio', command: 'npx' } } as never);
     expect(readConfig(config).servers.two?.command).toBe('npx');
   });
 });
@@ -168,6 +181,8 @@ describe('Config schema', () => {
   });
 
   it('拒绝非法传输方式', () => {
-    expect(() => Config({ servers: { one: { transport: 'sse', url: 'https://x' } } })).toThrow();
+    expect(() =>
+      Config({ servers: { one: { description: 'd', transport: 'sse', url: 'https://x' } } }),
+    ).toThrow();
   });
 });
