@@ -40,15 +40,6 @@ export function isValidServerName(name: string): boolean {
   return SERVER_NAME_PATTERN.test(name);
 }
 
-/** 把 `*` 通配符转为正则。 */
-export function globToRegExp(pattern: string): RegExp {
-  const escaped = pattern
-    .split('*')
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
-    .join('.*');
-  return new RegExp(`^${escaped}$`);
-}
-
 /** 稳定的凭据记录 id：小写连字符化，加服务器名摘要。 */
 export function grantId(serverName: string): string {
   const base =

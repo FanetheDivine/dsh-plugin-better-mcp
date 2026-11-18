@@ -88,9 +88,7 @@ describe('前端入口', () => {
 describe('字典', () => {
   it('中英文键集一致且覆盖面板与表单文案', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
-    expect(Object.keys(zh)).toEqual(
-      expect.arrayContaining(['title', 'add', 'delete', 'save', 'aggregate', 'token']),
-    );
+    expect(Object.keys(zh)).toEqual(expect.arrayContaining(['title', 'add', 'delete', 'save']));
   });
 });
 
@@ -211,20 +209,6 @@ describe('McpPanel', () => {
           toolCount: 2,
         },
       ],
-      expose: {
-        enabled: true,
-        endpoint: '/better-mcp/mcp',
-        groups: [
-          {
-            name: 'harness',
-            title: 'Harness',
-            url: 'http://127.0.0.1:3080/better-mcp/mcp/harness',
-            include: ['workspace_*'],
-            exclude: [],
-          },
-        ],
-        token: 'tok',
-      },
     };
     const fetchMock = vi.fn(
       async () =>

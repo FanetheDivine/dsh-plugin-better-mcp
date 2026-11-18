@@ -1,5 +1,5 @@
 /**
- * 共享 MCP 面板：服务器状态、懒加载、重连、授权、增删改与聚合端点。
+ * 共享 MCP 面板：服务器状态、懒加载、重连、授权与增删改。
  * 侧栏弹窗与插件页配置页使用同一个组件。
  */
 
@@ -12,7 +12,6 @@ import {
   type PanelSnapshot,
   removeServer,
   restart,
-  rotateEndpointToken,
   type ServerRow,
   setLazy,
   signOut,
@@ -147,8 +146,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<EditingState | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
-  const [reveal, setReveal] = useState(false);
-  const [copied, setCopied] = useState<string | undefined>(undefined);
   const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
 
   /** 重新读取快照。 */
@@ -179,17 +176,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(undefined);
-    }
-  };
-
-  /** 复制文本。 */
-  const copy = async (text: string, key: string): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(key);
-      setTimeout(() => setCopied(undefined), 1500);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -311,57 +297,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           onDelete={() => deleteServer(row)}
         />
       ))}
-      {snapshot !== undefined ? (
-        <div style={styles.aggregate}>
-          <div style={styles.sectionTitle}>{t('aggregate')}</div>
-          {!snapshot.expose.enabled ? <div style={styles.muted}>{t('aggregate')}: off</div> : null}
-          {snapshot.expose.groups.map((group) => (
-            <div key={group.name} style={styles.endpointRow}>
-              <code style={styles.code}>{group.url}</code>
-              <span style={styles.muted}>{group.title}</span>
-              <button
-                type="button"
-                style={styles.button}
-                onClick={() => void copy(group.url, `url:${group.name}`)}
-              >
-                {copied === `url:${group.name}` ? t('copied') : t('copy')}
-              </button>
-            </div>
-          ))}
-          <div style={styles.endpointRow}>
-            <span style={styles.label}>{t('token')}</span>
-            <code style={styles.code}>{reveal ? snapshot.expose.token : '••••••••••••••••'}</code>
-            <button
-              type="button"
-              style={styles.button}
-              onClick={() => setReveal((value) => !value)}
-            >
-              {reveal ? t('hide') : t('reveal')}
-            </button>
-            <button
-              type="button"
-              style={styles.button}
-              onClick={() => void copy(snapshot.expose.token, 'token')}
-            >
-              {copied === 'token' ? t('copied') : t('copy')}
-            </button>
-            <button
-              type="button"
-              style={styles.button}
-              disabled={busy === 'rotate'}
-              onClick={() =>
-                void run('rotate', async () => {
-                  const result = await rotateEndpointToken();
-                  const current = await fetchStatus();
-                  setSnapshot({ ...current, expose: { ...current.expose, token: result.token } });
-                })
-              }
-            >
-              {t('rotate')}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 
@@ -491,18 +426,6 @@ const styles = {
     wordBreak: 'break-all',
   },
   rowActions: { display: 'flex', gap: 6, marginTop: 2 },
-  aggregate: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    marginTop: 6,
-    paddingTop: 10,
-    borderTop: '1px solid var(--dsh-border, #33353a)',
-  },
-  sectionTitle: { fontSize: 12, fontWeight: 600, opacity: 0.85 },
-  endpointRow: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 },
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12, wordBreak: 'break-all' },
-  label: { fontSize: 12, opacity: 0.75 },
   muted: { fontSize: 12, opacity: 0.6 },
   button: {
     padding: '4px 10px',

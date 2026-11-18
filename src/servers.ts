@@ -1,12 +1,10 @@
 /**
- * 服务器生命周期：按需挂载、卸载、重连、连接等待与面板快照。
+ * 服务器生命周期：挂载、卸载、重连与面板快照。
  *
  * 挂载通过 `ctx.mcpManager.register()` 完成，连接、重连、工具发现与拆除仍由管理器负责。
  */
-import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-import { CONNECT_TIMEOUT_MS } from './constants.ts';
 import { readGrant, writeGrant } from './credentials.ts';
 import { refresh } from './oauth.ts';
 import { readState } from './state.ts';
@@ -16,7 +14,6 @@ import type {
   PluginConfig,
   PluginLogger,
   SettingsReader,
-  ToolSchemaView,
 } from './types.ts';
 import { isRecord } from './utils.ts';
 
@@ -48,47 +45,10 @@ export interface ServerRow {
   definition?: Record<string, unknown>;
 }
 
-/** 一个聚合端点组。 */
-export interface GroupView {
-  /** 组名。 */
-  name: string;
-  /** 显示标题。 */
-  title: string;
-  /** 组地址。 */
-  url: string;
-  /** 包含通配符。 */
-  include: string[];
-  /** 排除通配符。 */
-  exclude: string[];
-}
-
 /** 面板快照。 */
 export interface PanelSnapshot {
   /** 服务器行。 */
   servers: ServerRow[];
-  /** 聚合端点。 */
-  expose: {
-    /** 是否启用。 */
-    enabled: boolean;
-    /** 端点前缀。 */
-    endpoint: string;
-    /** 组视图。 */
-    groups: GroupView[];
-  };
-}
-
-/** 带令牌的完整快照，只用于同源面板路由。 */
-export interface PanelSnapshotWithToken extends PanelSnapshot {
-  /** 聚合端点信息与令牌。 */
-  expose: PanelSnapshot['expose'] & { token: string };
-}
-
-/** 一次工具调用的结果。 */
-export interface ToolOutcome {
-  /** 内容块。 */
-  content: ReadonlyArray<unknown>;
-  /** 是否被工具标记为错误。 */
-  isError: boolean;
 }
 
 /** 连接状态压缩视图。 */
@@ -234,89 +194,13 @@ export class ServerManager {
     if (!(await this.isLazy(serverName))) await this.mount(serverName);
   }
 
-  /** 等待一台已挂载服务器进入已连接状态。 */
-  async waitConnected(serverName: string, signal?: AbortSignal): Promise<{ toolCount: number }> {
-    const deadline = Date.now() + CONNECT_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-      if (signal?.aborted === true) throw new Error('cancelled');
-      const view = this.ctx.mcpManager.list().find((candidate) => candidate.name === serverName);
-      const status = view?.status;
-      if (status?.state === 'connected') return { toolCount: status.toolCount };
-      if (status?.state === 'failed') {
-        throw new Error(
-          `MCP server '${serverName}' failed: ${statusDetail(status) || String(status.reason)}`,
-        );
-      }
-      if (status?.state === 'waiting-credentials') {
-        throw new Error(
-          `MCP server '${serverName}' is waiting for credentials: ${status.lastError}`,
-        );
-      }
-      if (status?.state === 'reconnecting' && /401|unauthorized/i.test(status.lastError ?? '')) {
-        throw new Error(
-          `MCP server '${serverName}' rejected the token (401). Open the MCP panel and sign in.`,
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-    throw new Error(`Timed out waiting for MCP server '${serverName}' to connect.`);
-  }
-
   /** 管理器当前管理的服务器名。 */
   listManagedNames(): string[] {
     return this.ctx.mcpManager.list().map((view) => view.name);
   }
 
-  /** 把服务器发布的工具名解析为注册名。 */
-  publicToolName(serverName: string, rawName: string): string {
-    const prefix = `mcp__${serverName}__`;
-    const schemas = this.ctx.tools.schemas() as unknown as ReadonlyArray<ToolSchemaView>;
-    const candidates = schemas
-      .map((schema) => schema.name)
-      .filter((name) => name.startsWith(prefix));
-    if (candidates.includes(`${prefix}${rawName}`)) return `${prefix}${rawName}`;
-    const normalized = candidates.find(
-      (name) => name.slice(prefix.length).replace(/_[0-9a-f]{12}$/, '') === rawName,
-    );
-    if (normalized !== undefined) return normalized;
-    const available = candidates.map((name) => name.slice(prefix.length)).join(', ') || '(none)';
-    throw new Error(
-      `Server '${serverName}' has no tool named '${rawName}'. Available: ${available}`,
-    );
-  }
-
-  /** 执行一个注册工具并返回规范化结果。 */
-  async execute(
-    toolName: string,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<ToolOutcome> {
-    const batch = await this.ctx.tools.execute({
-      calls: [
-        {
-          type: 'tool-call',
-          id: `better-mcp-${randomUUID()}`,
-          name: toolName,
-          arguments: JSON.stringify(args ?? {}),
-        },
-      ] as never,
-      signal,
-    });
-    const result = batch.results[0]?.result;
-    if (result === undefined) throw new Error(`Tool '${toolName}' produced no result.`);
-    if (result.isError === true) {
-      return { content: result.content, isError: true };
-    }
-    return { content: result.content, isError: false };
-  }
-
   /** 构造面板快照。 */
-  async snapshot(includeToken: false): Promise<PanelSnapshot>;
-  async snapshot(includeToken: true, token: () => Promise<string>): Promise<PanelSnapshotWithToken>;
-  async snapshot(
-    includeToken: boolean,
-    token?: () => Promise<string>,
-  ): Promise<PanelSnapshot | PanelSnapshotWithToken> {
+  async snapshot(): Promise<PanelSnapshot> {
     const settings = this.getSettings();
     const state = await readState();
     const managed = new Map(this.ctx.mcpManager.list().map((view) => [view.name, view]));
@@ -336,9 +220,7 @@ export class ServerManager {
       rows.push({
         name: serverName,
         managed: mine,
-        ...(includeToken && definition !== undefined
-          ? { definition: publicDefinition(definition) }
-          : {}),
+        ...(definition === undefined ? {} : { definition: publicDefinition(definition) }),
         ...(typeof definition?.transport === 'string' ? { transport: definition.transport } : {}),
         ...(typeof definition?.url === 'string' ? { url: definition.url } : {}),
         ...(typeof definition?.auth === 'string'
@@ -352,21 +234,7 @@ export class ServerManager {
         ...status,
       });
     }
-    const expose = {
-      enabled: settings.expose.enabled,
-      endpoint: settings.expose.endpoint,
-      groups: Object.entries(settings.expose.groups).map(([groupName, group]) => ({
-        name: groupName,
-        title: group.title ?? groupName,
-        url: `${settings.expose.endpoint}/${groupName}`,
-        include: group.include,
-        exclude: group.exclude,
-      })),
-    };
-    if (includeToken && token !== undefined) {
-      return { servers: rows, expose: { ...expose, token: await token() } };
-    }
-    return { servers: rows, expose };
+    return { servers: rows };
   }
 
   /** 按新旧配置对账：卸载移除项，挂载新增项，重建变更项。 */
@@ -463,9 +331,4 @@ export function statusOf(status: McpManagedServerStatus | undefined): StatusView
     default:
       return { state: String((status as { state?: string }).state) };
   }
-}
-
-/** 失败状态的说明文本。 */
-function statusDetail(status: McpManagedServerStatus): string | undefined {
-  return statusOf(status).detail;
 }

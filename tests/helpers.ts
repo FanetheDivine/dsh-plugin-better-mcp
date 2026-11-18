@@ -35,7 +35,7 @@ export interface RegisteredTool {
 /** 宿主 mocked 服务选项。 */
 export interface MockCtxOptions {
   /** 传给 apply 的 volatile 配置引用。 */
-  config?: { servers: FakeVolatile<unknown>; expose: FakeVolatile<unknown> };
+  config?: { servers: FakeVolatile<unknown> };
   /** 初始管理器状态。 */
   statuses?: Record<string, McpManagedServerStatus>;
   /** 外部插件管理的服务器。 */
@@ -220,7 +220,6 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
         (ctx as unknown as MockCtxState)._configEdits.push(structuredClone(next));
         if (options.config !== undefined) {
           options.config.servers.set(next.servers);
-          options.config.expose.set(next.expose);
           (ctx as unknown as MockCtxState)._emit('loader/volatile-update', [['servers']]);
         }
       },

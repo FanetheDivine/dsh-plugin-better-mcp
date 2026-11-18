@@ -4,7 +4,7 @@
  */
 import Schema from '@deepseek-ai/schemastery';
 
-import { DEFAULT_GROUP, ENDPOINT_DEFAULT, PLUGIN_LABEL } from './constants.ts';
+import { PLUGIN_LABEL } from './constants.ts';
 import type { Volatile } from './types.ts';
 import { asString, isPositiveInteger, isRecord, isValidServerName } from './utils.ts';
 
@@ -58,40 +58,16 @@ export interface ServerDefinition {
   [key: string]: unknown;
 }
 
-/** 一个聚合工具组。 */
-export interface ToolGroup {
-  /** 面板显示名。 */
-  title?: string;
-  /** 包含通配符。 */
-  include: string[];
-  /** 排除通配符。 */
-  exclude: string[];
-}
-
-/** 聚合端点配置。 */
-export interface ExposeConfig {
-  /** 是否启用。 */
-  enabled: boolean;
-  /** 端点前缀。 */
-  endpoint: string;
-  /** 组定义。 */
-  groups: Record<string, ToolGroup>;
-}
-
 /** 配置项的实时取值。 */
 export interface PluginConfig {
   /** 本插件管理的服务器。 */
   servers: Record<string, ServerDefinition>;
-  /** 聚合端点。 */
-  expose: ExposeConfig;
 }
 
 /** 宿主传给 apply 的配置：每个字段是热重载引用。 */
 export interface Config {
   /** 服务器定义。 */
   servers: Volatile<Record<string, ServerDefinition> | undefined>;
-  /** 聚合端点。 */
-  expose: Volatile<ExposeConfig | undefined>;
 }
 
 /** OAuth 参数 schema；只声明字段，不做默认值填充。 */
@@ -125,28 +101,13 @@ const ServerSchema = Schema.intersect([
   Schema.dict(Schema.any()),
 ]);
 
-/** 工具组 schema。 */
-const GroupSchema = Schema.object({
-  title: Schema.string(),
-  include: Schema.array(Schema.string()),
-  exclude: Schema.array(Schema.string()),
-});
-
-/** 聚合端点 schema。 */
-const ExposeSchema = Schema.object({
-  enabled: Schema.boolean(),
-  endpoint: Schema.string(),
-  groups: Schema.dict(GroupSchema),
-});
-
-/** 配置 schema。两个字段都是 volatile：写入后就地生效。 */
+/** 配置 schema。`servers` 是 volatile：写入后就地生效。 */
 export const Config: Schema<Config> = Schema.object({
   servers: Schema.dict(ServerSchema).volatile(),
-  expose: ExposeSchema.volatile(),
 }) as unknown as Schema<Config>;
 
 /** 合法的顶层配置键。 */
-const CONFIG_KEYS = new Set<string>(['servers', 'expose']);
+const CONFIG_KEYS = new Set<string>(['servers']);
 
 /** 把缺省或 null 的输入转为空对象。 */
 function normalizeInput(raw: unknown): Record<string, unknown> {
@@ -315,64 +276,6 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
   return config;
 }
 
-/** 校验并规范化聚合端点配置。 */
-function normalizeExpose(raw: unknown): ExposeConfig {
-  if (raw === undefined || raw === null) {
-    return {
-      enabled: true,
-      endpoint: ENDPOINT_DEFAULT,
-      groups: { harness: { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] } },
-    };
-  }
-  if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: expose must be an object`);
-  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') {
-    throw new Error(`${PLUGIN_LABEL}: expose.enabled must be a boolean`);
-  }
-  const endpoint = raw.endpoint === undefined ? ENDPOINT_DEFAULT : asString(raw.endpoint);
-  if (endpoint === undefined) throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a string`);
-  const normalizedEndpoint = endpoint.replace(/\/+$/, '');
-  if (normalizedEndpoint === '' || !normalizedEndpoint.startsWith('/')) {
-    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a path starting with /`);
-  }
-  if (normalizedEndpoint.includes('?') || normalizedEndpoint.includes('#')) {
-    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must not carry a query or fragment`);
-  }
-  const groups: Record<string, ToolGroup> = {};
-  if (raw.groups !== undefined) {
-    if (!isRecord(raw.groups)) throw new Error(`${PLUGIN_LABEL}: expose.groups must be an object`);
-    for (const [groupName, definition] of Object.entries(raw.groups)) {
-      if (groupName === '')
-        throw new Error(`${PLUGIN_LABEL}: expose.groups keys must not be empty`);
-      if (!isRecord(definition)) {
-        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName} must be an object`);
-      }
-      if (definition.title !== undefined && typeof definition.title !== 'string') {
-        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName}.title must be a string`);
-      }
-      const include = definition.include === undefined ? [] : stringArray(definition.include);
-      const exclude = definition.exclude === undefined ? [] : stringArray(definition.exclude);
-      if (include === undefined || exclude === undefined) {
-        throw new Error(
-          `${PLUGIN_LABEL}: expose.groups.${groupName} include/exclude must be string arrays`,
-        );
-      }
-      groups[groupName] = {
-        ...(definition.title === undefined ? {} : { title: definition.title }),
-        include,
-        exclude,
-      };
-    }
-  }
-  if (Object.keys(groups).length === 0) {
-    groups.harness = { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] };
-  }
-  return {
-    enabled: raw.enabled === undefined ? true : raw.enabled,
-    endpoint: normalizedEndpoint,
-    groups,
-  };
-}
-
 /** 递归冻结。 */
 function deepFreeze<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -399,7 +302,7 @@ export function resolveConfig(raw?: unknown): Readonly<PluginConfig> {
       servers[name] = normalizeServerDefinition(name, definition);
     }
   }
-  return deepFreeze({ servers, expose: normalizeExpose(input.expose) });
+  return deepFreeze({ servers });
 }
 
 /** 判断值是否是热重载引用。 */

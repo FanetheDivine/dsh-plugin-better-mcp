@@ -22,15 +22,15 @@
 
 **Independent Test**: 插件只注册 OAuth 回调一条 Web 路由；配置含 `expose` 时报未知键；工具表没有 `mcp_call` 与 `mcp_servers`。
 
-- [ ] T002 [US4] 删除 src/aggregate.ts 与 tests/aggregate.test.ts
-- [ ] T003 [US4] 在 src/config.ts 删除 `expose` schema、`ExposeConfig`、`ToolGroup`、`normalizeExpose`，`CONFIG_KEYS` 只保留 `servers`
-- [ ] T004 [US4] 在 src/constants.ts 删除 `ENDPOINT_DEFAULT`、`TOKEN_REF`、`MAX_BATCH`、`AGGREGATE_CALL_TIMEOUT_MS`、`DEFAULT_GROUP`；在 src/credentials.ts 删除 `ensureEndpointToken`、`rotateEndpointToken`
-- [ ] T005 [US4] 在 src/routes.ts 删除聚合路由、`/api/better-mcp/endpoint/rotate`、`syncAggregateRoute`、`handlerFor`；快照不再带令牌
-- [ ] T006 [US4] 在 src/servers.ts 删除 `PanelSnapshotWithToken`、`expose` 快照字段、`execute`、`publicToolName`、`waitConnected`
-- [ ] T007 [US4] 在 src/tools.ts 删除 `buildServerTool`、`buildCallTool`、`parseCallArgs`；在 src/index.ts 删除对应注册与 `syncAggregateRoute` 调用
-- [ ] T008 [US4] 在 src/client/api.ts 删除 `rotateEndpointToken` 与 `expose` 类型；在 src/client/panel.tsx 删除聚合端点区块、复制与令牌状态
-- [ ] T009 [US4] 在 cordis.patch.yml 删除 `expose`；在 src/utils.ts 删除仅聚合端点使用的 `globToRegExp`
-- [ ] T010 [US4] 更新 tests/config.test.ts、tests/routes.test.ts、tests/servers.test.ts、tests/plugin.test.ts、tests/credentials.test.ts、tests/client.test.ts、tests/helpers.ts，删除聚合与旧工具用例，新增「配置含 expose 报未知键」与「只有 OAuth 回调路由」用例
+- [x] T002 [US4] 删除 src/aggregate.ts 与 tests/aggregate.test.ts
+- [x] T003 [US4] 在 src/config.ts 删除 `expose` schema、`ExposeConfig`、`ToolGroup`、`normalizeExpose`，`CONFIG_KEYS` 只保留 `servers`
+- [x] T004 [US4] 在 src/constants.ts 删除 `ENDPOINT_DEFAULT`、`TOKEN_REF`、`MAX_BATCH`、`AGGREGATE_CALL_TIMEOUT_MS`、`DEFAULT_GROUP`；在 src/credentials.ts 删除 `ensureEndpointToken`、`rotateEndpointToken`
+- [x] T005 [US4] 在 src/routes.ts 删除聚合路由、`/api/better-mcp/endpoint/rotate`、`syncAggregateRoute`、`handlerFor`；快照不再带令牌
+- [x] T006 [US4] 在 src/servers.ts 删除 `PanelSnapshotWithToken`、`expose` 快照字段、`execute`、`publicToolName`、`waitConnected`
+- [x] T007 [US4] 在 src/tools.ts 删除 `buildServerTool`、`buildCallTool`、`parseCallArgs`；在 src/index.ts 删除对应注册与 `syncAggregateRoute` 调用
+- [x] T008 [US4] 在 src/client/api.ts 删除 `rotateEndpointToken` 与 `expose` 类型；在 src/client/panel.tsx 删除聚合端点区块、复制与令牌状态
+- [x] T009 [US4] 在 cordis.patch.yml 删除 `expose`；在 src/utils.ts 删除仅聚合端点使用的 `globToRegExp`
+- [x] T010 [US4] 更新 tests/config.test.ts、tests/routes.test.ts、tests/servers.test.ts、tests/plugin.test.ts、tests/credentials.test.ts、tests/client.test.ts、tests/helpers.ts，删除聚合与旧工具用例，新增「配置含 expose 报未知键」与「只有 OAuth 回调路由」用例
 
 **Checkpoint**: `pnpm format && pnpm check` 通过后提交。
 

@@ -1,11 +1,11 @@
-// 面板路由、OAuth 路由与聚合端点接线。
+// 面板路由与 OAuth 路由接线。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readConfig } from '../src/config.ts';
-import { ensureEndpointToken, readClientSecret, readGrant, recordKey } from '../src/credentials.ts';
+import { readClientSecret, readGrant, recordKey } from '../src/credentials.ts';
 import { PluginRoutes } from '../src/routes.ts';
 import { ServerManager } from '../src/servers.ts';
 import { readState, setLazy } from '../src/state.ts';
@@ -31,19 +31,12 @@ interface Harness {
   routes: PluginRoutes;
   manager: ServerManager;
   current: () => ReturnType<typeof readConfig>;
-  refs: { servers: ReturnType<typeof volatile>; expose: ReturnType<typeof volatile> };
+  refs: { servers: ReturnType<typeof volatile> };
 }
 
 /** 组装路由。 */
 function harness(initialServers: Record<string, unknown> = {}): Harness {
-  const refs = {
-    servers: volatile(initialServers),
-    expose: volatile({
-      enabled: true,
-      endpoint: '/better-mcp/mcp',
-      groups: { harness: { title: 'Harness', include: ['workspace_*'], exclude: [] } },
-    }),
-  };
+  const refs = { servers: volatile(initialServers) };
   const ctx = makeCtx({ config: refs });
   let current = readConfig(refs);
   ctx.on('loader/volatile-update', () => {
@@ -52,7 +45,7 @@ function harness(initialServers: Record<string, unknown> = {}): Harness {
   ctx._configStore = structuredClone(current) as unknown as Record<string, unknown>;
   const logger = { info: vi.fn(), warn: vi.fn() };
   const manager = new ServerManager(ctx, () => current, logger);
-  const routes = new PluginRoutes(ctx, () => current, manager, logger);
+  const routes = new PluginRoutes(ctx, () => current, manager);
   routes.registerApi();
   routes.registerWeb();
   return { ctx, routes, manager, current: () => current, refs };
@@ -123,7 +116,7 @@ function webRoute(ctx: ReturnType<typeof makeCtx>, path: string): Record<string,
 }
 
 describe('status 与懒加载', () => {
-  it('返回令牌、服务器与组地址', async () => {
+  it('返回服务器列表', async () => {
     const { ctx } = harness({
       one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
@@ -131,11 +124,7 @@ describe('status 与懒加载', () => {
     expect(status).toBe(200);
     const servers = json.servers as Array<Record<string, unknown>>;
     expect(servers[0]).toMatchObject({ name: 'one', managed: true, lazy: true, auth: 'none' });
-    const expose = json.expose as Record<string, unknown>;
-    expect(typeof expose.token).toBe('string');
-    expect((expose.groups as Array<Record<string, unknown>>)[0]?.url).toBe(
-      '/better-mcp/mcp/harness',
-    );
+    expect(Object.keys(json)).toEqual(['servers']);
   });
 
   it('切换懒加载：打开卸载，关闭挂载', async () => {
@@ -290,54 +279,10 @@ describe('OAuth 路由', () => {
   });
 });
 
-describe('聚合端点与回调', () => {
-  it('轮换令牌后旧值失效', async () => {
+describe('OAuth 回调', () => {
+  it('只注册 OAuth 回调一条 Web 路由', () => {
     const { ctx } = harness();
-    const first = await ensureEndpointToken(ctx as never);
-    const response = await call(ctx, '/api/better-mcp/endpoint/rotate');
-    expect(response.status).toBe(200);
-    const token = String(response.json.token);
-    expect(token).not.toBe(first);
-    expect(await ensureEndpointToken(ctx as never)).toBe(token);
-  });
-
-  it('前缀路由按组返回工具清单', async () => {
-    const { ctx } = harness();
-    ctx._registeredTools.push({
-      name: 'workspace_list',
-      description: 'list workspaces',
-      parameters: { type: 'object', properties: {} },
-      output: { schema: {}, render: () => [] },
-      execute: async () => undefined,
-    });
-    const token = await ensureEndpointToken(ctx as never);
-    const route = webRoute(ctx, '/better-mcp/mcp');
-    const { res, read } = makeRes();
-    await (route.handler as (req: never, res: never) => Promise<void>)(
-      makeReq(
-        'POST',
-        '/better-mcp/mcp/harness',
-        JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-        {
-          authorization: `Bearer ${token}`,
-        },
-      ),
-      res,
-    );
-    const result = read();
-    expect(result.status).toBe(200);
-    const body = JSON.parse(result.body) as { result: { tools: Array<{ name: string }> } };
-    expect(body.result.tools.map((tool) => tool.name)).toEqual(['workspace_list']);
-  });
-
-  it('未知组返回 404', async () => {
-    const { ctx } = harness();
-    const { res, read } = makeRes();
-    await (webRoute(ctx, '/better-mcp/mcp').handler as (req: never, res: never) => Promise<void>)(
-      makeReq('POST', '/better-mcp/mcp/nope', '{}'),
-      res,
-    );
-    expect(read().status).toBe(404);
+    expect(ctx._routes.map((route) => route.path)).toEqual(['/better-mcp/oauth/callback']);
   });
 
   it('回调未知 state 返回失败页', async () => {

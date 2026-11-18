@@ -5,21 +5,18 @@ import { Config, normalizeServerDefinition, readConfig, resolveConfig } from '..
 import { volatile } from './helpers.ts';
 
 describe('resolveConfig', () => {
-  it('缺省为空服务器、启用聚合端点与默认组', () => {
-    const config = resolveConfig();
-    expect(config.servers).toEqual({});
-    expect(config.expose.enabled).toBe(true);
-    expect(config.expose.endpoint).toBe('/better-mcp/mcp');
-    expect(config.expose.groups.harness?.include).toEqual(['workspace_*', 'session_*']);
+  it('缺省为空服务器', () => {
+    expect(resolveConfig()).toEqual({ servers: {} });
   });
 
   it('undefined 与 null 都按缺省处理', () => {
     expect(resolveConfig(undefined).servers).toEqual({});
-    expect(resolveConfig(null).expose.enabled).toBe(true);
+    expect(resolveConfig(null).servers).toEqual({});
   });
 
   it('拒绝未知顶层键', () => {
     expect(() => resolveConfig({ bogus: 1 })).toThrow('unknown config key "bogus"');
+    expect(() => resolveConfig({ expose: {} })).toThrow('unknown config key "expose"');
     expect(() => resolveConfig([])).toThrow('config must be an object');
   });
 
@@ -33,7 +30,6 @@ describe('resolveConfig', () => {
     const config = resolveConfig({ servers: { one: { transport: 'stdio', command: 'node' } } });
     expect(Object.isFrozen(config)).toBe(true);
     expect(Object.isFrozen(config.servers)).toBe(true);
-    expect(Object.isFrozen(config.expose.groups)).toBe(true);
   });
 });
 
@@ -121,40 +117,17 @@ describe('服务器定义校验', () => {
   });
 });
 
-describe('聚合端点校验', () => {
-  it('端点必须是以 / 开头的路径', () => {
-    expect(() => resolveConfig({ expose: { endpoint: 'mcp' } })).toThrow('path starting with /');
-  });
-
-  it('去掉末尾斜杠', () => {
-    expect(resolveConfig({ expose: { endpoint: '/custom/mcp/' } }).expose.endpoint).toBe(
-      '/custom/mcp',
-    );
-  });
-
-  it('组为空时补默认组', () => {
-    expect(resolveConfig({ expose: { groups: {} } }).expose.groups.harness).toBeDefined();
-  });
-
-  it('组名不能为空', () => {
-    expect(() => resolveConfig({ expose: { groups: { '': {} } } })).toThrow(
-      'keys must not be empty',
-    );
-  });
-});
-
 describe('readConfig', () => {
   it('展开 volatile 引用', () => {
     const config = {
       servers: volatile({ one: { transport: 'stdio', command: 'node' } }),
-      expose: volatile(undefined),
     };
     expect(readConfig(config).servers.one?.command).toBe('node');
   });
 
   it('引用变化后读到新值', () => {
     const servers = volatile({});
-    const config = { servers, expose: volatile(undefined) };
+    const config = { servers };
     servers.set({ two: { transport: 'stdio', command: 'npx' } } as never);
     expect(readConfig(config).servers.two?.command).toBe('npx');
   });

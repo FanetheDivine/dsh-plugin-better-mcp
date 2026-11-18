@@ -1,7 +1,7 @@
 /**
  * 插件入口。导出宿主约定的 name、inject、apply 与 Config。
  *
- * 装配顺序：读取配置 → 创建服务器管理与路由 → 注册工具与路由 → 挂载常驻服务器 →
+ * 装配顺序：读取配置 → 创建服务器管理与路由 → 注册路由 → 挂载常驻服务器 →
  * 监听热更新。
  */
 
@@ -9,7 +9,6 @@ import { Config, type PluginConfig, readConfig } from './config.ts';
 import { PLUGIN_LABEL, PLUGIN_ROW_ID } from './constants.ts';
 import { PluginRoutes } from './routes.ts';
 import { ServerManager } from './servers.ts';
-import { buildCallTool, buildServerTool } from './tools.ts';
 import type { Context, PluginLogger } from './types.ts';
 
 export { Config };
@@ -21,7 +20,7 @@ export const name = PLUGIN_ROW_ID;
 export const inject = ['tools', 'mcpManager', 'credentials'];
 
 /**
- * 插件启用时调用：解析配置、注册工具与路由、挂载常驻服务器。
+ * 插件启用时调用：解析配置、注册路由、挂载常驻服务器。
  * 保存 volatile 配置后宿主发出 `loader/volatile-update`，插件按新值对账。
  */
 export function apply(ctx: Context, config?: unknown): void {
@@ -40,19 +39,8 @@ export function apply(ctx: Context, config?: unknown): void {
     ctx,
     () => settings,
     manager,
-    logger,
     () => reconciliation,
   );
-
-  ctx.effect(() => {
-    const disposers = [
-      ctx.tools.register(buildServerTool(manager)),
-      ctx.tools.register(buildCallTool(manager, () => settings, logger)),
-    ];
-    return () => {
-      for (const dispose of disposers) dispose();
-    };
-  }, 'better-mcp: tools');
 
   routes.registerApi();
   routes.registerWeb();
@@ -94,7 +82,6 @@ export function apply(ctx: Context, config?: unknown): void {
     reconciliation = reconciliation
       .then(async () => {
         await manager.reconcile(previous, next);
-        routes.syncAggregateRoute();
       })
       .catch((error: unknown) => {
         logger.warn(`better-mcp: config reconcile failed: ${String(error)}`);

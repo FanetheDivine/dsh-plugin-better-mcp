@@ -1,4 +1,4 @@
-// 插件入口接线：导出契约、启动挂载、热更新对账、工具与路由、卸载清理。
+// 插件入口接线：导出契约、启动挂载、热更新对账、路由、卸载清理。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,14 +27,7 @@ async function flush(): Promise<void> {
 
 /** 标准配置引用。 */
 function refs(servers: Record<string, unknown> = {}) {
-  return {
-    servers: volatile(servers),
-    expose: volatile({
-      enabled: true,
-      endpoint: '/better-mcp/mcp',
-      groups: { harness: { title: 'Harness', include: ['workspace_*'], exclude: [] } },
-    }),
-  };
+  return { servers: volatile(servers) };
 }
 
 describe('模块契约', () => {
@@ -47,16 +40,11 @@ describe('模块契约', () => {
 });
 
 describe('apply 接线', () => {
-  it('注册两个工具与面板、回调、聚合路由', async () => {
+  it('注册面板路由与 OAuth 回调路由', async () => {
     const config = refs();
     const ctx = makeCtx({ config });
     apply(ctx, config);
-    expect(ctx._registeredTools.map((tool) => tool.name).sort()).toEqual([
-      'mcp_call',
-      'mcp_servers',
-    ]);
     expect(ctx._fetchRoutes.map((route) => route.path).sort()).toEqual([
-      '/api/better-mcp/endpoint/rotate',
       '/api/better-mcp/lazy',
       '/api/better-mcp/oauth/client',
       '/api/better-mcp/oauth/signout',
@@ -66,10 +54,7 @@ describe('apply 接线', () => {
       '/api/better-mcp/servers/remove',
       '/api/better-mcp/status',
     ]);
-    expect(ctx._routes.map((route) => route.path).sort()).toEqual([
-      '/better-mcp/mcp',
-      '/better-mcp/oauth/callback',
-    ]);
+    expect(ctx._routes.map((route) => route.path)).toEqual(['/better-mcp/oauth/callback']);
     await flush();
   });
 
@@ -104,21 +89,22 @@ describe('apply 接线', () => {
   });
 
   it('未知配置键让加载失败', () => {
-    const config = { servers: volatile({}), expose: volatile(undefined), bogus: volatile(1) };
+    const config = { servers: volatile({}), expose: volatile({ enabled: true }) };
     const ctx = makeCtx({ config: config as never });
-    expect(() => apply(ctx, config)).toThrow('unknown config key "bogus"');
+    expect(() => apply(ctx, config as never)).toThrow('unknown config key "expose"');
   });
 
-  it('缺少 Web 服务时仍注册工具', async () => {
-    const config = refs();
+  it('缺少 Web 服务时仍挂载服务器', async () => {
+    const config = refs({
+      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+    });
     const ctx = makeCtx({ config, noConnection: true, noWebServer: true });
     apply(ctx, config);
-    expect(ctx._registeredTools).toHaveLength(2);
     expect(ctx._routes).toHaveLength(0);
-    await flush();
+    await vi.waitFor(() => expect(ctx._managerRegistered.has('one')).toBe(true));
   });
 
-  it('卸载时释放工具、路由与挂载', async () => {
+  it('卸载时释放路由与挂载', async () => {
     const config = refs({
       one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
@@ -126,7 +112,6 @@ describe('apply 接线', () => {
     apply(ctx, config);
     await vi.waitFor(() => expect(ctx._managerRegistered.size).toBe(1));
     ctx._dispose();
-    expect(ctx._registeredTools).toHaveLength(0);
     expect(ctx._managerRegistered.size).toBe(0);
     expect(ctx._routes).toHaveLength(0);
     expect(ctx._fetchRoutes).toHaveLength(0);

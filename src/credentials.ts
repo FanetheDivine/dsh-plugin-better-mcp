@@ -1,19 +1,11 @@
 /**
  * 凭据读写的封装。
  *
- * 三类秘密都存进 DSH 凭据库：OAuth 授权、固定客户端密钥、聚合端点令牌。
+ * 两类秘密都存进 DSH 凭据库：OAuth 授权与固定客户端密钥。
  * 配置文件只保留非密钥字段。
  */
-import { randomBytes } from 'node:crypto';
-
-import { CREDENTIAL_SCOPE, TOKEN_REF } from './constants.ts';
-import type {
-  Context,
-  CredentialKey,
-  CredentialRecord,
-  CredentialRef,
-  PluginLogger,
-} from './types.ts';
+import { CREDENTIAL_SCOPE } from './constants.ts';
+import type { Context, CredentialKey, CredentialRecord } from './types.ts';
 import { asString, grantId, isRecord } from './utils.ts';
 
 /** 一次 OAuth 授权的持久化内容。 */
@@ -44,9 +36,6 @@ export interface OAuthGrant {
 export function recordKey(id: string): CredentialKey {
   return `${CREDENTIAL_SCOPE}/${id}` as unknown as CredentialKey;
 }
-
-/** 聚合令牌的凭据引用。 */
-const ENDPOINT_TOKEN_REF = TOKEN_REF as unknown as CredentialRef;
 
 /** 读取一台服务器的授权记录。 */
 export async function readGrant(ctx: Context, serverName: string): Promise<OAuthGrant | undefined> {
@@ -112,21 +101,4 @@ export async function writeClientSecret(
 /** 删除固定客户端的密钥。 */
 export async function deleteClientSecret(ctx: Context, serverName: string): Promise<void> {
   await ctx.credentials.deleteRecord(clientSecretKey(serverName));
-}
-
-/** 读取或创建聚合端点令牌。 */
-export async function ensureEndpointToken(ctx: Context, logger?: PluginLogger): Promise<string> {
-  const resolved = await ctx.credentials.resolve(ENDPOINT_TOKEN_REF);
-  if (resolved !== undefined && resolved.value !== '') return resolved.value;
-  const created = randomBytes(24).toString('base64url');
-  await ctx.credentials.set(ENDPOINT_TOKEN_REF, created);
-  logger?.info('better-mcp: created the aggregate endpoint token');
-  return created;
-}
-
-/** 轮换聚合端点令牌。 */
-export async function rotateEndpointToken(ctx: Context): Promise<string> {
-  const created = randomBytes(24).toString('base64url');
-  await ctx.credentials.set(ENDPOINT_TOKEN_REF, created);
-  return created;
 }

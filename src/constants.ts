@@ -12,12 +12,6 @@ export const PLUGIN_LABEL = 'better-mcp';
 /** OAuth 回调路径。 */
 export const CALLBACK_PATH = '/better-mcp/oauth/callback';
 
-/** 聚合端点默认前缀。 */
-export const ENDPOINT_DEFAULT = '/better-mcp/mcp';
-
-/** 聚合端点令牌的凭据引用。 */
-export const TOKEN_REF = 'BETTER_MCP_TOKEN';
-
 /** 插件数据区内的目录名。 */
 export const DATA_DIR = 'better-mcp';
 
@@ -32,16 +26,3 @@ export const PENDING_TTL_MS = 10 * 60 * 1000;
 
 /** 按需挂载时等待连接的上限。 */
 export const CONNECT_TIMEOUT_MS = 25_000;
-
-/** 一次 JSON-RPC 批量最多处理的消息数。 */
-export const MAX_BATCH = 20;
-
-/** 聚合端点单次工具调用的超时。 */
-export const AGGREGATE_CALL_TIMEOUT_MS = 120_000;
-
-/** 默认工具组。 */
-export const DEFAULT_GROUP = {
-  title: 'DSH harness tools',
-  include: ['workspace_*', 'session_*'],
-  exclude: [] as string[],
-};

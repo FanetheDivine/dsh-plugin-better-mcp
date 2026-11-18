@@ -1,4 +1,4 @@
-// 服务器生命周期：挂载、卸载、等待连接、工具名解析与快照对账。
+// 服务器生命周期：挂载、卸载、快照与对账。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,14 +25,7 @@ afterEach(async () => {
 
 /** 配置。 */
 function settings(servers: PluginConfig['servers']): PluginConfig {
-  return {
-    servers,
-    expose: {
-      enabled: true,
-      endpoint: '/better-mcp/mcp',
-      groups: { harness: { include: [], exclude: [] } },
-    },
-  };
+  return { servers };
 }
 
 /** 构造管理器。 */
@@ -47,7 +40,6 @@ function makeManager(ctx: MockCtxState, config: PluginConfig) {
 describe('mount', () => {
   it('只注册一次，并剔除插件字段、注入 Bearer', async () => {
     const ctx = makeCtx();
-    await ctx.credentials.set('BETTER_MCP_TOKEN', 'endpoint');
     await ctx.credentials.modifyRecord(recordKey(grantId('figma')), async () => ({
       kind: 'grant',
       payload: { accessToken: 'grant-token' },
@@ -110,83 +102,6 @@ describe('unmount', () => {
   });
 });
 
-describe('waitConnected', () => {
-  it('连接成功返回工具数', async () => {
-    const ctx = makeCtx({
-      statuses: { one: { state: 'connected', toolCount: 3, connectedAt: Date.now() } },
-    });
-    const manager = makeManager(ctx, settings({}));
-    expect(await manager.waitConnected('one')).toEqual({ toolCount: 3 });
-  });
-
-  it('失败、等待凭据与 401 都抛错', async () => {
-    const ctx = makeCtx();
-    const manager = makeManager(ctx, settings({}));
-    ctx._setStatus('one', { state: 'failed', reason: 'gave-up', lastError: 'boom' });
-    await expect(manager.waitConnected('one')).rejects.toThrow('boom');
-    ctx._setStatus('one', { state: 'waiting-credentials', lastError: 'sign in' });
-    await expect(manager.waitConnected('one')).rejects.toThrow('waiting for credentials');
-    ctx._setStatus('one', {
-      state: 'reconnecting',
-      attempt: 1,
-      maxAttempts: 3,
-      nextRetryAtMs: Date.now(),
-      lastError: 'HTTP 401 Unauthorized',
-    });
-    await expect(manager.waitConnected('one')).rejects.toThrow('401');
-  });
-
-  it('超时抛错', async () => {
-    vi.useFakeTimers();
-    try {
-      const ctx = makeCtx();
-      const manager = makeManager(ctx, settings({}));
-      const pending = expect(manager.waitConnected('one')).rejects.toThrow('Timed out');
-      await vi.advanceTimersByTimeAsync(26_000);
-      await pending;
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
-describe('工具名解析与执行', () => {
-  it('解析注册名、摘要后缀与缺失工具', async () => {
-    const ctx = makeCtx();
-    ctx._registeredTools.push(
-      {
-        name: 'mcp__figma__get_file',
-        description: '',
-        parameters: {},
-        output: { schema: {}, render: () => [] },
-        execute: async () => undefined,
-      },
-      {
-        name: 'mcp__figma__list_abc123abc123',
-        description: '',
-        parameters: {},
-        output: { schema: {}, render: () => [] },
-        execute: async () => undefined,
-      },
-    );
-    const manager = makeManager(ctx, settings({}));
-    expect(manager.publicToolName('figma', 'get_file')).toBe('mcp__figma__get_file');
-    expect(manager.publicToolName('figma', 'list')).toBe('mcp__figma__list_abc123abc123');
-    expect(() => manager.publicToolName('figma', 'missing')).toThrow(
-      'Available: get_file, list_abc123abc123',
-    );
-  });
-
-  it('执行结果映射为内容与错误标记', async () => {
-    const ctx = makeCtx({
-      executeResult: { content: [{ type: 'text', text: 'hi' }], isError: false },
-    });
-    const manager = makeManager(ctx, settings({}));
-    const outcome = await manager.execute('mcp__x__y', { a: 1 }, new AbortController().signal);
-    expect(outcome).toEqual({ content: [{ type: 'text', text: 'hi' }], isError: false });
-  });
-});
-
 describe('snapshot', () => {
   it('合并配置与管理器，按名称排序', async () => {
     const ctx = makeCtx({ external: ['external-one'] });
@@ -199,7 +114,7 @@ describe('snapshot', () => {
       figma: { transport: 'streamable-http', url: 'https://x', auth: 'oauth', lazy: true },
     });
     const manager = makeManager(ctx, config);
-    const snapshot = await manager.snapshot(false);
+    const snapshot = await manager.snapshot();
     expect(snapshot.servers.map((row) => row.name)).toEqual(['external-one', 'figma']);
     expect(snapshot.servers[0]).toMatchObject({ managed: false, lazy: false, mounted: false });
     expect(snapshot.servers[1]).toMatchObject({
@@ -207,10 +122,6 @@ describe('snapshot', () => {
       lazy: true,
       authorized: true,
       auth: 'oauth',
-    });
-    expect(snapshot.expose.groups[0]).toMatchObject({
-      name: 'harness',
-      url: '/better-mcp/mcp/harness',
     });
   });
 
@@ -221,10 +132,10 @@ describe('snapshot', () => {
       ctx,
       settings({ one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true } }),
     );
-    expect((await manager.snapshot(false)).servers[0]?.lazy).toBe(false);
+    expect((await manager.snapshot()).servers[0]?.lazy).toBe(false);
   });
 
-  it('带令牌快照包含脱敏定义', async () => {
+  it('快照包含脱敏定义', async () => {
     const ctx = makeCtx();
     const manager = makeManager(
       ctx,
@@ -238,8 +149,7 @@ describe('snapshot', () => {
         },
       }),
     );
-    const snapshot = await manager.snapshot(true, async () => 'token');
-    expect(snapshot.expose.token).toBe('token');
+    const snapshot = await manager.snapshot();
     expect(snapshot.servers[0]?.definition).toMatchObject({ url: 'https://x' });
     expect(JSON.stringify(snapshot.servers[0]?.definition)).not.toContain('hide-me');
   });
