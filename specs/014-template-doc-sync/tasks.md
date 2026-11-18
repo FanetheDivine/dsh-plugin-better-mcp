@@ -36,10 +36,10 @@
 
 **Independent Test**: 按 `specs/014-template-doc-sync/data-model.md` 的迁移表逐项核对，现行引用均有效
 
-- [ ] T006 [P] [US2] 更新 `docs/how-it-works.md`，承接宿主入口、严格配置与依赖归属规则
-- [ ] T007 [P] [US2] 更新 `docs/i18n.md`，承接原国际化原则的全部约束
-- [ ] T008 [US2] 更新 `docs/known-risks.md`，把版本规则链接到原则 I，把 external 规则链接到 `docs/how-it-works.md`
-- [ ] T009 [US2] 核对 `docs/how-it-works.md`、`docs/i18n.md` 与 `docs/known-risks.md` 的迁移完整性，提交阶段 4
+- [X] T006 [P] [US2] 更新 `docs/how-it-works.md`，承接宿主入口、严格配置与依赖归属规则
+- [X] T007 [P] [US2] 更新 `docs/i18n.md`，承接原国际化原则的全部约束
+- [X] T008 [US2] 更新 `docs/known-risks.md`，把版本规则链接到原则 I，把 external 规则链接到 `docs/how-it-works.md`
+- [X] T009 [US2] 核对 `docs/how-it-works.md`、`docs/i18n.md` 与 `docs/known-risks.md` 的迁移完整性，提交阶段 4
 
 ## Phase 5: User Story 3 - 主工作区只用于同步 (Priority: P1)
 
