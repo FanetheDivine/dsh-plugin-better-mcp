@@ -55,6 +55,13 @@ pnpm 的 minimum release age 策略会拒绝发布时间过短的包。
 
 模型工具 `mcp_servers` 不返回聚合令牌；令牌只出现在同源面板路由与凭据库。
 
+## 国际化
+
+- 宿主在注册时捕获的文案（如命令描述）保持注册时的语言，切换语言后仍显示旧语言；槽位渲染的文案随切换更新。
+- locale 服务只负责选择、持久化、语言匹配、键回退与 `<html lang>`，复数规则与双向布局由语言包自理。
+- 元数据或字典缺当前语言时按回退链取值；缺 `meta.title` 与 `meta.description` 时回落 `package.json` 的字段，可能显示英文包名。
+- 规范见 [i18n.md](./i18n.md)。
+
 ## Windows 长路径
 
 `node_modules` 嵌套很深，路径可能超过 Windows 的 260 字符上限。

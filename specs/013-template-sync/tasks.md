@@ -62,19 +62,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T011 [US2] 新增 `tests/metadata.test.ts`：目录只含基线 `en`、`zh`；每份 `meta` 恰含 `title` 与 `description` 且为非空字符串、标题单行；各语言键集一致；不含 U+200B 与 U+FEFF；声明 `meta.detail` 时匹配 `^docs/.+\.md$` 且文件存在；`package.json` 的 `exports` 含 `./locale/*.json`、`files` 含 `locale/*.json`
-- [ ] T012 [US2] 运行 `pnpm exec vitest run tests/metadata.test.ts`，确认现有资源通过；逐项破坏后确认失败并指出破坏点
+- [X] T011 [US2] 新增 `tests/metadata.test.ts`：目录只含基线 `en`、`zh`；每份 `meta` 恰含 `title` 与 `description` 且为非空字符串、标题单行；各语言键集一致；不含 U+200B 与 U+FEFF；声明 `meta.detail` 时匹配 `^docs/.+\.md$` 且文件存在；`package.json` 的 `exports` 含 `./locale/*.json`、`files` 含 `locale/*.json`
+- [X] T012 [US2] 运行 `pnpm exec vitest run tests/metadata.test.ts`，确认现有资源通过；逐项破坏后确认失败并指出破坏点
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] 新增 `docs/i18n.md`：资源位置、`meta` 字段表（含可选 `detail`）、宿主回退顺序、包清单声明、前端字典与 `better-mcp` 命名空间、新增语言步骤、校验命令；约束条目指向宪章原则 VIII
-- [ ] T014 [US2] 用 `/speckit-constitution` 在 `.specify/memory/constitution.md` 新增原则 VIII「国际化」：文案经字典或元数据提供、基线 `zh` 与 `en` 键集一致、元数据放 `locale/<语言 id>.json` 并在 `exports` 与 `files` 声明、译文保留占位符与 API 字段名、资源不含 U+200B 与 U+FEFF、变更由测试覆盖、规范归属 `docs/i18n.md`；同步影响报告记录 2.0.0 → 2.1.0
-- [ ] T015 [P] [US2] 更新 `AGENTS.md` 文档索引，增加 `docs/i18n.md` 一行
-- [ ] T016 [P] [US2] 更新 `README.md`，说明插件标题与描述随宿主语言切换，中英文各一份
-- [ ] T017 [US2] 更新 `docs/development.md` 的测试表：两个产物测试标注「产物测试」，新增 `metadata.test.ts` 与 `dist-freshness.test.ts` 两行；补 vitest 两个 project 与新鲜度要求的说明；文件地图补 `tests/support/dist-freshness.ts` 与 `locale/` 条目
-- [ ] T018 [P] [US2] 在 `docs/how-it-works.md` 的 locale 小节与打包小节补指向 `docs/i18n.md` 的链接与 `locale/*.json` 说明，不复制规则
-- [ ] T019 [P] [US2] 在 `docs/known-risks.md` 增加「国际化」小节：注册时捕获的文案保持旧语言、回退链取值、缺元数据回落 `package.json`，并链接规范
-- [ ] T020 [US2] 运行 `pnpm format && pnpm check`，提交阶段 3
+- [X] T013 [P] [US2] 新增 `docs/i18n.md`：资源位置、`meta` 字段表（含可选 `detail`）、宿主回退顺序、包清单声明、前端字典与 `better-mcp` 命名空间、新增语言步骤、校验命令；约束条目指向宪章原则 VIII
+- [X] T014 [US2] 用 `/speckit-constitution` 在 `.specify/memory/constitution.md` 新增原则 VIII「国际化」：文案经字典或元数据提供、基线 `zh` 与 `en` 键集一致、元数据放 `locale/<语言 id>.json` 并在 `exports` 与 `files` 声明、译文保留占位符与 API 字段名、资源不含 U+200B 与 U+FEFF、变更由测试覆盖、规范归属 `docs/i18n.md`；同步影响报告记录 2.0.0 → 2.1.0
+- [X] T015 [P] [US2] 更新 `AGENTS.md` 文档索引，增加 `docs/i18n.md` 一行
+- [X] T016 [P] [US2] 更新 `README.md`，说明插件标题与描述随宿主语言切换，中英文各一份
+- [X] T017 [US2] 更新 `docs/development.md` 的测试表：两个产物测试标注「产物测试」，新增 `metadata.test.ts` 与 `dist-freshness.test.ts` 两行；补 vitest 两个 project 与新鲜度要求的说明；文件地图补 `tests/support/dist-freshness.ts` 与 `locale/` 条目
+- [X] T018 [P] [US2] 在 `docs/how-it-works.md` 的 locale 小节与打包小节补指向 `docs/i18n.md` 的链接与 `locale/*.json` 说明，不复制规则
+- [X] T019 [P] [US2] 在 `docs/known-risks.md` 增加「国际化」小节：注册时捕获的文案保持旧语言、回退链取值、缺元数据回落 `package.json`，并链接规范
+- [X] T020 [US2] 运行 `pnpm format && pnpm check`，提交阶段 3
 
 **Checkpoint**: 元数据规范与测试落地，文档索引可查到
 
