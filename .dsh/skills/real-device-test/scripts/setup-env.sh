@@ -87,7 +87,7 @@ else
 # 实机测试隔离配置：停用真实模型，会话与存储写入 profile 目录，mock provider 由末尾 insert 加载。
 - id: $PLUGIN
   config:
-    prefix: rdt
+${RDT_PLUGIN_CONFIG:-    prefix: rdt}
 - id: agent-default-model
   config:
     provider: mock
@@ -117,6 +117,7 @@ EOF
 fi
 mkdir -p "$PDIR_U/test-sessions" "$PDIR_U/test-storage" "$PDIR_U/shots"
 cp "$SCRIPTS_DIR/mock-provider.mjs" "$SCRIPTS_DIR/run-test.mjs" "$PDIR_U/"
+cp "$SCRIPTS_DIR/mcp-cases.mjs" "$SCRIPTS_DIR/mcp-browser-cases.mjs" "$PDIR_U/"
 
 echo "== 6/6 注册测试工作区"
 node "$SCRIPTS_DIR/register-workspace.mjs" "$PDIR_U" "$REPO"
