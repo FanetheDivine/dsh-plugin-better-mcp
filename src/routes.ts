@@ -283,7 +283,7 @@ export class PluginRoutes {
 
   /** 发起 OAuth。 */
   private async startOAuth(request: Request): Promise<Response> {
-    const url = new URL(request.url, `http://${request.headers.get('host') ?? '127.0.0.1'}`);
+    const url = new URL(request.url, 'http://127.0.0.1');
     const serverName = url.searchParams.get('server') ?? '';
     const definition = this.getSettings().servers[serverName];
     if (definition === undefined)
@@ -297,7 +297,8 @@ export class PluginRoutes {
       const discovery = await discover(endpoint);
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
-      const redirectUri = oauthDefinition.redirectUri ?? `${url.origin}${CALLBACK_PATH}`;
+      const redirectUri =
+        oauthDefinition.redirectUri ?? `${this.originOf(request)}${CALLBACK_PATH}`;
       let clientId = oauthDefinition.clientId;
       let clientSecret =
         oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
@@ -403,6 +404,9 @@ export class PluginRoutes {
         clientId: context.clientId,
         ...(context.clientSecret === undefined ? {} : { clientSecret: context.clientSecret }),
         tokenEndpoint: asString(context.authorization.token_endpoint) ?? '',
+        ...(context.tokenAuthMethod === undefined
+          ? {}
+          : { tokenAuthMethod: context.tokenAuthMethod }),
         resource: context.resource,
         authorization: context.authorization,
         authorizedAt: Date.now(),
@@ -412,6 +416,25 @@ export class PluginRoutes {
     } catch (error) {
       return { ok: false, detail: messageOf(error) };
     }
+  }
+
+  /**
+   * 浏览器访问本服务的来源。
+   * Web 载体把 fetch 路由的请求 URL 解析到占位来源，真实来源只在 `host` 头里。
+   * @param request - 面板发出的请求。
+   * @returns 协议与 `host` 头拼成的来源；缺少 `host` 头时回落到监听地址。
+   */
+  private originOf(request: Request): string {
+    let fallback = 'http://127.0.0.1';
+    try {
+      fallback = this.ctx.get('webServer')?.getOrigin?.() ?? fallback;
+    } catch {
+      // 监听器尚未绑定端口，保持回环默认值。
+    }
+    const protocol = new URL(fallback).protocol;
+    const host = request.headers.get('host');
+    if (host === null || host === '') return fallback;
+    return `${protocol}//${host}`;
   }
 
   /** 在固定回环端口监听一次回调。 */

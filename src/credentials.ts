@@ -24,6 +24,8 @@ export interface OAuthGrant {
   clientSecret?: string;
   /** 刷新端点。 */
   tokenEndpoint?: string;
+  /** 令牌端点认证方式。 */
+  tokenAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
   /** 资源标识。 */
   resource?: string;
   /** 授权服务器元数据。 */

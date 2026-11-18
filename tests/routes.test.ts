@@ -241,6 +241,69 @@ describe('OAuth 路由', () => {
     expect(String(response.json.error)).toContain('401');
   });
 
+  it('回调地址取自 Host 头，忽略占位来源', async () => {
+    const { ctx } = harness({
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://mcp.example.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const target = String(input);
+        if (init?.method === 'POST' && target === 'https://mcp.example.com/mcp') {
+          return new Response('', {
+            status: 401,
+            headers: {
+              'www-authenticate':
+                'Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"',
+            },
+          });
+        }
+        if (target === 'https://mcp.example.com/.well-known/oauth-protected-resource') {
+          return Response.json({
+            resource: 'https://mcp.example.com/mcp',
+            authorization_servers: ['https://auth.example.com'],
+            scopes_supported: ['read'],
+          });
+        }
+        if (target === 'https://auth.example.com/.well-known/oauth-authorization-server') {
+          return Response.json({
+            issuer: 'https://auth.example.com',
+            authorization_endpoint: 'https://auth.example.com/authorize',
+            token_endpoint: 'https://auth.example.com/token',
+            registration_endpoint: 'https://auth.example.com/register',
+          });
+        }
+        if (target === 'https://auth.example.com/register') {
+          const body: unknown = JSON.parse(String(init?.body ?? '{}'));
+          registration.push(body as Record<string, unknown>);
+          return Response.json(
+            { client_id: 'client-1', client_secret: 'secret-1' },
+            { status: 201 },
+          );
+        }
+        return new Response('unexpected', { status: 500 });
+      }),
+    );
+    // Web 载体把 fetch 路由的请求 URL 解析到占位来源，真实来源只在 Host 头里。
+    const request = new Request('http://x/api/better-mcp/oauth/start?server=one', {
+      headers: { host: '127.0.0.1:3210' },
+    });
+    const response = await fetchRoute(ctx, '/api/better-mcp/oauth/start')(request);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.redirectUri).toBe('http://127.0.0.1:3210/better-mcp/oauth/callback');
+    expect(registration[0]?.redirect_uris).toEqual([
+      'http://127.0.0.1:3210/better-mcp/oauth/callback',
+    ]);
+  });
+
   it('配置固定客户端：写入配置与凭据库', async () => {
     const { ctx, refs } = harness({
       one: {

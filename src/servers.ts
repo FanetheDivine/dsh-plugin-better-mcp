@@ -105,6 +105,7 @@ export class ServerManager {
         refreshToken,
         ...(grant.resource === undefined ? {} : { resource: grant.resource }),
         ...(grant.authorization === undefined ? {} : { authorization: grant.authorization }),
+        ...(grant.tokenAuthMethod === undefined ? {} : { tokenAuthMethod: grant.tokenAuthMethod }),
       });
       const next = {
         ...grant,

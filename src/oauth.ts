@@ -52,6 +52,8 @@ export interface PendingAuthorization {
   clientId: string;
   /** 客户端密钥。 */
   clientSecret?: string;
+  /** 令牌端点认证方式。 */
+  tokenAuthMethod?: TokenAuthMethod;
   /** 资源标识。 */
   resource: string;
   /** 授权服务器元数据。 */
@@ -71,6 +73,9 @@ export interface TokenResponse {
   /** 令牌类型。 */
   tokenType: string;
 }
+
+/** 令牌端点认证方式。 */
+export type TokenAuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none';
 
 /** base64url，无填充。 */
 function base64url(buffer: Buffer): string {
@@ -177,7 +182,7 @@ export async function discover(serverUrl: string, signal?: AbortSignal): Promise
 export async function registerClient(
   discovery: Discovery,
   options: { clientName: string; redirectUri: string; scopes: string[] },
-): Promise<{ clientId: string; clientSecret?: string }> {
+): Promise<{ clientId: string; clientSecret?: string; tokenAuthMethod: TokenAuthMethod }> {
   const endpoint = asString(discovery.authorization.registration_endpoint);
   if (endpoint === undefined) {
     throw new Error(
@@ -205,11 +210,17 @@ export async function registerClient(
   if (clientId === undefined || clientId === '') {
     throw new Error('Client registration answered no client_id.');
   }
+  const method = isRecord(registered) ? asString(registered.token_endpoint_auth_method) : undefined;
+  const secret = isRecord(registered) ? asString(registered.client_secret) : undefined;
   return {
     clientId,
-    ...(isRecord(registered) && typeof registered.client_secret === 'string'
-      ? { clientSecret: registered.client_secret }
-      : {}),
+    ...(secret === undefined ? {} : { clientSecret: secret }),
+    tokenAuthMethod:
+      method === 'client_secret_basic' || method === 'client_secret_post' || method === 'none'
+        ? method
+        : secret === undefined
+          ? 'none'
+          : 'client_secret_post',
   };
 }
 
@@ -243,12 +254,22 @@ function authenticateClient(
   clientId: string,
   clientSecret: string | undefined,
   authorization: Record<string, unknown>,
+  registered?: TokenAuthMethod,
 ): { headers: Record<string, string>; form: URLSearchParams } {
+  // 注册时确定的方式优先：元数据列出的方式未必都被实现。
   const declared = Array.isArray(authorization.token_endpoint_auth_methods_supported)
-    ? authorization.token_endpoint_auth_methods_supported
-    : ['client_secret_post'];
-  const methods = declared.filter((value): value is string => typeof value === 'string');
-  if (clientSecret !== undefined && methods.includes('client_secret_basic')) {
+    ? authorization.token_endpoint_auth_methods_supported.filter(
+        (value): value is string => typeof value === 'string',
+      )
+    : [];
+  const method =
+    registered ??
+    (declared.includes('client_secret_post')
+      ? 'client_secret_post'
+      : declared.includes('client_secret_basic')
+        ? 'client_secret_basic'
+        : 'client_secret_post');
+  if (clientSecret !== undefined && method === 'client_secret_basic') {
     const basic = Buffer.from(
       `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`,
     ).toString('base64');
@@ -280,6 +301,7 @@ export async function exchangeCode(
     pending.clientId,
     pending.clientSecret,
     pending.authorization,
+    pending.tokenAuthMethod,
   );
   const response = await request(endpoint, {
     method: 'POST',
@@ -302,6 +324,8 @@ export async function refresh(grant: {
   tokenEndpoint: string;
   clientId: string;
   clientSecret?: string;
+  /** 令牌端点认证方式。 */
+  tokenAuthMethod?: TokenAuthMethod;
   refreshToken: string;
   resource?: string;
   authorization?: Record<string, unknown>;
@@ -316,6 +340,7 @@ export async function refresh(grant: {
     grant.clientId,
     grant.clientSecret,
     grant.authorization ?? {},
+    grant.tokenAuthMethod,
   );
   const response = await request(grant.tokenEndpoint, {
     method: 'POST',
