@@ -12,7 +12,7 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 在 package.json 新增 devDependencies `@deepseek-ai/dsh-session-projection`、`@deepseek-ai/dsh-session`、`@deepseek-ai/dsh-llm`，版本 `0.2.2-rc.3`；删除 `@deepseek-ai/dsh-home-paths`；同步 pnpm-workspace.yaml 的 `minimumReleaseAgeExclude`；运行 `pnpm install` 更新 pnpm-lock.yaml
+- [x] T001 在 package.json 新增 devDependencies `@deepseek-ai/dsh-session-projection`、`@deepseek-ai/dsh-session`、`@deepseek-ai/dsh-llm`，版本 `0.2.2-rc.3`；删除 `@deepseek-ai/dsh-home-paths`；同步 pnpm-workspace.yaml 的 `minimumReleaseAgeExclude`；运行 `pnpm install` 更新 pnpm-lock.yaml
 
 ---
 
