@@ -218,9 +218,31 @@ describe('ServerForm', () => {
     expect(html).toContain('data-testid="better-mcp-form"');
     expect(html).toContain('for="better-mcp-name"');
     expect(html).toContain('id="better-mcp-name"');
+    expect(html).toContain('aria-describedby="better-mcp-name-hint"');
+    expect(html).toContain(zh.nameHint);
+    expect(html).toContain('<fieldset');
+    expect(html).toContain('required=""');
     expect(html).toContain('name="clientSecret"');
     expect(html).toContain('autoComplete="new-password"');
     expect(html).toContain('aria-busy="false"');
+  });
+
+  it('保存期间禁用全部字段', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: emptyForm(),
+          isEdit: false,
+          busy: true,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('<fieldset');
+    expect(html).toContain('disabled=""');
   });
 });
 
@@ -332,12 +354,13 @@ describe('服务器行', () => {
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('aria-label="为 alpha 启用懒加载"');
+    expect(html).toContain('aria-describedby="better-mcp-lazy-note"');
   });
 
-  it('连接诊断独占反馈区域', () => {
+  it('连接诊断使用可展开区域', () => {
     const html = renderRow({ error: 'HTTP 502' });
-    expect(html).toContain('better-mcp-diagnostics');
-    expect(html).toContain('role="alert"');
+    expect(html).toContain('<details class="better-mcp-diagnostics"');
+    expect(html).toContain(zh.errorDetails);
     expect(html).toContain('HTTP 502');
   });
 

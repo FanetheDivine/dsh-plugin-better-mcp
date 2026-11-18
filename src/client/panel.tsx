@@ -155,6 +155,7 @@ export function ServerItem(props: {
                 disabled={working}
                 onChange={props.onLazy}
                 label={t('lazyFor', { name: row.name })}
+                describedBy="better-mcp-lazy-note"
                 title={t('lazyHint')}
               />
               <span>{t('lazy')}</span>
@@ -169,9 +170,10 @@ export function ServerItem(props: {
           ) : null}
           {row.url !== undefined ? <p className="better-mcp-server-url">{row.url}</p> : null}
           {row.error !== undefined && row.error !== '' ? (
-            <p className="better-mcp-diagnostics" role="alert">
-              {row.error}
-            </p>
+            <details className="better-mcp-diagnostics">
+              <summary>{t('errorDetails')}</summary>
+              <p>{row.error}</p>
+            </details>
           ) : null}
           {row.managed ? (
             <div className="better-mcp-actions">
@@ -410,6 +412,11 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
             />
           ))}
         </ul>
+      ) : null}
+      {snapshot?.servers.some((row) => row.managed) ? (
+        <p className="better-mcp-lazy-note" id="better-mcp-lazy-note">
+          {t('lazyHint')}
+        </p>
       ) : null}
     </div>
   );

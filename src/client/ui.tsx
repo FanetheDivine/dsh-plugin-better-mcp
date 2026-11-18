@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useId,
   useRef,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -142,16 +143,26 @@ export interface SwitchProps {
   disabled?: boolean;
   /** 悬浮说明。 */
   title?: string;
+  /** 辅助说明元素 id。 */
+  describedBy?: string;
 }
 
 /** 宿主风格开关。 */
-export function Switch({ checked, onChange, label, disabled, title }: SwitchProps): JSX.Element {
+export function Switch({
+  checked,
+  onChange,
+  label,
+  disabled,
+  title,
+  describedBy,
+}: SwitchProps): JSX.Element {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={describedBy}
       title={title}
       disabled={disabled}
       className="better-mcp-switch"
@@ -203,6 +214,7 @@ export function Modal({
   children,
 }: ModalProps): JSX.Element | null {
   const dialog = useRef<HTMLDivElement>(null);
+  const descriptionId = useId();
   useModalLayer(dialog, open, onClose);
   if (!open) return null;
   const dialogClasses = ['better-mcp-dialog', className].filter(Boolean).join(' ');
@@ -216,6 +228,9 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        aria-describedby={
+          description !== undefined && description !== '' ? descriptionId : undefined
+        }
         className={dialogClasses}
         data-testid={testId}
       >
@@ -235,7 +250,9 @@ export function Modal({
             </Button>
           </div>
           {description !== undefined && description !== '' ? (
-            <p className="better-mcp-dialog-description">{description}</p>
+            <p className="better-mcp-dialog-description" id={descriptionId}>
+              {description}
+            </p>
           ) : null}
           <div className={bodyClasses}>{children}</div>
         </div>
@@ -640,6 +657,13 @@ export const CLIENT_STYLES = String.raw`
   line-height: 18px;
   white-space: nowrap;
 }
+.better-mcp-lazy-note {
+  margin: 0 0 0 56px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
 .better-mcp-description {
   margin: 0;
   color: var(--dsw-alias-label-secondary);
@@ -668,12 +692,20 @@ export const CLIENT_STYLES = String.raw`
 .better-mcp-diagnostics {
   margin: 0;
   padding: 8px 10px;
+  border-left: 2px solid var(--dsw-alias-state-error-primary);
   border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-label-primary);
   font-size: 12px;
   line-height: 18px;
   overflow-wrap: anywhere;
+}
+.better-mcp-diagnostics summary {
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.better-mcp-diagnostics p {
+  margin: 8px 0 0;
 }
 .better-mcp-actions {
   display: flex;
@@ -715,6 +747,10 @@ export const CLIENT_STYLES = String.raw`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .better-mcp-field {
   display: flex;
@@ -730,6 +766,16 @@ export const CLIENT_STYLES = String.raw`
   font-size: 13px;
   line-height: 20px;
   font-weight: 500;
+}
+.better-mcp-required {
+  color: var(--dsw-alias-state-error-primary);
+}
+.better-mcp-field-hint {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
 }
 .better-mcp-input {
   width: 100%;
@@ -751,7 +797,7 @@ select.better-mcp-input {
   padding-bottom: 0;
 }
 .better-mcp-input::placeholder {
-  color: var(--dsw-alias-label-dimmed);
+  color: var(--dsw-alias-label-secondary);
   opacity: 1;
 }
 .better-mcp-input:focus {
@@ -832,7 +878,8 @@ select.better-mcp-input {
     justify-content: space-between;
     margin-left: 52px;
   }
-  .better-mcp-server-extra {
+  .better-mcp-server-extra,
+  .better-mcp-lazy-note {
     margin-left: 0;
   }
   .better-mcp-form-grid {

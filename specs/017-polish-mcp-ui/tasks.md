@@ -74,9 +74,9 @@ description: "Task list for MCP 管理界面视觉优化"
 
 **Purpose**: 完成用户文档、实机回归与视觉审查
 
-- [ ] T010 [P] 在 README.md 更新面板、表单弹层与亮暗主题的用户行为说明
-- [ ] T011 [P] 按 specs/017-polish-mcp-ui/quickstart.md 复测 M1–M6、浏览器核心流程与亮暗/窄视口截图，并将结果写入 specs/017-polish-mcp-ui/real-device-report.md
-- [ ] T012 完成 UI/UX 子代理审查，处理审查发现并在 specs/017-polish-mcp-ui/real-device-report.md 记录结论，运行 pnpm format 与 pnpm full-check
+- [x] T010 [P] 在 README.md 更新面板、表单弹层与亮暗主题的用户行为说明
+- [x] T011 [P] 按 specs/017-polish-mcp-ui/quickstart.md 复测 M1–M6、浏览器核心流程与亮暗/窄视口截图，并将结果写入 specs/017-polish-mcp-ui/real-device-report.md
+- [x] T012 完成 UI/UX 子代理审查，处理审查发现并在 specs/017-polish-mcp-ui/real-device-report.md 记录结论，运行 pnpm format 与 pnpm full-check
 
 **Checkpoint**: 全部验收通过，提交实机验证与文档阶段。
 

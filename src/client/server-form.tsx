@@ -237,8 +237,11 @@ export function ServerForm({
   };
 
   const errorId = (key: keyof ServerFormValues): string => `better-mcp-${key}-error`;
-  const describedBy = (key: keyof ServerFormValues): string | undefined =>
-    invalidField === key ? errorId(key) : undefined;
+  const describedBy = (key: keyof ServerFormValues): string | undefined => {
+    const ids = key === 'name' ? ['better-mcp-name-hint'] : [];
+    if (invalidField === key) ids.push(errorId(key));
+    return ids.length === 0 ? undefined : ids.join(' ');
+  };
   const fieldError = (key: keyof ServerFormValues): JSX.Element | null => {
     if (invalid === undefined || invalidField !== key) return null;
     return (
@@ -265,27 +268,35 @@ export function ServerForm({
       className="better-mcp-form"
       data-testid="better-mcp-form"
       aria-busy={busy}
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         save();
       }}
     >
-      <div className="better-mcp-form-grid">
+      <fieldset className="better-mcp-form-grid" disabled={busy}>
         <div className="better-mcp-field">
           <label className="better-mcp-label" htmlFor="better-mcp-name">
             {t('name')}
+            <span className="better-mcp-required" aria-hidden="true">
+              {' *'}
+            </span>
           </label>
           <input
             id="better-mcp-name"
             name="name"
             className="better-mcp-input"
             value={values.name}
+            required
             disabled={isEdit}
             data-modal-autofocus={!isEdit ? true : undefined}
             aria-invalid={invalidField === 'name'}
             aria-describedby={describedBy('name')}
             onChange={(event) => update('name', event.target.value)}
           />
+          <p className="better-mcp-field-hint" id="better-mcp-name-hint">
+            {t('nameHint')}
+          </p>
           {fieldError('name')}
         </div>
         <div className="better-mcp-field">
@@ -310,12 +321,16 @@ export function ServerForm({
         <div className="better-mcp-field better-mcp-field-full">
           <label className="better-mcp-label" htmlFor="better-mcp-description">
             {t('description')}
+            <span className="better-mcp-required" aria-hidden="true">
+              {' *'}
+            </span>
           </label>
           <textarea
             id="better-mcp-description"
             name="description"
             className="better-mcp-input better-mcp-textarea"
             value={values.description}
+            required
             placeholder={t('descriptionPlaceholder')}
             data-modal-autofocus={isEdit ? true : undefined}
             aria-invalid={invalidField === 'description'}
@@ -329,12 +344,16 @@ export function ServerForm({
             <div className="better-mcp-field better-mcp-field-full">
               <label className="better-mcp-label" htmlFor="better-mcp-url">
                 {t('address')}
+                <span className="better-mcp-required" aria-hidden="true">
+                  {' *'}
+                </span>
               </label>
               <input
                 id="better-mcp-url"
                 name="url"
                 className="better-mcp-input"
                 value={values.url}
+                required
                 aria-invalid={invalidField === 'url'}
                 aria-describedby={describedBy('url')}
                 onChange={(event) => update('url', event.target.value)}
@@ -447,12 +466,16 @@ export function ServerForm({
             <div className="better-mcp-field">
               <label className="better-mcp-label" htmlFor="better-mcp-command">
                 {t('command')}
+                <span className="better-mcp-required" aria-hidden="true">
+                  {' *'}
+                </span>
               </label>
               <input
                 id="better-mcp-command"
                 name="command"
                 className="better-mcp-input better-mcp-code"
                 value={values.command}
+                required
                 aria-invalid={invalidField === 'command'}
                 aria-describedby={describedBy('command')}
                 onChange={(event) => update('command', event.target.value)}
@@ -487,7 +510,7 @@ export function ServerForm({
             <span>{t('lazy')}</span>
           </label>
         </div>
-      </div>
+      </fieldset>
       {error !== undefined ? (
         <div className="better-mcp-form-error" role="alert">
           {error}
