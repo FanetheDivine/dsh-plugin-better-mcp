@@ -18,8 +18,8 @@
 
 **Purpose**: 固定规则迁移与引用同步依据
 
-- [ ] T002 在 `specs/014-template-doc-sync/data-model.md` 补全原原则条款到归属文档的逐项映射
-- [ ] T003 核对 `specs/014-template-doc-sync/data-model.md` 覆盖原原则 I、II、III、VIII 的全部条款，提交阶段 2
+- [X] T002 在 `specs/014-template-doc-sync/data-model.md` 补全原原则条款到归属文档的逐项映射
+- [X] T003 核对 `specs/014-template-doc-sync/data-model.md` 覆盖原原则 I、II、III、VIII 的全部条款，提交阶段 2
 
 ## Phase 3: User Story 1 - Constitution Check 只核对硬约束 (Priority: P1) 🎯 MVP
 
