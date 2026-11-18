@@ -285,6 +285,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
               values: valuesFromDefinition(
                 row.name,
                 row.definition ?? {
+                  description: row.description ?? '',
                   transport: row.transport ?? 'streamable-http',
                   auth: row.auth,
                   lazy: row.lazy,

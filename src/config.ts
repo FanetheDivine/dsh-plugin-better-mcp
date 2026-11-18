@@ -26,6 +26,8 @@ export interface OAuthClientConfig {
 
 /** 一台 MCP 服务器定义。 */
 export interface ServerDefinition {
+  /** 简介，写入会话的 MCP 目录。 */
+  description: string;
   /** 传输方式。 */
   transport: 'stdio' | 'streamable-http';
   /** stdio：启动命令。 */
@@ -42,7 +44,7 @@ export interface ServerDefinition {
   headers?: Record<string, string>;
   /** 认证方式，缺省 oauth。 */
   auth: 'oauth' | 'none';
-  /** 是否按需挂载，缺省 true。 */
+  /** 是否默认对会话隐藏，缺省 true。 */
   lazy: boolean;
   /** OAuth 参数。 */
   oauth?: OAuthClientConfig;
@@ -83,6 +85,7 @@ const OAuthSchema = Schema.object({
 /** 单服务器 schema：声明已知字段，其余字段透传给管理器。 */
 const ServerSchema = Schema.intersect([
   Schema.object({
+    description: Schema.string(),
     transport: Schema.union(['stdio', 'streamable-http']).required(),
     command: Schema.string(),
     args: Schema.array(Schema.string()),
@@ -186,8 +189,13 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
   if (transport !== 'stdio' && transport !== 'streamable-http') {
     throw new Error(`${PLUGIN_LABEL}: servers.${name}.transport must be stdio or streamable-http`);
   }
+  const description = asString(raw.description)?.trim();
+  if (description === undefined || description === '') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.description is required`);
+  }
   const config: ServerDefinition = {
     ...raw,
+    description,
     transport,
     auth:
       raw.auth === undefined

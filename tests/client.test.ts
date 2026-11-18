@@ -27,6 +27,7 @@ function values(overrides: Partial<ServerFormValues> = {}): ServerFormValues {
   return {
     ...emptyForm(),
     name: 'alpha',
+    description: 'Alpha tools',
     url: 'https://example.com/mcp',
     ...overrides,
   };
@@ -118,6 +119,7 @@ describe('服务器表单辅助函数', () => {
 
   it('要求 stdio 命令', () => {
     expect(validateValues(values({ transport: 'stdio', command: '   ' }))).toBe('commandRequired');
+    expect(validateValues(values({ description: '  ' }))).toBe('descriptionRequired');
   });
 
   it('拒绝非回环的 OAuth 回调地址', () => {
@@ -164,6 +166,7 @@ describe('服务器表单辅助函数', () => {
     expect(definition.auth).toBe('none');
     expect(definition.command).toBe('npx');
     expect(definition.args).toEqual(['-y', 'server']);
+    expect(definition.description).toBe('Alpha tools');
   });
 });
 
@@ -185,6 +188,7 @@ describe('ServerForm', () => {
     expect(html).toContain('data-testid="better-mcp-form"');
     expect(html).toContain(zh.createTitle);
     expect(html).toContain(zh.name);
+    expect(html).toContain(zh.description);
   });
 });
 

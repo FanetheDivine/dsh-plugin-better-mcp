@@ -4,6 +4,7 @@
 export interface ServerRow {
   name: string;
   managed: boolean;
+  description?: string;
   transport?: string;
   url?: string;
   auth?: string;

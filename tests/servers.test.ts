@@ -48,6 +48,7 @@ describe('mount', () => {
       ctx,
       settings({
         figma: {
+          description: 'd',
           transport: 'streamable-http',
           url: 'https://mcp.figma.com/mcp',
           auth: 'oauth',
@@ -65,6 +66,7 @@ describe('mount', () => {
       url: 'https://mcp.figma.com/mcp',
       headers: { Authorization: 'Bearer grant-token' },
     });
+    expect(entry).not.toHaveProperty('description');
     expect(entry).not.toHaveProperty('lazy');
     expect(entry).not.toHaveProperty('auth');
     expect(entry).not.toHaveProperty('oauth');
@@ -75,7 +77,13 @@ describe('mount', () => {
     const manager = makeManager(
       ctx,
       settings({
-        figma: { transport: 'streamable-http', url: 'https://x', auth: 'oauth', lazy: true },
+        figma: {
+          description: 'd',
+          transport: 'streamable-http',
+          url: 'https://x',
+          auth: 'oauth',
+          lazy: true,
+        },
       }),
     );
     await expect(manager.mount('figma')).rejects.toThrow('needs authorization');
@@ -93,7 +101,9 @@ describe('unmount', () => {
     const ctx = makeCtx();
     const manager = makeManager(
       ctx,
-      settings({ one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false } }),
+      settings({
+        one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      }),
     );
     await manager.mount('one');
     await manager.unmount('one');
@@ -111,7 +121,13 @@ describe('snapshot', () => {
       payload: { accessToken: 't' },
     }));
     const config = settings({
-      figma: { transport: 'streamable-http', url: 'https://x', auth: 'oauth', lazy: true },
+      figma: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        auth: 'oauth',
+        lazy: true,
+      },
     });
     const manager = makeManager(ctx, config);
     const snapshot = await manager.snapshot();
@@ -130,7 +146,9 @@ describe('snapshot', () => {
     await setLazy('one', false);
     const manager = makeManager(
       ctx,
-      settings({ one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true } }),
+      settings({
+        one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      }),
     );
     expect((await manager.snapshot()).servers[0]?.lazy).toBe(false);
   });
@@ -141,6 +159,7 @@ describe('snapshot', () => {
       ctx,
       settings({
         one: {
+          description: 'd',
           transport: 'streamable-http',
           url: 'https://x',
           auth: 'oauth',
@@ -159,16 +178,16 @@ describe('reconcile', () => {
   it('卸载移除、挂载新增、重建变更', async () => {
     const ctx = makeCtx();
     let config = settings({
-      removed: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
-      kept: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      removed: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      kept: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     const manager = new ServerManager(ctx as never, () => config, { info: vi.fn(), warn: vi.fn() });
     await manager.mount('removed');
     await manager.mount('kept');
     const previous = config;
     config = settings({
-      kept: { transport: 'stdio', command: 'npx', auth: 'none', lazy: false },
-      added: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      kept: { description: 'd', transport: 'stdio', command: 'npx', auth: 'none', lazy: false },
+      added: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     await manager.reconcile(previous, config);
     expect(ctx._managerRegistered.has('removed')).toBe(false);
@@ -180,7 +199,7 @@ describe('reconcile', () => {
     const ctx = makeCtx();
     const previous = settings({});
     const next = settings({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     const manager = makeManager(ctx, next);
     await manager.reconcile(previous, next);

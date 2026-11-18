@@ -60,8 +60,14 @@ describe('apply 接线', () => {
 
   it('启动只挂载常驻服务器', async () => {
     const config = refs({
-      resident: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
-      lazy: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      resident: {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        lazy: false,
+      },
+      lazy: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     const ctx = makeCtx({ config });
     apply(ctx, config);
@@ -70,15 +76,15 @@ describe('apply 接线', () => {
 
   it('volatile 更新后挂载新增、卸载移除、重建变更', async () => {
     const config = refs({
-      removed: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
-      kept: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      removed: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      kept: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     const ctx = makeCtx({ config });
     apply(ctx, config);
     await vi.waitFor(() => expect(ctx._managerRegistered.has('kept')).toBe(true));
     config.servers.set({
-      kept: { transport: 'stdio', command: 'npx', auth: 'none', lazy: false },
-      added: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      kept: { description: 'd', transport: 'stdio', command: 'npx', auth: 'none', lazy: false },
+      added: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     ctx._emit('loader/volatile-update', [['servers']]);
     await vi.waitFor(() => {
@@ -96,7 +102,7 @@ describe('apply 接线', () => {
 
   it('缺少 Web 服务时仍挂载服务器', async () => {
     const config = refs({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     const ctx = makeCtx({ config, noConnection: true, noWebServer: true });
     apply(ctx, config);
@@ -106,7 +112,7 @@ describe('apply 接线', () => {
 
   it('卸载时释放路由与挂载', async () => {
     const config = refs({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     const ctx = makeCtx({ config });
     apply(ctx, config);

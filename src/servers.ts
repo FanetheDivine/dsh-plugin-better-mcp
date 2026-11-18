@@ -23,6 +23,8 @@ export interface ServerRow {
   name: string;
   /** 是否由本插件配置。 */
   managed: boolean;
+  /** 本插件服务器的简介。 */
+  description?: string;
   /** 传输方式。 */
   transport?: string;
   /** 端点地址。 */
@@ -135,7 +137,7 @@ export class ServerManager {
     if (definition === undefined) {
       throw new Error(`No configured MCP server named '${serverName}'.`);
     }
-    const { lazy: _lazy, auth, oauth: _oauth, ...rest } = definition;
+    const { description: _description, lazy: _lazy, auth, oauth: _oauth, ...rest } = definition;
     const entry: Record<string, unknown> = { ...rest };
     if (auth === 'oauth' || auth === undefined) {
       const token = await this.accessTokenOf(serverName);
@@ -220,6 +222,7 @@ export class ServerManager {
       rows.push({
         name: serverName,
         managed: mine,
+        ...(definition === undefined ? {} : { description: definition.description }),
         ...(definition === undefined ? {} : { definition: publicDefinition(definition) }),
         ...(typeof definition?.transport === 'string' ? { transport: definition.transport } : {}),
         ...(typeof definition?.url === 'string' ? { url: definition.url } : {}),

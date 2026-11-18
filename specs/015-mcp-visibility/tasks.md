@@ -42,11 +42,11 @@
 
 **Independent Test**: 缺简介的配置与表单提交都被拒绝；快照返回简介。
 
-- [ ] T011 [US3] 在 src/config.ts 的 `ServerDefinition` 与 schema 新增 `description`，规则「必填，去掉首尾空白后非空」，缺失时抛 `servers.<name>.description is required`
-- [ ] T012 [US3] 在 src/servers.ts 构造管理器条目时去掉 `description`；`ServerRow` 新增 `description`
-- [ ] T013 [P] [US3] 在 src/client/server-form.tsx 新增简介字段（多行文本）、`descriptionRequired` 校验与 `definitionFromValues` 输出；在 src/client/locales.ts 新增 `description`、`descriptionRequired` 键
-- [ ] T014 [US3] 在 cordis.patch.yml 注释与 README.md 配置示例补 `description`
-- [ ] T015 [US3] 更新 tests/config.test.ts、tests/servers.test.ts、tests/client.test.ts、tests/routes.test.ts 的定义夹具并新增缺简介用例
+- [x] T011 [US3] 在 src/config.ts 的 `ServerDefinition` 与 schema 新增 `description`，规则「必填，去掉首尾空白后非空」，缺失时抛 `servers.<name>.description is required`
+- [x] T012 [US3] 在 src/servers.ts 构造管理器条目时去掉 `description`；`ServerRow` 新增 `description`
+- [x] T013 [P] [US3] 在 src/client/server-form.tsx 新增简介字段（多行文本）、`descriptionRequired` 校验与 `definitionFromValues` 输出；在 src/client/locales.ts 新增 `description`、`descriptionRequired` 键
+- [x] T014 [US3] 在 cordis.patch.yml 注释与 README.md 配置示例补 `description`
+- [x] T015 [US3] 更新 tests/config.test.ts、tests/servers.test.ts、tests/client.test.ts、tests/routes.test.ts 的定义夹具并新增缺简介用例
 
 **Checkpoint**: `pnpm format && pnpm check` 通过后提交。
 

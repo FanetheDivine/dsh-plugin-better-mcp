@@ -6,7 +6,8 @@
 # sidebar footer action beside the Restart button plus the plugin row page.
 #
 # `servers` stays empty on install: configure your own servers in the panel or
-# in the row config. Tokens and OAuth client secrets live in the credentials
+# in the row config. Each server needs a `description`; the model reads it in
+# the session's MCP catalog. Tokens and OAuth client secrets live in the credentials
 # store, never in this file.
 - insert:
     - id: better-mcp

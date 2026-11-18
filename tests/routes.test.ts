@@ -118,7 +118,7 @@ function webRoute(ctx: ReturnType<typeof makeCtx>, path: string): Record<string,
 describe('status 与懒加载', () => {
   it('返回服务器列表', async () => {
     const { ctx } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     const { status, json } = await call(ctx, '/api/better-mcp/status');
     expect(status).toBe(200);
@@ -129,7 +129,7 @@ describe('status 与懒加载', () => {
 
   it('切换懒加载：打开卸载，关闭挂载', async () => {
     const { ctx, manager } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     await manager.mount('one');
     await call(ctx, '/api/better-mcp/lazy', { server: 'one', lazy: true });
@@ -147,7 +147,7 @@ describe('status 与懒加载', () => {
 
   it('restart 重新挂载', async () => {
     const { ctx } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
     });
     const response = await call(ctx, '/api/better-mcp/restart', { server: 'one' });
     expect(response.status).toBe(200);
@@ -160,7 +160,7 @@ describe('服务器增删改', () => {
     const { ctx, refs } = harness();
     const response = await call(ctx, '/api/better-mcp/servers', {
       server: 'one',
-      definition: { transport: 'stdio', command: 'node' },
+      definition: { description: 'd', transport: 'stdio', command: 'node' },
     });
     expect(response.status).toBe(200);
     expect((response.json.servers as Array<Record<string, unknown>>)[0]?.name).toBe('one');
@@ -174,11 +174,17 @@ describe('服务器增删改', () => {
     expect(
       (await call(ctx, '/api/better-mcp/servers', { server: 'bad name', definition: {} })).status,
     ).toBe(400);
+    const missing = await call(ctx, '/api/better-mcp/servers', {
+      server: 'one',
+      definition: { transport: 'stdio', command: 'node' },
+    });
+    expect(missing.status).toBe(400);
+    expect(String(missing.json.error)).toContain('description is required');
     expect(
       (
         await call(ctx, '/api/better-mcp/servers', {
           server: 'one',
-          definition: { transport: 'stdio' },
+          definition: { description: 'd', transport: 'stdio' },
         })
       ).status,
     ).toBe(400);
@@ -186,11 +192,11 @@ describe('服务器增删改', () => {
 
   it('更新保留已有定义', async () => {
     const { ctx, refs } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     await call(ctx, '/api/better-mcp/servers', {
       server: 'two',
-      definition: { transport: 'stdio', command: 'npx' },
+      definition: { description: 'd', transport: 'stdio', command: 'npx' },
     });
     const servers = refs.servers.get() as Record<string, unknown>;
     expect(Object.keys(servers)).toEqual(['one', 'two']);
@@ -199,7 +205,7 @@ describe('服务器增删改', () => {
 
   it('删除同时清理授权、客户端密钥与懒加载状态', async () => {
     const { ctx, refs } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     await ctx.credentials.modifyRecord(recordKey(grantId('one')), async () => ({
       kind: 'grant',
@@ -222,7 +228,7 @@ describe('服务器增删改', () => {
 describe('OAuth 路由', () => {
   it('未知服务器与非 http 服务器返回 400', async () => {
     const { ctx } = harness({
-      one: { transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
     });
     expect((await call(ctx, '/api/better-mcp/oauth/start?server=x')).status).toBe(400);
     expect((await call(ctx, '/api/better-mcp/oauth/start?server=one')).status).toBe(400);
@@ -230,7 +236,13 @@ describe('OAuth 路由', () => {
 
   it('发现失败返回 502', async () => {
     const { ctx } = harness({
-      one: { transport: 'streamable-http', url: 'https://x', auth: 'oauth', lazy: true },
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        auth: 'oauth',
+        lazy: true,
+      },
     });
     vi.stubGlobal(
       'fetch',
@@ -243,7 +255,13 @@ describe('OAuth 路由', () => {
 
   it('配置固定客户端：写入配置与凭据库', async () => {
     const { ctx, refs } = harness({
-      one: { transport: 'streamable-http', url: 'https://x', auth: 'oauth', lazy: true },
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        auth: 'oauth',
+        lazy: true,
+      },
     });
     const response = await call(ctx, '/api/better-mcp/oauth/client', {
       server: 'one',
