@@ -1,10 +1,12 @@
 // 发布内容回归：npm pack --dry-run 断言 tarball 只含发布所需文件。
-// files 字段决定分发内容；src / tests / scripts / specs 不得进包。
+// files 字段决定分发内容；src / tests / scripts / specs 不得进包。产物过期时测试失败。
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+
+import { assertFreshDist } from './support/dist-freshness.ts';
 
 /** 仓库根目录。 */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,15 +17,7 @@ let cachedPaths: Set<string> | undefined;
 /** 执行 npm pack --dry-run --json，返回文件路径集合。 */
 function packedPaths(): Set<string> {
   if (cachedPaths !== undefined) return cachedPaths;
-  if (!existsSync(path.join(ROOT, 'dist', 'index.mjs'))) {
-    const build = spawnSync('pnpm', ['build'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      shell: process.platform === 'win32',
-    });
-    if (build.status !== 0)
-      throw new Error(`pnpm build 失败：${String(build.stderr ?? build.stdout)}`);
-  }
+  assertFreshDist();
   const result = spawnSync('npm', ['pack', '--dry-run', '--json'], {
     cwd: ROOT,
     encoding: 'utf8',

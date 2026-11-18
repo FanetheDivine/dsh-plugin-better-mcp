@@ -1,9 +1,10 @@
 // 浏览器产物契约测试：dist/client.js 按包名注册闭包工厂并保留槽位注册。
-import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+
+import { assertFreshDist } from './support/dist-freshness.ts';
 
 /** 仓库根目录（tests/ 的上一级）。 */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,19 +15,9 @@ const CLIENT_FILE = path.join(ROOT, 'dist', 'client.js');
 /** 浏览器产物注册 id，与 package.json 的 name 一致。 */
 const CLIENT_ID = 'dsh-plugin-better-mcp';
 
-/** 产物缺失时先构建，保证测试独立可跑。 */
+/** 读取产物；产物缺失或过期时由检查给出构建提示。 */
 function readBundle(): string {
-  if (!existsSync(CLIENT_FILE)) {
-    const build = spawnSync('pnpm', ['build'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      // Windows 下 pnpm 是 pnpm.cmd，需经 shell 启动
-      shell: process.platform === 'win32',
-    });
-    if (build.status !== 0) {
-      throw new Error(`pnpm build 失败：${String(build.stderr ?? build.stdout ?? '未知错误')}`);
-    }
-  }
+  assertFreshDist();
   return readFileSync(CLIENT_FILE, 'utf8');
 }
 

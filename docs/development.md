@@ -61,15 +61,18 @@ dsh plugin add <repo>
 | 命令 | 作用 |
 | --- | --- |
 | `pnpm dev` | 监听并构建 |
-| `pnpm build` | 打包并生成类型声明 |
-| `pnpm check` | 依次运行类型检查、lint 与测试 |
+| `pnpm build` | 打包、生成类型声明并运行 `test:dist` |
+| `pnpm check` | 依次运行类型检查、lint 和 `test:code` |
 | `pnpm full-check` | `check` 加构建 |
 | `pnpm typecheck` | 类型检查 |
 | `pnpm lint` | biome 检查 |
 | `pnpm lint:fix` | biome 检查并自动修复 |
 | `pnpm format` | biome 格式化 |
-| `pnpm test` | 运行 vitest |
+| `pnpm test:code` | 只运行源码测试 |
+| `pnpm test:dist` | 只运行产物测试，要求 `dist` 新鲜 |
 | `pnpm run release` | 检查、格式化、升版本、归档 CHANGELOG 并推送 tag |
+
+代码质量门禁是 `pnpm check`；`test:code` 与 `test:dist` 用于局部验证。
 
 ## CI
 
@@ -79,6 +82,8 @@ dsh plugin add <repo>
 | --- | --- | --- |
 | `check` | PR、打 tag | Node 24 上运行 `pnpm run full-check` |
 | `publish` | 打 tag | 用 OIDC 发布 npm |
+
+`full-check` 依次运行 `check` 与 `build`：`check` 不读取 `dist`，产物测试在 `build` 末尾执行。
 
 发布前把 npm Trusted Publisher 绑定到本仓库与 `.github/workflows/ci.yml`。
 
@@ -95,13 +100,18 @@ dsh plugin add <repo>
 | `tests/servers.test.ts` | 挂载、等待连接、工具名解析、快照与对账 |
 | `tests/routes.test.ts` | 面板路由、OAuth 路由、回调与端点接线 |
 | `tests/client.test.ts` | 字典、槽位注册、表单校验与静态渲染 |
-| `tests/client-bundle.test.ts` | `dist/client.js` 的注册契约与导出 |
-| `tests/package-pack.test.ts` | npm 包内容与补丁 |
+| `tests/client-bundle.test.ts` | `dist/client.js` 的注册契约与导出（产物测试） |
+| `tests/package-pack.test.ts` | npm 包内容与补丁（产物测试） |
+| `tests/metadata.test.ts` | 插件元数据的结构、键集、禁用字符与清单声明 |
+| `tests/dist-freshness.test.ts` | 产物新鲜度判定的五种状态 |
 | `tests/release-archive.test.mjs` | CHANGELOG 归档计划 |
 | `tests/worktree-extension.test.ts` | worktree 扩展的创建、复用与清理 |
 | `tests/helpers.ts` | 模拟宿主与客户端 `ctx` |
+| `tests/support/dist-freshness.ts` | 构建输入与产物清单、`assertFreshDist` |
 
-测试要求见[宪章](../.specify/memory/constitution.md)原则 IV。
+测试要求见[宪章](../.specify/memory/constitution.md)原则 IV。文案与元数据的规范见 [i18n.md](./i18n.md)。
+
+vitest 拆成 `code` 与 `dist` 两个 project。产物测试读取 `dist`，由 `build` 末尾的 `test:dist` 执行；`test:code` 不读取 `dist`。产物缺失或早于构建输入时，产物测试失败并提示运行 `pnpm build`。
 
 ## 实机验证
 
@@ -143,7 +153,7 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 ```text
 cordis.patch.yml            # 插件行，dsh plugin add 时插入 profile
 icon.svg                    # 插件图标
-locale/                     # meta.title / meta.description
+locale/                     # 插件元数据，规范见 i18n.md
 src/
 ├── index.ts                # 宿主入口：装配、挂载、热更新对账
 ├── config.ts               # Config schema、默认值、严格校验
@@ -171,6 +181,9 @@ dist/
 └── client/                 # 前端类型声明
 scripts/release-archive.mjs # 发布时归档 CHANGELOG
 tests/                      # vitest 单元测试
+├── support/
+│   ├── primitives.ts       # 平台组件包解析到源码
+│   └── dist-freshness.ts   # 产物新鲜度检查
 docs/                       # 开发者文档
 specs/<NNN>-<name>/         # 每个需求的 spec、plan、tasks
 .dsh/skills/
