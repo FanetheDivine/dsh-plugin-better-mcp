@@ -27,8 +27,8 @@
 
 **Independent Test**: 宪章原则顺序、版本与 Sync Impact Report 符合 spec 的 US1 验收场景
 
-- [ ] T004 [US1] 用 `/speckit-constitution` 修订 `.specify/memory/constitution.md`：保留五条原则，以 `@deepseek-ai/dsh-agent` 为 dsh 子包版本基准，记录迁移与重新编号
-- [ ] T005 [US1] 核对 `.specify/memory/constitution.md` 原则 II–V 保留本插件原有测试、文档、质量与公开引用条款，提交阶段 3
+- [X] T004 [US1] 用 `/speckit-constitution` 修订 `.specify/memory/constitution.md`：保留五条原则，以 `@deepseek-ai/dsh-agent` 为 dsh 子包版本基准，记录迁移与重新编号
+- [X] T005 [US1] 核对 `.specify/memory/constitution.md` 原则 II–V 保留本插件原有测试、文档、质量与公开引用条款，提交阶段 3
 
 ## Phase 4: User Story 2 - 移出的规则仍有唯一归属 (Priority: P1)
 
