@@ -40,12 +40,12 @@ description: "Task list for MCP 管理界面视觉优化"
 
 ### Tests for User Story 1
 
-- [ ] T004 [US1] 在 tests/client.test.ts 添加列表语义、状态分区、懒加载 switch、反馈语义与主题 token 回归测试，并确认测试在当前实现上失败
+- [x] T004 [US1] 在 tests/client.test.ts 添加列表语义、状态分区、懒加载 switch、反馈语义与主题 token 回归测试，并确认测试在当前实现上失败
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] 在 src/client/panel.tsx 与 src/client/locales.ts 实现分隔式服务器列表、状态与诊断分区、统一按钮、带服务器名称的懒加载 switch、加载/空/错误反馈及响应式布局
-- [ ] T006 [P] [US1] 在 src/client/index.tsx 统一侧栏入口与配置摘要的主题样式，并为主弹层保存和恢复触发按钮焦点
+- [x] T005 [US1] 在 src/client/panel.tsx 与 src/client/locales.ts 实现分隔式服务器列表、状态与诊断分区、统一按钮、带服务器名称的懒加载 switch、加载/空/错误反馈及响应式布局
+- [x] T006 [P] [US1] 在 src/client/index.tsx 统一侧栏入口与配置摘要的主题样式，并为主弹层保存和恢复触发按钮焦点
 
 **Checkpoint**: US1 的核心管理与亮暗主题检查通过，提交服务器列表阶段。
 

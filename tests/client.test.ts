@@ -23,6 +23,7 @@ import {
   type ServerFormValues,
   validateValues,
 } from '../src/client/server-form.tsx';
+import { CLIENT_STYLES } from '../src/client/ui.tsx';
 import { makeClientCtx, translate } from './helpers.ts';
 
 /** 带合法名称与地址的表单值。 */
@@ -246,6 +247,7 @@ describe('McpPanel', () => {
     );
     expect(html).toContain('data-testid="better-mcp-panel"');
     expect(html).toContain('Loading…');
+    expect(html).toContain('role="status"');
     // 静态渲染不执行 useEffect，因此不会发起状态请求。
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -305,20 +307,45 @@ describe('服务器行', () => {
         maxAttempts: 5,
         error: 'HTTP 502',
       }),
-    ).toEqual(['Reconnecting', 'Reconnect 2 of 5', 'HTTP 502']);
+    ).toEqual(['Reconnecting', 'Reconnect 2 of 5']);
   });
 
-  it('本插件服务器显示简介与操作', () => {
+  it('本插件服务器使用管理列表语义与带名称的懒加载开关', () => {
     const html = renderRow({ description: 'Alpha tools' });
+    expect(html).toContain('<li');
     expect(html).toContain('Alpha tools');
     expect(html).toContain(zh.restart);
     expect(html).toContain(zh.edit);
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-label="为 alpha 启用懒加载"');
+  });
+
+  it('连接诊断独占反馈区域', () => {
+    const html = renderRow({ error: 'HTTP 502' });
+    expect(html).toContain('better-mcp-diagnostics');
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('HTTP 502');
   });
 
   it('其他来源的服务器只显示状态', () => {
     const html = renderRow({ managed: false });
     expect(html).toContain(zh.external);
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('主题样式', () => {
+  it('使用宿主主题变量描述表面、文本、状态与主按钮', () => {
+    for (const token of [
+      '--dsw-alias-bg-layer-2',
+      '--dsw-alias-label-primary',
+      '--dsw-alias-state-error-primary',
+      '--dsw-alias-button-primary-fill',
+    ]) {
+      expect(CLIENT_STYLES).toContain(token);
+    }
+    expect(CLIENT_STYLES).not.toMatch(/#[\da-f]{3,8}\b/i);
   });
 });
 
