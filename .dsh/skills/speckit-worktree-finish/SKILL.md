@@ -159,10 +159,10 @@ then clean up with `--abandon`. A branch already pushed to the remote is left th
    commit as `BEFORE_COMMIT`, then run:
 
    ```bash
-   test "$(git -C "$MAIN_WORKTREE" symbolic-ref --short HEAD)" = main
-   test -z "$(git -C "$MAIN_WORKTREE" status --porcelain)"
-   git -C "$MAIN_WORKTREE" fetch origin main
-   git -C "$MAIN_WORKTREE" merge-base --is-ancestor main origin/main
+   test "$(git -C "$MAIN_WORKTREE" symbolic-ref --short HEAD)" = main &&
+   test -z "$(git -C "$MAIN_WORKTREE" status --porcelain)" &&
+   git -C "$MAIN_WORKTREE" fetch origin main &&
+   git -C "$MAIN_WORKTREE" merge-base --is-ancestor main origin/main &&
    git -C "$MAIN_WORKTREE" pull --ff-only origin main
    ```
 

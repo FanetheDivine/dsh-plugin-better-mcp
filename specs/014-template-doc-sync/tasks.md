@@ -60,6 +60,7 @@
 - [X] T015 [P] 更新 `CHANGELOG.md`，记录宪章 3.0.0、规则归属与主工作区流程
 - [X] T016 按 `specs/014-template-doc-sync/quickstart.md` 核对全部验收点，运行 `pnpm format && pnpm check` 与 `git diff --check`
 - [X] T017 检查 `git status --short` 与最终 diff，确认变更范围符合 `specs/014-template-doc-sync/spec.md`，提交阶段 6
+- [X] T018 串联四份 worktree 流程说明中的检查与同步命令，修正 `specs/014-template-doc-sync/quickstart.md` 的既有条目表述，复验并提交审查修正
 
 ## Dependencies & Execution Order
 

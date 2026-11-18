@@ -17,7 +17,7 @@
 1. 在 `docs/how-it-works.md` 查找入口导出、`.volatile()`、type-only 导入、严格配置与依赖打包规则。
 2. 在 `docs/i18n.md` 查找基线语言、键集、包清单、禁用字符与测试约束。
 3. 在 `docs/known-risks.md` 与 `docs/development.md` 核对链接指向当前原则或归属文档。
-4. 历史 spec 与 CHANGELOG 保持原样。
+4. 历史 spec 与既有 CHANGELOG 条目保持原样。
 
 ## 3. 核对主工作区流程
 
