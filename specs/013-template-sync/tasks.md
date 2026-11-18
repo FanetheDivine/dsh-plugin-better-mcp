@@ -86,9 +86,9 @@
 
 **Independent Test**: 全仓库搜索 `pnpm test` 只命中旧版本归档；CHANGELOG 的 Unreleased 记录本次变更；按 quickstart 逐条通过。
 
-- [ ] T021 [US3] 在 `CHANGELOG.md` 的 Unreleased 增加条目：测试入口拆分与产物过期提示、元数据测试与 `docs/i18n.md`、宪章 2.1.0
-- [ ] T022 [US3] 检查 `AGENTS.md`、`docs/development.md`、`README.md` 与 `CHANGELOG.md` 的命令与链接一致，确认无 `pnpm test` 残留
-- [ ] T023 [US3] 运行 `pnpm format && pnpm check && pnpm build`，按 `quickstart.md` 逐条验证；按宪章原则 VII 检查新增与修改的跟踪文件只引用仓库内路径与公网 URL；提交阶段 4
+- [X] T021 [US3] 在 `CHANGELOG.md` 的 Unreleased 增加条目：测试入口拆分与产物过期提示、元数据测试与 `docs/i18n.md`、宪章 2.1.0
+- [X] T022 [US3] 检查 `AGENTS.md`、`docs/development.md`、`README.md` 与 `CHANGELOG.md` 的命令与链接一致，确认无 `pnpm test` 残留
+- [X] T023 [US3] 运行 `pnpm format && pnpm check && pnpm build`，按 `quickstart.md` 逐条验证；按宪章原则 VII 检查新增与修改的跟踪文件只引用仓库内路径与公网 URL；提交阶段 4
 
 ---
 
