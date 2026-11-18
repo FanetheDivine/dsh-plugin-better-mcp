@@ -26,10 +26,12 @@ function packedPaths(): Set<string> {
   });
   if (result.status !== 0)
     throw new Error(`npm pack --dry-run 失败：${String(result.stderr ?? result.stdout)}`);
-  const report = JSON.parse(String(result.stdout ?? '[]')) as Array<{
-    files?: Array<{ path: string }>;
-  }>;
-  cachedPaths = new Set(report.flatMap((entry) => entry.files ?? []).map((file) => file.path));
+  // npm 11 与更早版本输出数组；npm 12 起输出以包名为键的对象。
+  const report = JSON.parse(String(result.stdout ?? '[]')) as
+    | Array<{ files?: Array<{ path: string }> }>
+    | Record<string, { files?: Array<{ path: string }> }>;
+  const entries = Array.isArray(report) ? report : Object.values(report);
+  cachedPaths = new Set(entries.flatMap((entry) => entry.files ?? []).map((file) => file.path));
   return cachedPaths;
 }
 
