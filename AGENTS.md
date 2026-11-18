@@ -1,4 +1,4 @@
-先阅读 [README.md](./README.md) 了解项目。
+本仓库是 DSH 插件 `dsh-plugin-better-mcp`。先阅读 [README.md](./README.md) 了解功能与配置。
 
 # 文档索引
 

@@ -1,78 +1,405 @@
 /**
- * 插件配置：schema、默认值与严格校验。
- * 导出 Config、PluginConfig、DEFAULT_CONFIG、resolveConfig 与 readConfig。
+ * 插件配置：schema、默认值、严格校验与热重载读取。
+ * 导出 Config、PluginConfig、resolveConfig、readConfig 与单服务器校验。
  */
 import Schema from '@deepseek-ai/schemastery';
 
-import { DEFAULT_PREFIX, PLUGIN_LABEL } from './constants.ts';
+import { DEFAULT_GROUP, ENDPOINT_DEFAULT, PLUGIN_LABEL } from './constants.ts';
 import type { Volatile } from './types.ts';
-import { isRecord } from './utils.ts';
+import { asString, isPositiveInteger, isRecord, isValidServerName } from './utils.ts';
 
-/** 宿主传给 apply 的配置：每个字段是热重载引用，用 `.get()` 读取实时值。 */
-export interface Config {
-  /** 是否注册 demo 工具。 */
-  demoEnabled: Volatile<boolean>;
-  /** 工具回显与事件日志使用的前缀。 */
-  prefix: Volatile<string>;
+/** OAuth 客户端配置。 */
+export interface OAuthClientConfig {
+  /** 请求的 scope 列表。 */
+  scopes: string[];
+  /** 固定客户端标识。 */
+  clientId?: string;
+  /** 固定客户端密钥；只读取旧配置，界面写入凭据库。 */
+  clientSecret?: string;
+  /** 固定回调地址。 */
+  redirectUri?: string;
+  /** 覆盖发现的授权服务器地址。 */
+  authorizationServer?: string;
+  /** 覆盖发现的令牌端点。 */
+  tokenEndpoint?: string;
 }
 
-/**
- * 配置 schema。`.volatile()` 字段修改后不重启插件，并出现在“插件”面板的配置页。
- * schema 不拒绝未知键，严格校验由 resolveConfig 完成。
- */
-export const Config: Schema<Config> = Schema.object({
-  demoEnabled: Schema.boolean().default(true).volatile(),
-  prefix: Schema.string().default(DEFAULT_PREFIX).pattern(/\S/).volatile(),
-}) as unknown as Schema<Config>;
+/** 一台 MCP 服务器定义。 */
+export interface ServerDefinition {
+  /** 传输方式。 */
+  transport: 'stdio' | 'streamable-http';
+  /** stdio：启动命令。 */
+  command?: string;
+  /** stdio：启动参数。 */
+  args?: string[];
+  /** stdio：额外环境变量。 */
+  env?: Record<string, string>;
+  /** stdio：工作目录。 */
+  cwd?: string;
+  /** streamable-http：端点地址。 */
+  url?: string;
+  /** streamable-http：额外请求头。 */
+  headers?: Record<string, string>;
+  /** 认证方式，缺省 oauth。 */
+  auth: 'oauth' | 'none';
+  /** 是否按需挂载，缺省 true。 */
+  lazy: boolean;
+  /** OAuth 参数。 */
+  oauth?: OAuthClientConfig;
+  /** 单次工具调用超时，转发给管理器。 */
+  toolCallTimeoutMs?: number;
+  /** 启动预算，转发给管理器。 */
+  startupTimeoutMs?: number;
+  /** 关闭预算，转发给管理器。 */
+  closeTimeoutMs?: number;
+  /** 重连策略，原样转发给管理器。 */
+  reconnect?: Record<string, unknown>;
+  /** 其它管理器字段。 */
+  [key: string]: unknown;
+}
+
+/** 一个聚合工具组。 */
+export interface ToolGroup {
+  /** 面板显示名。 */
+  title?: string;
+  /** 包含通配符。 */
+  include: string[];
+  /** 排除通配符。 */
+  exclude: string[];
+}
+
+/** 聚合端点配置。 */
+export interface ExposeConfig {
+  /** 是否启用。 */
+  enabled: boolean;
+  /** 端点前缀。 */
+  endpoint: string;
+  /** 组定义。 */
+  groups: Record<string, ToolGroup>;
+}
 
 /** 配置项的实时取值。 */
-export type PluginConfig = {
-  /** 是否注册 demo 工具。 */
-  demoEnabled: boolean;
-  /** 工具回显与事件日志使用的前缀。 */
-  prefix: string;
-};
+export interface PluginConfig {
+  /** 本插件管理的服务器。 */
+  servers: Record<string, ServerDefinition>;
+  /** 聚合端点。 */
+  expose: ExposeConfig;
+}
 
-/** 默认配置。 */
-export const DEFAULT_CONFIG: Readonly<PluginConfig> = Object.freeze({
-  demoEnabled: true,
-  prefix: DEFAULT_PREFIX,
+/** 宿主传给 apply 的配置：每个字段是热重载引用。 */
+export interface Config {
+  /** 服务器定义。 */
+  servers: Volatile<Record<string, ServerDefinition> | undefined>;
+  /** 聚合端点。 */
+  expose: Volatile<ExposeConfig | undefined>;
+}
+
+/** OAuth 参数 schema；只声明字段，不做默认值填充。 */
+const OAuthSchema = Schema.object({
+  scopes: Schema.array(Schema.string()),
+  clientId: Schema.string(),
+  clientSecret: Schema.string(),
+  redirectUri: Schema.string(),
+  authorizationServer: Schema.string(),
+  tokenEndpoint: Schema.string(),
 });
 
-/** 合法的配置键。出现其他键时报错。 */
-const CONFIG_KEYS = new Set<string>(['demoEnabled', 'prefix']);
+/** 单服务器 schema：声明已知字段，其余字段透传给管理器。 */
+const ServerSchema = Schema.intersect([
+  Schema.object({
+    transport: Schema.union(['stdio', 'streamable-http']).required(),
+    command: Schema.string(),
+    args: Schema.array(Schema.string()),
+    env: Schema.dict(Schema.string()),
+    cwd: Schema.string(),
+    url: Schema.string(),
+    headers: Schema.dict(Schema.string()),
+    auth: Schema.union(['oauth', 'none']),
+    lazy: Schema.boolean(),
+    oauth: OAuthSchema,
+    toolCallTimeoutMs: Schema.number(),
+    startupTimeoutMs: Schema.number(),
+    closeTimeoutMs: Schema.number(),
+    reconnect: Schema.any(),
+  }),
+  Schema.dict(Schema.any()),
+]);
+
+/** 工具组 schema。 */
+const GroupSchema = Schema.object({
+  title: Schema.string(),
+  include: Schema.array(Schema.string()),
+  exclude: Schema.array(Schema.string()),
+});
+
+/** 聚合端点 schema。 */
+const ExposeSchema = Schema.object({
+  enabled: Schema.boolean(),
+  endpoint: Schema.string(),
+  groups: Schema.dict(GroupSchema),
+});
+
+/** 配置 schema。两个字段都是 volatile：写入后就地生效。 */
+export const Config: Schema<Config> = Schema.object({
+  servers: Schema.dict(ServerSchema).volatile(),
+  expose: ExposeSchema.volatile(),
+}) as unknown as Schema<Config>;
+
+/** 合法的顶层配置键。 */
+const CONFIG_KEYS = new Set<string>(['servers', 'expose']);
 
 /** 把缺省或 null 的输入转为空对象。 */
-function normalizeConfigInput(raw: unknown): Record<string, unknown> {
+function normalizeInput(raw: unknown): Record<string, unknown> {
   if (raw === undefined || raw === null) return {};
   if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: config must be an object`);
   return raw;
 }
 
+/** 读取字符串数组；非法时返回 undefined。 */
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.every((item) => typeof item === 'string') ? [...value] : undefined;
+}
+
+/** 读取字符串字典；非法时返回 undefined。 */
+function stringDict(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined;
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string') return undefined;
+    result[key] = item;
+  }
+  return result;
+}
+
+/** 校验并规范化 OAuth 参数。 */
+function normalizeOAuth(name: string, raw: unknown): OAuthClientConfig {
+  if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth must be an object`);
+  const scopes = raw.scopes === undefined ? [] : stringArray(raw.scopes);
+  if (scopes === undefined) {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth.scopes must be an array of strings`);
+  }
+  const config: OAuthClientConfig = { scopes };
+  for (const key of [
+    'clientId',
+    'clientSecret',
+    'redirectUri',
+    'authorizationServer',
+    'tokenEndpoint',
+  ] as const) {
+    const value = raw[key];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string') {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth.${key} must be a string`);
+    }
+    config[key] = value;
+  }
+  if (config.redirectUri !== undefined) assertLoopbackRedirect(name, config.redirectUri);
+  return config;
+}
+
+/** 固定回调必须是回环 http 地址。 */
+function assertLoopbackRedirect(name: string, redirectUri: string): void {
+  let url: URL;
+  try {
+    url = new URL(redirectUri);
+  } catch {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must be an absolute URL`);
+  }
+  if (url.protocol !== 'http:' || (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')) {
+    throw new Error(
+      `${PLUGIN_LABEL}: servers.${name}.oauth.redirectUri must point at 127.0.0.1 or localhost`,
+    );
+  }
+}
+
+/** 校验并规范化一台服务器定义。 */
+export function normalizeServerDefinition(name: string, raw: unknown): ServerDefinition {
+  if (!isValidServerName(name)) {
+    throw new Error(
+      `${PLUGIN_LABEL}: server name '${name}' must match ${String(/^[A-Za-z0-9_-]{1,32}$/)}`,
+    );
+  }
+  if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: servers.${name} must be an object`);
+  const transport = raw.transport;
+  if (transport !== 'stdio' && transport !== 'streamable-http') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.transport must be stdio or streamable-http`);
+  }
+  const config: ServerDefinition = {
+    ...raw,
+    transport,
+    auth:
+      raw.auth === undefined
+        ? transport === 'stdio'
+          ? 'none'
+          : 'oauth'
+        : (raw.auth as 'oauth' | 'none'),
+    lazy: raw.lazy === undefined ? true : (raw.lazy as boolean),
+  };
+  if (config.auth !== 'oauth' && config.auth !== 'none') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.auth must be oauth or none`);
+  }
+  if (typeof config.lazy !== 'boolean') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.lazy must be a boolean`);
+  }
+  if (transport === 'stdio') {
+    const command = asString(config.command);
+    if (command === undefined || command.trim() === '') {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.command is required for a stdio server`);
+    }
+    if (typeof config.url === 'string' && config.url !== '') {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.url is not a stdio field`);
+    }
+    if (config.headers !== undefined) {
+      const headers = stringDict(config.headers);
+      if (headers === undefined) {
+        throw new Error(`${PLUGIN_LABEL}: servers.${name}.headers must be a string map`);
+      }
+      if (Object.keys(headers).length > 0) {
+        throw new Error(`${PLUGIN_LABEL}: servers.${name}.headers is not a stdio field`);
+      }
+    }
+    const args = config.args === undefined ? [] : stringArray(config.args);
+    if (args === undefined) {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.args must be an array of strings`);
+    }
+    config.args = args;
+    const env = config.env === undefined ? {} : stringDict(config.env);
+    if (env === undefined)
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.env must be a string map`);
+    config.env = env;
+  } else {
+    const url = asString(config.url);
+    if (url === undefined || url.trim() === '') {
+      throw new Error(
+        `${PLUGIN_LABEL}: servers.${name}.url is required for a streamable-http server`,
+      );
+    }
+    new URL(url);
+    if (typeof config.command === 'string' && config.command !== '') {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.command is not a streamable-http field`);
+    }
+    if (Array.isArray(config.args) && config.args.length > 0) {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.args is not a streamable-http field`);
+    }
+    if (isRecord(config.env) && Object.keys(config.env).length > 0) {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.env is not a streamable-http field`);
+    }
+    if (typeof config.cwd === 'string' && config.cwd !== '') {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.cwd is not a streamable-http field`);
+    }
+    const headers = config.headers === undefined ? {} : stringDict(config.headers);
+    if (headers === undefined) {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.headers must be a string map`);
+    }
+    config.headers = headers;
+    if (config.auth === 'oauth') {
+      config.oauth =
+        config.oauth === undefined ? { scopes: [] } : normalizeOAuth(name, config.oauth);
+    } else if (config.oauth !== undefined) {
+      config.oauth = normalizeOAuth(name, config.oauth);
+    }
+  }
+  if (transport === 'stdio' && config.auth === 'oauth') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.auth oauth requires streamable-http`);
+  }
+  for (const key of ['toolCallTimeoutMs', 'startupTimeoutMs', 'closeTimeoutMs'] as const) {
+    const value = config[key];
+    if (value !== undefined && !isPositiveInteger(value)) {
+      throw new Error(`${PLUGIN_LABEL}: servers.${name}.${key} must be a positive integer`);
+    }
+  }
+  if (config.reconnect !== undefined && !isRecord(config.reconnect)) {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.reconnect must be an object`);
+  }
+  return config;
+}
+
+/** 校验并规范化聚合端点配置。 */
+function normalizeExpose(raw: unknown): ExposeConfig {
+  if (raw === undefined || raw === null) {
+    return {
+      enabled: true,
+      endpoint: ENDPOINT_DEFAULT,
+      groups: { harness: { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] } },
+    };
+  }
+  if (!isRecord(raw)) throw new Error(`${PLUGIN_LABEL}: expose must be an object`);
+  if (raw.enabled !== undefined && typeof raw.enabled !== 'boolean') {
+    throw new Error(`${PLUGIN_LABEL}: expose.enabled must be a boolean`);
+  }
+  const endpoint = raw.endpoint === undefined ? ENDPOINT_DEFAULT : asString(raw.endpoint);
+  if (endpoint === undefined) throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a string`);
+  const normalizedEndpoint = endpoint.replace(/\/+$/, '');
+  if (normalizedEndpoint === '' || !normalizedEndpoint.startsWith('/')) {
+    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must be a path starting with /`);
+  }
+  if (normalizedEndpoint.includes('?') || normalizedEndpoint.includes('#')) {
+    throw new Error(`${PLUGIN_LABEL}: expose.endpoint must not carry a query or fragment`);
+  }
+  const groups: Record<string, ToolGroup> = {};
+  if (raw.groups !== undefined) {
+    if (!isRecord(raw.groups)) throw new Error(`${PLUGIN_LABEL}: expose.groups must be an object`);
+    for (const [groupName, definition] of Object.entries(raw.groups)) {
+      if (groupName === '')
+        throw new Error(`${PLUGIN_LABEL}: expose.groups keys must not be empty`);
+      if (!isRecord(definition)) {
+        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName} must be an object`);
+      }
+      if (definition.title !== undefined && typeof definition.title !== 'string') {
+        throw new Error(`${PLUGIN_LABEL}: expose.groups.${groupName}.title must be a string`);
+      }
+      const include = definition.include === undefined ? [] : stringArray(definition.include);
+      const exclude = definition.exclude === undefined ? [] : stringArray(definition.exclude);
+      if (include === undefined || exclude === undefined) {
+        throw new Error(
+          `${PLUGIN_LABEL}: expose.groups.${groupName} include/exclude must be string arrays`,
+        );
+      }
+      groups[groupName] = {
+        ...(definition.title === undefined ? {} : { title: definition.title }),
+        include,
+        exclude,
+      };
+    }
+  }
+  if (Object.keys(groups).length === 0) {
+    groups.harness = { ...DEFAULT_GROUP, include: [...DEFAULT_GROUP.include] };
+  }
+  return {
+    enabled: raw.enabled === undefined ? true : raw.enabled,
+    endpoint: normalizedEndpoint,
+    groups,
+  };
+}
+
+/** 递归冻结。 */
+function deepFreeze<T>(value: T): T {
+  if (Array.isArray(value)) {
+    for (const item of value) deepFreeze(item);
+    return Object.freeze(value) as T;
+  }
+  if (isRecord(value)) {
+    for (const item of Object.values(value)) deepFreeze(item);
+    return Object.freeze(value) as T;
+  }
+  return value;
+}
+
 /** 校验配置并与默认值合并，返回冻结的完整配置。 */
 export function resolveConfig(raw?: unknown): Readonly<PluginConfig> {
-  const input = normalizeConfigInput(raw);
+  const input = normalizeInput(raw);
   for (const key of Object.keys(input)) {
     if (!CONFIG_KEYS.has(key)) throw new Error(`${PLUGIN_LABEL}: unknown config key "${key}"`);
   }
-  const config: PluginConfig = { ...DEFAULT_CONFIG };
-  // demoEnabled 必须是布尔值
-  const demoEnabled = input.demoEnabled;
-  if (demoEnabled !== undefined && demoEnabled !== null) {
-    if (typeof demoEnabled !== 'boolean') {
-      throw new Error(`${PLUGIN_LABEL}: config demoEnabled must be a boolean`);
+  const servers: Record<string, ServerDefinition> = {};
+  if (input.servers !== undefined && input.servers !== null) {
+    if (!isRecord(input.servers)) throw new Error(`${PLUGIN_LABEL}: servers must be an object`);
+    for (const [name, definition] of Object.entries(input.servers)) {
+      servers[name] = normalizeServerDefinition(name, definition);
     }
-    config.demoEnabled = demoEnabled;
   }
-  // prefix 必须是非空字符串
-  const prefix = input.prefix;
-  if (prefix !== undefined && prefix !== null) {
-    if (typeof prefix !== 'string' || prefix.trim() === '') {
-      throw new Error(`${PLUGIN_LABEL}: config prefix must be a non-empty string`);
-    }
-    config.prefix = prefix;
-  }
-  return Object.freeze(config);
+  return deepFreeze({ servers, expose: normalizeExpose(input.expose) });
 }
 
 /** 判断值是否是热重载引用。 */

@@ -2,16 +2,24 @@
 
 ## 本地加载
 
-1. 运行 `pnpm dev`，tsdown 监听 `src/` 并重建 `dist/index.mjs` 与 `dist/client.js`。
-2. 在 profile 的 `cordis.patch.yml` 中加入：
+推荐把仓库作为本地包安装：
+
+```sh
+pnpm build
+dsh plugin add <repo>
+```
+
+安装会插入 `better-mcp` 行并链接当前目录；改动后重建并刷新页面。
+
+也可以只在 profile 里指向宿主产物：
 
 ```yaml
 - insert:
-    - id: dsh-plugin-template-dev
+    - id: better-mcp-dev
       name: file:///<repo>/dist/index.mjs
 ```
 
-前端部分不需要额外的插件行。宿主读到包的 `dsh.client` 声明后加载 `dist/client.js`。改动前端代码后重建并刷新页面。
+前端部分仍由包的 `dsh.client` 声明加载 `dist/client.js`。
 
 ## 热更新
 
@@ -36,12 +44,12 @@
 | 构建组 | 入口 | 产物 |
 | --- | --- | --- |
 | 宿主 | `src/index.ts` | `dist/index.mjs` |
-| 浏览器 | `src/client/index.ts` | `dist/client.js` |
+| 浏览器 | `src/client/index.tsx` | `dist/client.js` |
 
 - 浏览器组用 banner/footer/intro 包成 `window.__ModuleLoader__.load({ id, factory })` 闭包工厂。
 - `PLATFORM_MODULES` 列出宿主冻结模块表提供的模块，构建时保持 external。
 - 新增或升级宿主客户端依赖时，核对平台种子表与宿主版本。
-- 类型声明由 `tsc -p tsconfig.build.json` 生成到 `dist/client/`。
+- 类型声明由 `tsc -p tsconfig.build.json` 生成。
 
 ## 环境要求
 
@@ -54,13 +62,14 @@
 | --- | --- |
 | `pnpm dev` | 监听并构建 |
 | `pnpm build` | 打包并生成类型声明 |
-| `pnpm check` | 依次运行类型检查、lint、测试和构建 |
+| `pnpm check` | 依次运行类型检查、lint 与测试 |
+| `pnpm full-check` | `check` 加构建 |
 | `pnpm typecheck` | 类型检查 |
 | `pnpm lint` | biome 检查 |
 | `pnpm lint:fix` | biome 检查并自动修复 |
 | `pnpm format` | biome 格式化 |
 | `pnpm test` | 运行 vitest |
-| `pnpm run release` | 检查并发布新版本 |
+| `pnpm run release` | 检查、格式化、升版本、归档 CHANGELOG 并推送 tag |
 
 ## CI
 
@@ -69,28 +78,34 @@
 | Job | 触发 | 内容 |
 | --- | --- | --- |
 | `check` | PR、打 tag | Node 24 上运行 `pnpm run full-check` |
-| `publish` | 默认禁用 | 打 tag 时发布 npm，用 OIDC 换取发布令牌 |
+| `publish` | 打 tag | 用 OIDC 发布 npm |
 
-- `publish` 由 `if: false` 禁用，原触发条件以注释保留；`pnpm run release` 推送的 tag 不会在 npm 产生新版本。
-- 模板转化时解禁，步骤见[宪章](../.specify/memory/constitution.md)原则 VII。
+发布前把 npm Trusted Publisher 绑定到本仓库与 `.github/workflows/ci.yml`。
 
 ## 测试
 
 | 文件 | 覆盖内容 |
 | --- | --- |
-| `tests/plugin.test.ts` | 配置校验、热重载、demo 工具、`apply` 接线 |
-| `tests/config-form.test.ts` | 配置页草稿、空白前缀拒绝、保存、恢复默认与放弃 |
-| `tests/release-archive.test.mjs` | CHANGELOG 归档计划 |
-| `tests/client.test.ts` | 前端服务声明、字典与槽位注册、示例行与配置页渲染 |
+| `tests/plugin.test.ts` | 入口契约、启动挂载、volatile 对账、卸载清理 |
+| `tests/config.test.ts` | 默认值、严格校验、服务器定义规则、volatile 读取 |
+| `tests/state.test.ts` | 懒加载状态读写与损坏回退 |
+| `tests/credentials.test.ts` | 授权、客户端密钥、聚合令牌 |
+| `tests/oauth.test.ts` | 发现、动态注册、PKCE、换码与刷新 |
+| `tests/aggregate.test.ts` | 组匹配、鉴权、JSON-RPC 方法与批量 |
+| `tests/servers.test.ts` | 挂载、等待连接、工具名解析、快照与对账 |
+| `tests/routes.test.ts` | 面板路由、OAuth 路由、回调与端点接线 |
+| `tests/client.test.ts` | 字典、槽位注册、表单校验与静态渲染 |
 | `tests/client-bundle.test.ts` | `dist/client.js` 的注册契约与导出 |
-| `tests/package-pack.test.ts` | npm 包只含发布所需文件，含前端产物 |
+| `tests/package-pack.test.ts` | npm 包内容与补丁 |
+| `tests/release-archive.test.mjs` | CHANGELOG 归档计划 |
 | `tests/worktree-extension.test.ts` | worktree 扩展的创建、复用与清理 |
-| `tests/helpers.ts` | 模拟宿主与客户端 `ctx`，记录注册、事件监听与日志 |
-| `tests/support/primitives.ts` | 把平台组件包解析到源码，避开已发布产物内联的依赖 |
+| `tests/helpers.ts` | 模拟宿主与客户端 `ctx` |
 
 测试要求见[宪章](../.specify/memory/constitution.md)原则 IV。
 
-浏览器用例由仓库内的 `playwright` 驱动无头 Chrome。`vitest.config.ts` 把 `@deepseek-ai/dsh-client-ui-primitives` 指向包的源码：已发布的 `lib` 内联了 shiki、katex 等未声明的依赖，源码只依赖 react、clsx 与 `dsh-client-store`。
+## 实机验证
+
+按 [real-device-test](../.dsh/skills/real-device-test/SKILL.md) 建专用 profile，覆盖装载、工具调用、懒加载、配置写入与面板渲染。浏览器用例由 `playwright` 驱动本机 Chrome。
 
 ## Spec Kit 流程
 
@@ -107,7 +122,7 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 | 4 | `/speckit-tasks` | `tasks.md` |
 | 5 | `/speckit-analyze` | 跨产物一致性报告 |
 | 6 | `/speckit-implement` | 按阶段提交的实现 |
-| 7 | `/speckit-worktree-finish` | 基线同步、PR、无上限等待合并与合并后的清理，或以 `abandon` 放弃 |
+| 7 | `/speckit-worktree-finish` | 基线同步、PR、等待合并与清理 |
 
 - `base_ref` 默认为 `origin/main`，必须已包含 `.specify/` 与 `.dsh/skills/`。
 - `worktrees/` 已加入 `.gitignore`，biome 与 vitest 也会跳过它。
@@ -118,7 +133,7 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 
 修改 `commands/` 或 `extension.yml` 后重新渲染：
 
-1. 把扩展目录复制到仓库外的临时目录，删除其中的 `.specify-dev/`。
+1. 把扩展目录复制到仓库外的临时目录。
 2. 运行 `specify extension add --dev <临时目录> --force`。
 
 脚本行为由 `tests/worktree-extension.test.ts` 覆盖。
@@ -127,20 +142,28 @@ DSH 从 `.dsh/skills/` 加载 `speckit-*` skill，在对话框输入 `/` 调用�
 
 ```text
 cordis.patch.yml            # 插件行，dsh plugin add 时插入 profile
+icon.svg                    # 插件图标
+locale/                     # meta.title / meta.description
 src/
-├── index.ts                # 打包入口，导出 name、inject、apply、Config
-├── config.ts               # Config schema、默认值、严格校验与热重载读取
-├── constants.ts            # 共享常量
-├── demo-tool.ts            # demo_echo 工具
-├── events.ts               # agent 事件监听示例
-├── types.ts                # 宿主类型再导出
-├── utils.ts                # 零依赖工具函数
+├── index.ts                # 宿主入口：装配、挂载、热更新对账
+├── config.ts               # Config schema、默认值、严格校验
+├── constants.ts            # 插件标识、路径、超时与批量上限
+├── types.ts                # 宿主类型再导出与路由契约
+├── utils.ts                # 对象读取、JSON 响应、glob、grantId
+├── home.ts                 # DSH 家目录解析
+├── state.ts                # 懒加载状态
+├── credentials.ts          # 授权、客户端密钥、聚合令牌
+├── oauth.ts                # 发现、注册、PKCE、换码与刷新
+├── aggregate.ts            # 无状态 MCP 端点处理器
+├── servers.ts              # 挂载、连接等待、工具解析与快照
+├── routes.ts               # /api 路由、回调与端点注册
+├── tools.ts                # mcp_servers 与 mcp_call
 └── client/
-    ├── index.ts            # 浏览器入口：注册字典、示例行与配置页
-    ├── config-form.ts      # 配置页草稿模型与行键常量
-    ├── config-page.tsx     # 配置页的 summary 与 page 视图
-    ├── demo-dock.tsx       # 前端示例行组件
-    └── locales.ts          # 中英文字典与命名空间
+    ├── index.tsx           # 浏览器入口：字典、侧栏动作、配置页
+    ├── panel.tsx           # 共享面板
+    ├── server-form.tsx     # 新增/编辑表单
+    ├── api.ts              # 插件路由调用
+    └── locales.ts          # 中英文字典
 dist/
 ├── index.mjs               # 宿主产物
 ├── client.js               # 浏览器产物（闭包工厂）
@@ -148,7 +171,6 @@ dist/
 └── client/                 # 前端类型声明
 scripts/release-archive.mjs # 发布时归档 CHANGELOG
 tests/                      # vitest 单元测试
-changelogs/                 # 各版本的 CHANGELOG 归档
 docs/                       # 开发者文档
 specs/<NNN>-<name>/         # 每个需求的 spec、plan、tasks
 .dsh/skills/
@@ -159,5 +181,5 @@ specs/<NNN>-<name>/         # 每个需求的 spec、plan、tasks
 ├── scripts/bash/           # Spec Kit 脚本
 ├── extensions.yml          # 扩展钩子
 └── extensions/worktree/    # 本地 worktree 扩展
-.github/workflows/ci.yml    # CI：check（Node 24）与默认禁用的 publish
+.github/workflows/ci.yml    # CI：check 与 publish
 ```

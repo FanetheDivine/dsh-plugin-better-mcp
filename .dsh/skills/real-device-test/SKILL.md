@@ -74,6 +74,40 @@ mock provider 的约定：
 - 其他消息回复「mock：已收到」。
 - 每个请求追加到 `requests.jsonl`，用于核对请求内容。
 
+## MCP 插件用例
+
+`dsh-plugin-better-mcp` 不依赖 mock 模型，用独立脚本覆盖装载与面板：
+
+```sh
+cd <profile目录>
+node mcp-cases.mjs
+```
+
+| 用例 | 断言 |
+| --- | --- |
+| M1 装载 | 插件已激活 |
+| M2 工具 | `mcp_servers` 与 `mcp_call` 出现在工具表 |
+| M3 浏览器产物 | 客户端模块图包含本插件 |
+| M4 配置 | 默认 `servers` 为空，`expose.enabled` 为真 |
+| M5 volatile 写入 | 新增懒加载服务器后 `fiber.uid` 不变，懒加载服务器不挂载 |
+| M6 删除定义 | 删除后配置回空，插件实例不变 |
+
+浏览器用例：
+
+```sh
+node mcp-browser-cases.mjs
+```
+
+| 用例 | 操作 | 断言 |
+| --- | --- | --- |
+| B1 侧栏入口 | 点击 MCP 图标 | 面板出现，含新增入口 |
+| B2 新增服务器 | 填写名称与地址并保存 | 面板出现服务器行，profile 补丁写入名称 |
+| B3 删除服务器 | 删除刚建的服务器 | 行消失，补丁中的名称被清除 |
+| B4 配置页 | 插件页 → 插件详情 → 行“配置” | 内联面板出现 |
+
+- `RDT_PLUGIN_CONFIG` 覆盖 setup 写入的插件配置块，默认是模板的 `prefix: rdt`。
+- 行配置按钮的 accessible name 是「配置 <插件标题>」；`RDT_PLUGIN_TITLE` 默认 `MCP 增强`。
+
 ## 阶段 3：浏览器用例（C）
 
 1. 启动 GUI：
