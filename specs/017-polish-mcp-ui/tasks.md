@@ -25,8 +25,8 @@ description: "Task list for MCP 管理界面视觉优化"
 
 **Purpose**: 建立两个用户故事共用的主题化控件与文案
 
-- [ ] T002 在 src/client/ui.tsx 实现使用宿主 token 的共享样式、Button、Switch、Modal 与焦点管理
-- [ ] T003 [P] 在 src/client/locales.ts 补充开关名称、删除确认标题与字段提示所需中英文文案
+- [x] T002 在 src/client/ui.tsx 实现使用宿主 token 的共享样式、Button、Switch、Modal 与焦点管理
+- [x] T003 [P] 确认 src/client/locales.ts 的现有文案覆盖共享控件、状态反馈、表单与确认操作
 
 **Checkpoint**: 共享控件可供面板和表单使用，提交基础组件阶段。
 
@@ -44,7 +44,7 @@ description: "Task list for MCP 管理界面视觉优化"
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] 在 src/client/panel.tsx 实现分隔式服务器列表、状态与诊断分区、统一按钮、懒加载 switch、加载/空/错误反馈及响应式布局
+- [ ] T005 [US1] 在 src/client/panel.tsx 与 src/client/locales.ts 实现分隔式服务器列表、状态与诊断分区、统一按钮、带服务器名称的懒加载 switch、加载/空/错误反馈及响应式布局
 - [ ] T006 [P] [US1] 在 src/client/index.tsx 统一侧栏入口与配置摘要的主题样式，并为主弹层保存和恢复触发按钮焦点
 
 **Checkpoint**: US1 的核心管理与亮暗主题检查通过，提交服务器列表阶段。
@@ -64,7 +64,7 @@ description: "Task list for MCP 管理界面视觉优化"
 ### Implementation for User Story 2
 
 - [ ] T008 [P] [US2] 在 src/client/server-form.tsx 实现主题化字段、稳定标签关联、字段级校验错误、首个无效字段聚焦与独立滚动内容
-- [ ] T009 [P] [US2] 在 src/client/panel.tsx 接入新增/编辑表单弹层和删除确认弹层，保留保存、授权、删除与取消流程
+- [ ] T009 [P] [US2] 在 src/client/panel.tsx 与 src/client/locales.ts 接入新增/编辑表单弹层和删除确认弹层，保留保存、授权、删除与取消流程
 
 **Checkpoint**: US2 的两种入口、校验和弹层操作检查通过，提交表单阶段。
 
