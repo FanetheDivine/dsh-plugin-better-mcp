@@ -1,8 +1,11 @@
 // 实机测试 mock provider：无网络，按用户消息中的标记返回脚本化响应。
 // 模型：mock-model。
 // 标记：
-//   ECHO_CASE:<文本>  首次请求调用 demo_echo，收到工具结果后用文本回复结果
-//   其他消息          回复「mock：已收到」
+//   ECHO_CASE:<文本>         首次请求调用 demo_echo，收到工具结果后用文本回复结果
+//   MCP_TOOLS               回复当前可见的 mcp__* 工具与 mcp_manage
+//   MCP_MANAGE:<server>:<cmd> 调用 mcp_manage，收到结果后再回复可见工具
+//   MCP_CALL:<name>|<json>   调用指定工具，收到结果后回复结果文本
+//   其他消息                 回复「mock：已收到」
 // 每次请求都追加到 profile 目录的 requests.jsonl，供事后核对。
 import { execSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
@@ -24,6 +27,9 @@ export const inject = ['llm'];
 /** 被测工具名。 */
 export const TOOL_NAME = 'demo_echo';
 
+/** 可见性管理工具名。 */
+export const MANAGE_TOOL = 'mcp_manage';
+
 /** 提取消息中的全部文本，包含工具结果里的文本。 */
 function blockTexts(content) {
   return (content ?? []).flatMap((b) =>
@@ -39,9 +45,24 @@ export function plain(messages) {
     .join('\n');
 }
 
+/** 当前可见的 MCP 工具名。 */
+export function mcpToolNames(tools) {
+  return (tools ?? [])
+    .map((t) => t.name)
+    .filter((name) => name.startsWith('mcp__'))
+    .sort();
+}
+
+/** 可见工具摘要，供断言直接比对。 */
+export function toolSummary(tools) {
+  return `MCP_TOOLS manage=${(tools ?? []).some((t) => t.name === MANAGE_TOOL)} [${mcpToolNames(tools).join(', ')}]`;
+}
+
 export function apply(ctx) {
   class Mock extends LlmAdapter {
     calls = [];
+    /** 上一次工具调用的用途，决定收到结果后的回复。 */
+    pending = 'echo';
     providerInfo(id) {
       return { id, name: 'Real device test mock' };
     }
@@ -77,12 +98,62 @@ export function apply(ctx) {
       const lastAssistant = o.messages.map((m) => m.role).lastIndexOf('assistant');
       const userText = plain(o.messages.slice(lastAssistant + 1).filter((m) => m.role === 'user'));
       const marker = /ECHO_CASE:(\S+)/.exec(userText);
+      const manage = /MCP_MANAGE:([^:\s]+):(\S+)/.exec(userText);
+      const call = /MCP_CALL:([^\s|]+)(?:\|(\S+))?/.exec(userText);
+      const wantsTools = /MCP_TOOLS/.test(userText) || manage !== null;
+      const names = (o.tools ?? []).map((tool) => tool.name);
 
       // 收到工具结果：把结果作为最终回复。新版宿主用 tool 角色，旧版放进 user 消息的 tool-result 块
       const hasToolResult =
         last?.role === 'tool' || (last?.content ?? []).some((b) => b.type === 'tool-result');
       if (hasToolResult) {
-        const text = `mock：工具返回 ${plain([last])}`;
+        const text =
+          this.pending === 'mcp'
+            ? `${toolSummary(o.tools)} result=${plain([last]).slice(0, 200)}`
+            : `mock：工具返回 ${plain([last])}`;
+        yield { type: 'block-end', index: 0, block: { type: 'text', text } };
+        yield usage(text.length);
+        yield { type: 'finish', reason: { kind: 'stop' } };
+        return;
+      }
+      // 可见性管理：调用 mcp_manage，结果是下一步的工具表
+      if (manage !== null && names.includes(MANAGE_TOOL)) {
+        this.pending = 'mcp';
+        yield {
+          type: 'block-end',
+          index: 0,
+          block: {
+            type: 'tool-call',
+            id: `mock-mcp-${this.calls.length}`,
+            name: MANAGE_TOOL,
+            arguments: JSON.stringify({ server: manage[1], command: manage[2] }),
+          },
+        };
+        yield usage(20);
+        yield { type: 'finish', reason: { kind: 'tool-calls' } };
+        return;
+      }
+      // 调用任意已注册工具
+      if (call !== null && names.includes(call[1])) {
+        this.pending = 'mcp';
+        yield {
+          type: 'block-end',
+          index: 0,
+          block: {
+            type: 'tool-call',
+            id: `mock-mcp-${this.calls.length}`,
+            name: call[1],
+            arguments: call[2] ?? '{}',
+          },
+        };
+        yield usage(20);
+        yield { type: 'finish', reason: { kind: 'tool-calls' } };
+        return;
+      }
+      // 只报告可见工具
+      if (wantsTools) {
+        this.pending = 'echo';
+        const text = toolSummary(o.tools);
         yield { type: 'block-end', index: 0, block: { type: 'text', text } };
         yield usage(text.length);
         yield { type: 'finish', reason: { kind: 'stop' } };
