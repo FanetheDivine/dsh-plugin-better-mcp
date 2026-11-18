@@ -86,10 +86,10 @@ node mcp-cases.mjs
 | 用例 | 断言 |
 | --- | --- |
 | M1 装载 | 插件已激活 |
-| M2 工具 | `mcp_servers` 与 `mcp_call` 出现在工具表 |
+| M2 工具 | 工具表含 `mcp_manage`，不含 `mcp_servers` 与 `mcp_call` |
 | M3 浏览器产物 | 客户端模块图包含本插件 |
-| M4 配置 | 默认 `servers` 为空，`expose.enabled` 为真 |
-| M5 volatile 写入 | 新增懒加载服务器后 `fiber.uid` 不变，懒加载服务器不挂载 |
+| M4 配置 | 默认 `servers` 为空，配置没有 `expose` |
+| M5 volatile 写入 | 新增懒加载服务器后 `fiber.uid` 不变，服务器照常挂载 |
 | M6 删除定义 | 删除后配置回空，插件实例不变 |
 
 浏览器用例：

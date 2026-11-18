@@ -105,11 +105,11 @@
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T034 [P] 更新 README.md：功能、配置表、工具、面板、OAuth、限制；删除聚合端点章节
-- [ ] T035 [P] 更新 docs/how-it-works.md：入口契约、宿主运行时、可见性、数据流、秘密存放
-- [ ] T036 [P] 更新 docs/known-risks.md：删除聚合端点与客户端令牌；新增可见性风险（restrict 依赖、前缀匹配、待定选择在下一步前崩溃会丢失）
-- [ ] T037 [P] 更新 docs/development.md 文件地图；更新 .dsh/skills/real-device-test 的用例与脚本，删除聚合端点用例，新增 `mcp_manage` 用例
-- [ ] T038 运行 `pnpm format && pnpm check && pnpm build`
+- [x] T034 [P] 更新 README.md：功能、配置表、工具、面板、OAuth、限制；删除聚合端点章节
+- [x] T035 [P] 更新 docs/how-it-works.md：入口契约、宿主运行时、可见性、数据流、秘密存放
+- [x] T036 [P] 更新 docs/known-risks.md：删除聚合端点与客户端令牌；新增可见性风险（restrict 依赖、前缀匹配、待定选择在下一步前崩溃会丢失）
+- [x] T037 [P] 更新 docs/development.md 文件地图；更新 .dsh/skills/real-device-test 的用例与脚本，删除聚合端点用例，新增 `mcp_manage` 用例
+- [x] T038 运行 `pnpm format && pnpm check && pnpm build`
 
 ---
 

@@ -66,6 +66,7 @@ await check('B2 新增服务器写入配置', async () => {
   const form = page.getByTestId('better-mcp-form');
   await form.waitFor({ timeout: 5000 });
   await form.locator('input').first().fill('ui-smoke');
+  await form.locator('textarea').first().fill('UI smoke server');
   await form.locator('select').first().selectOption('streamable-http');
   await form.locator('input').nth(1).fill('https://example.invalid/mcp');
   await form.locator('select').nth(1).selectOption('none');

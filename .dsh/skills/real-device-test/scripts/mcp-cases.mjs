@@ -1,4 +1,4 @@
-// MCP 插件后端实机用例：装载、工具、浏览器模块、volatile 配置写入与懒加载对账。
+// MCP 插件后端实机用例：装载、工具、浏览器模块、volatile 配置写入与挂载对账。
 // 用法：在 profile 目录运行 node mcp-cases.mjs；env 同 run-test.mjs。
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
@@ -69,7 +69,8 @@ await check('M2 工具可见', () => {
     .get('tools')
     .schemas()
     .map((tool) => tool.name);
-  for (const name of ['mcp_servers', 'mcp_call']) assert(names.includes(name), `缺少 ${name}`);
+  assert(names.includes('mcp_manage'), '缺少 mcp_manage');
+  for (const name of ['mcp_servers', 'mcp_call']) assert(!names.includes(name), `多余 ${name}`);
   return { count: names.length };
 });
 
@@ -82,8 +83,8 @@ await check('M3 浏览器产物已登记', () => {
 await check('M4 默认配置与配置服务', async () => {
   assert(app.get('configEditor'), '缺少 configEditor');
   assert.deepEqual(entry.options.config?.servers ?? {}, {});
-  assert.equal(entry.options.config?.expose?.enabled, true);
-  return entry.options.config?.expose?.endpoint;
+  assert.equal(entry.options.config?.expose, undefined);
+  return Object.keys(entry.options.config ?? {});
 });
 
 await check('M5 volatile 写入不重挂', async () => {
@@ -92,11 +93,11 @@ await check('M5 volatile 写入不重挂', async () => {
     ...current,
     servers: {
       smoke: {
+        description: 'Smoke test server',
         transport: 'streamable-http',
         url: 'https://example.invalid/mcp',
         lazy: true,
-        auth: 'oauth',
-        oauth: { scopes: [] },
+        auth: 'none',
       },
     },
   }));
@@ -107,12 +108,13 @@ await check('M5 volatile 写入不重挂', async () => {
     readFileSync(join(root, 'cordis.patch.yml'), 'utf8').includes('smoke'),
     '补丁未写入 smoke',
   );
-  assert.equal(
+  // 懒加载只决定会话默认可见性；服务器照常挂载。
+  assert(
     app
       .get('mcpManager')
       .list()
-      .find((view) => view.name === 'smoke'),
-    undefined,
+      .some((view) => view.name === 'smoke'),
+    '懒加载服务器未挂载',
   );
 });
 
