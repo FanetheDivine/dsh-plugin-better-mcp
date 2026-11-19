@@ -11,9 +11,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 // Type-only：拉取 sidebar.footer.action 槽位声明。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
+import { useEffect, useState } from 'react';
+
+import { fetchStatus, type PanelSnapshot } from './api.ts';
 
 import { en, NS, zh } from './locales.ts';
-import { McpPanel } from './panel.tsx';
+import { McpPanel, startStatusPolling } from './panel.tsx';
 import { ClientStyles, McpIcon } from './ui.tsx';
 
 /** 需要宿主注入的客户端服务。 */
@@ -40,14 +43,21 @@ export function openPluginConfig(ctx: Context): void {
   store.create().actions.setView?.({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
 }
 
-/** 侧栏触发按钮。 */
-function SidebarAction({
+/** 判断快照中是否存在待授权 OAuth 服务器。 */
+export function hasPendingAuthorization(snapshot: PanelSnapshot): boolean {
+  return snapshot.servers.some((row) => row.auth === 'oauth' && !row.authorized);
+}
+
+/** 侧栏按钮的展示属性。 */
+export function SidebarButton({
   t,
   wide,
+  needsAuth,
   onOpen,
 }: {
   t: TranslateNS<typeof NS>;
   wide: boolean;
+  needsAuth: boolean;
   onOpen: () => void;
 }): JSX.Element {
   return (
@@ -58,12 +68,38 @@ function SidebarAction({
         className="better-mcp-sidebar-action"
         title={t('title')}
         aria-label={t('title')}
+        data-attention={needsAuth || undefined}
         onClick={onOpen}
       >
         <McpIcon />
       </button>
     </div>
   );
+}
+
+/** 侧栏触发按钮，独立同步待授权状态。 */
+function SidebarAction({
+  t,
+  wide,
+  onOpen,
+}: {
+  t: TranslateNS<typeof NS>;
+  wide: boolean;
+  onOpen: () => void;
+}): JSX.Element {
+  const [needsAuth, setNeedsAuth] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const stop = startStatusPolling(async () => {
+      const snapshot = await fetchStatus();
+      if (active) setNeedsAuth(hasPendingAuthorization(snapshot));
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+  }, []);
+  return <SidebarButton t={t} wide={wide} needsAuth={needsAuth} onOpen={onOpen} />;
 }
 
 /** 插件页配置项。 */

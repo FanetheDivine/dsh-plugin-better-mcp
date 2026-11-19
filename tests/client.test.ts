@@ -13,11 +13,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PanelSnapshot } from '../src/client/api.ts';
 import {
   apply,
+  hasPendingAuthorization,
   inject,
   openPluginConfig,
   PACKAGE_NAME,
   ROW_ID,
   ROW_KEY,
+  SidebarButton,
 } from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
 import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
@@ -131,6 +133,41 @@ describe('前端入口', () => {
     openPluginConfig(ctx as never);
     expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
     expect(setView).toHaveBeenCalledWith({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
+  });
+  it('有待授权 OAuth 时侧边栏高亮，全部已授权或无 OAuth 时恢复', () => {
+    const snapshot = (servers: PanelSnapshot['servers']): PanelSnapshot => ({ servers });
+    const row = (overrides: Partial<PanelSnapshot['servers'][number]>) => ({
+      name: 'server',
+      lazy: true,
+      authorized: false,
+      mounted: false,
+      state: 'idle',
+      ...overrides,
+    });
+    expect(
+      hasPendingAuthorization(
+        snapshot([
+          row({ name: 'oauth', auth: 'oauth', authorized: false }),
+          row({ name: 'plain', auth: 'none', authorized: false }),
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      hasPendingAuthorization(snapshot([row({ name: 'oauth', auth: 'oauth', authorized: true })])),
+    ).toBe(false);
+    expect(hasPendingAuthorization(snapshot([row({ name: 'plain', auth: 'none' })]))).toBe(false);
+
+    const render = (needsAuth: boolean) =>
+      renderToStaticMarkup(
+        createElement(SidebarButton as never, {
+          t: translate(zh),
+          wide: true,
+          needsAuth,
+          onOpen: () => undefined,
+        } as never),
+      );
+    expect(render(true)).toContain('data-attention="true"');
+    expect(render(false)).not.toContain('data-attention="true"');
   });
 });
 
@@ -565,6 +602,19 @@ describe('主题样式', () => {
     );
     expect(CLIENT_STYLES).toMatch(
       /\.better-mcp-server-name\s*\{[^}]*font-size:\s*16px;[^}]*font-weight:\s*600;/,
+    );
+  });
+
+  it('待授权图标使用警告色阴影呼吸，并在减少动效时停用', () => {
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*var\(--dsw-alias-state-warn-primary\)/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*animation:\s*better-mcp-auth-breath/,
+    );
+    expect(CLIENT_STYLES).toMatch(/@keyframes better-mcp-auth-breath\s*\{[\s\S]*box-shadow:/);
+    expect(CLIENT_STYLES).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*animation:\s*none;/,
     );
   });
 });

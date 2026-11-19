@@ -94,11 +94,11 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ### Tests for User Story 4
 
-- [ ] T013 [P] [US4] 在 `tests/client.test.ts` 覆盖待授权汇总、侧边栏数据状态、多服务器部分授权、警告色、阴影呼吸和 `prefers-reduced-motion`
+- [X] T013 [P] [US4] 在 `tests/client.test.ts` 覆盖待授权汇总、侧边栏数据状态、多服务器部分授权、警告色、阴影呼吸和 `prefers-reduced-motion`
 
 ### Implementation for User Story 4
 
-- [ ] T014 [US4] 在 `src/client/index.tsx` 为侧边栏接入串行状态轮询与卸载清理，在 `src/client/ui.tsx` 添加警告高亮和阴影呼吸样式
+- [X] T014 [US4] 在 `src/client/index.tsx` 为侧边栏接入串行状态轮询与卸载清理，在 `src/client/ui.tsx` 添加警告高亮和阴影呼吸样式
 
 **Checkpoint**: 配置面板与侧边栏使用相同待授权条件，授权完成后提示停止
 

@@ -349,6 +349,22 @@ export const CLIENT_STYLES = String.raw`
   font-size: 12px;
   line-height: 1;
 }
+.better-mcp-sidebar-action[data-attention='true'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 12%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+  animation: better-mcp-auth-breath 2.4s ease-in-out infinite;
+}
+@keyframes better-mcp-auth-breath {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dsw-alias-state-warn-primary) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--dsw-alias-state-warn-primary) 18%, transparent),
+      0 0 16px color-mix(in srgb, var(--dsw-alias-state-warn-primary) 42%, transparent);
+  }
+}
 [data-sidebar-collapsed] [class*="footerActions"]:has(.better-mcp-entry[data-rail='rail']) {
   flex-direction: column;
   align-items: center;
@@ -1030,6 +1046,9 @@ select.better-mcp-input {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .better-mcp-sidebar-action[data-attention='true'] {
+    animation: none;
+  }
   .better-mcp-switch-thumb {
     transition: none;
   }
