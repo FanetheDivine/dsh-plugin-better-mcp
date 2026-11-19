@@ -81,9 +81,9 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Independent Test**: 计划未批准或未豁免时 tasks 不运行 setup；实现出现新未决项时暂停受影响工作。
 
-- [ ] T008 [US1] 审查 `.dsh/skills/speckit-plan/SKILL.md`，确认技术探索后的实现决策清单、分批访谈、计划审查和状态失效规则
-- [ ] T009 [P] [US1] 将 `.dsh/skills/speckit-tasks/SKILL.md` 同步到模板提交 `03c8e9e`，在 setup 前核验规格与计划门禁
-- [ ] T010 [P] [US1] 将 `.dsh/skills/speckit-implement/SKILL.md` 同步到模板提交 `03c8e9e`，实现前复核门禁并处理新未决项
+- [x] T008 [US1] 审查 `.dsh/skills/speckit-plan/SKILL.md`，确认技术探索后的实现决策清单、分批访谈、计划审查和状态失效规则
+- [x] T009 [P] [US1] 将 `.dsh/skills/speckit-tasks/SKILL.md` 同步到模板提交 `03c8e9e`，在 setup 前核验规格与计划门禁
+- [x] T010 [P] [US1] 将 `.dsh/skills/speckit-implement/SKILL.md` 同步到模板提交 `03c8e9e`，实现前复核门禁并处理新未决项
 
 **Checkpoint**: 任务与实现只接收已批准或已豁免的完整规格和计划。
 
