@@ -43,7 +43,7 @@ export function openPluginConfig(ctx: Context): void {
   store.create().actions.setView?.({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
 }
 
-/** 判断快照中是否存在待授权 OAuth 服务器。 */
+/** 判断快照中是否存在待鉴权 OAuth 服务器。 */
 export function hasPendingAuthorization(snapshot: PanelSnapshot): boolean {
   return snapshot.servers.some((row) => row.auth === 'oauth' && !row.authorized);
 }
@@ -77,7 +77,7 @@ export function SidebarButton({
   );
 }
 
-/** 侧栏触发按钮，独立同步待授权状态。 */
+/** 侧栏触发按钮，独立同步待鉴权状态。 */
 function SidebarAction({
   t,
   wide,

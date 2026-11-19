@@ -9,6 +9,8 @@ export interface ServerRow {
   auth?: string;
   lazy: boolean;
   authorized: boolean;
+  /** 完整鉴权地址，由宿主给出。 */
+  authorizeUrl?: string;
   mounted: boolean;
   /** 连接状态名。 */
   state: string;
@@ -29,11 +31,6 @@ export interface PanelSnapshot {
 
 /** 服务器定义（面板提交的结构）。 */
 export type ServerDefinition = Record<string, unknown>;
-
-/** 生成可直接导航的授权启动地址。 */
-export function oauthStartUrl(server: string): string {
-  return `/better-mcp/oauth/start?server=${encodeURIComponent(server)}`;
-}
 
 /** 发起一个路由请求并解析 JSON。 */
 async function call<T>(

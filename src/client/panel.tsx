@@ -1,5 +1,5 @@
 /**
- * 共享 MCP 面板：服务器状态、懒加载、重连、授权与增删改。
+ * 共享 MCP 面板：服务器状态、懒加载、重连、鉴权与增删改。
  * 侧栏弹窗与插件页配置页使用同一个组件。
  */
 
@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   configureClient,
   fetchStatus,
-  oauthStartUrl,
   type PanelSnapshot,
   removeServer,
   restart,
@@ -26,7 +25,7 @@ import {
   type ServerFormValues,
   valuesFromDefinition,
 } from './server-form.tsx';
-import { Button, ClientStyles, LinkButton, Modal, Switch } from './ui.tsx';
+import { Button, ClientStyles, Modal, Switch } from './ui.tsx';
 
 /** 面板属性。 */
 export interface McpPanelProps {
@@ -171,21 +170,6 @@ export function ServerItem(props: {
           <Button busy={working} onClick={props.onRestart}>
             {working ? t('working') : t('restart')}
           </Button>
-          {row.auth === 'oauth' ? (
-            <LinkButton
-              href={oauthStartUrl(row.name)}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={
-                row.authorized
-                  ? t('reauthorizeFor', { name: row.name })
-                  : t('authorizeFor', { name: row.name })
-              }
-              variant={needsAuth ? 'primary' : 'outline'}
-            >
-              {row.authorized ? t('reauthorize') : t('authorize')}
-            </LinkButton>
-          ) : null}
           {row.auth === 'oauth' && row.authorized ? (
             <Button disabled={working} onClick={props.onSignOut}>
               {t('signout')}
@@ -198,6 +182,19 @@ export function ServerItem(props: {
             {t('delete')}
           </Button>
         </div>
+        {needsAuth && row.authorizeUrl !== undefined ? (
+          <p className="better-mcp-auth-line">
+            <span>{t('authHint')}</span>{' '}
+            <a
+              href={row.authorizeUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t('authLinkFor', { name: row.name })}
+            >
+              {row.authorizeUrl}
+            </a>
+          </p>
+        ) : null}
       </div>
     </li>
   );

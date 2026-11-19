@@ -150,7 +150,7 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 5. 回调换码，写授权记录，卸载旧实例并重新挂载，随后执行 `VisibilityRuntime.syncAll()` 与 `notifyAll()`。
 6. 距过期 30 秒内用刷新令牌换新；刷新失败沿用旧令牌并告警。
 
-配置面板的授权链接指向 `/better-mcp/oauth/start?server=<name>`。该 Web 路由复用授权启动逻辑，成功返回 `302 Location`，失败返回带原始原因的 HTML 错误页。同源 JSON 启动路由继续保留。
+配置面板的鉴权行显示完整地址 `<origin>/better-mcp/oauth/start?server=<name>`，由宿主按默认外链行为打开。地址取 Web 服务监听源，桌面端因此得到宿主认可的绝对地址；相对地址在 `dsh-app://` 页面下不会触发外链。该 Web 路由复用授权启动逻辑，成功返回 `302 Location`，失败返回带原始原因的 HTML 错误页。同源 JSON 启动路由继续保留。
 
 回调地址取 `host` 头的来源加回调路径。Web 载体把 fetch 路由的请求 URL 解析到占位来源 `http://x`，真实来源只在 `host` 头里；缺少该头时回落到 Web 服务监听地址。
 
@@ -172,10 +172,10 @@ Figma 默认回调与显式 `oauth.redirectUri` 都使用临时回环监听；10
 | 注册项 | 作用 |
 | --- | --- |
 | `locale.register` | 注册 `dsh-plugin-better-mcp` 命名空间的中英文字典 |
-| `sidebar.footer.action` | id `better-mcp`、order 52，打开行配置页并显示待授权状态 |
+| `sidebar.footer.action` | id `better-mcp`、order 52，打开行配置页并显示待鉴权状态 |
 | `plugins.row.config` | 键 `dsh-plugin-better-mcp#better-mcp`，渲染 summary 或内联面板 |
 
-配置页使用 `McpPanel` 调用插件自己的 `/api` 路由。面板与侧栏分别每 1 秒串行读取状态，卸载后停止；面板快照序号防止旧响应覆盖新状态。侧栏存在待授权服务器时显示警告色与阴影呼吸，`prefers-reduced-motion` 下停用持续动画。
+配置页使用 `McpPanel` 调用插件自己的 `/api` 路由。面板与侧栏分别每 1 秒串行读取状态，卸载后停止；面板快照序号防止旧响应覆盖新状态。侧栏存在待鉴权服务器时显示警告色与阴影呼吸，`prefers-reduced-motion` 下停用持续动画。
 
 元数据与字典的完整规范见 [i18n.md](./i18n.md)。
 
@@ -185,7 +185,7 @@ Figma 默认回调与显式 `oauth.redirectUri` 都使用临时回环监听；10
 共享 McpPanel / 侧栏
   → 每 1 秒串行读取状态
     → 面板按快照序号接收最新响应
-    → 侧栏按待授权状态切换高亮
+    → 侧栏按待鉴权状态切换高亮
 
 OAuth 回调
   → 写入授权并重新挂载

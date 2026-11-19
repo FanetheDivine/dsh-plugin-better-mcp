@@ -228,10 +228,21 @@ export class PluginRoutes {
   // 面板路由
   // ---------------------------------------------------------------------------
 
-  /** 等待对账完成后的面板快照。 */
+  /** 等待对账完成后的面板快照，并为 OAuth 服务器补上完整鉴权地址。 */
   private async currentSnapshot(): Promise<PanelSnapshot> {
     await this.waitIdle();
-    return this.manager.snapshot();
+    const snapshot = await this.manager.snapshot();
+    const origin = this.originOf(null);
+    return {
+      servers: snapshot.servers.map((row) =>
+        row.auth === 'oauth'
+          ? {
+              ...row,
+              authorizeUrl: `${origin}${OAUTH_START_PATH}?server=${encodeURIComponent(row.name)}`,
+            }
+          : row,
+      ),
+    };
   }
 
   /** 写入一台服务器的懒加载开关，作为各会话的默认可见性。 */
