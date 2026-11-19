@@ -11,14 +11,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 // Type-only：拉取 sidebar.footer.action 槽位声明。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useState } from 'react';
 
 import { en, NS, zh } from './locales.ts';
 import { McpPanel } from './panel.tsx';
-import { ClientStyles } from './ui.tsx';
+import { ClientStyles, McpIcon } from './ui.tsx';
 
 /** 需要宿主注入的客户端服务。 */
-export const inject = ['slots', 'locale'];
+export const inject = ['slots', 'locale', 'pluginNavigation'];
 
 /** 插件包名，用于拼接配置页的槽位键。 */
 export const PACKAGE_NAME = 'dsh-plugin-better-mcp';
@@ -29,43 +28,41 @@ export const ROW_ID = 'better-mcp';
 /** 配置页的槽位键。 */
 export const ROW_KEY = `${PACKAGE_NAME}#${ROW_ID}`;
 
+/** 打开本插件的行配置页。 */
+export function openPluginConfig(ctx: Context): void {
+  ctx.pluginNavigation.openBundle(PACKAGE_NAME);
+  // 宿主的 main 槽位键未纳入 SlotMap 类型声明。
+  const entry = ctx.slots
+    .entries('main' as never)
+    .find((candidate) => candidate.options.key === 'plugins');
+  const store = entry?.store;
+  if (store === undefined || typeof store === 'function') return;
+  store.create().actions.setView?.({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
+}
+
 /** 侧栏触发按钮。 */
-function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }): JSX.Element {
-  const [open, setOpen] = useState(false);
+function SidebarAction({
+  t,
+  wide,
+  onOpen,
+}: {
+  t: TranslateNS<typeof NS>;
+  wide: boolean;
+  onOpen: () => void;
+}): JSX.Element {
   return (
-    <>
+    <div className="better-mcp-entry" data-dsh-part="entry" data-rail={wide ? undefined : 'rail'}>
       <ClientStyles />
       <button
         type="button"
         className="better-mcp-sidebar-action"
-        data-wide={wide}
         title={t('title')}
         aria-label={t('title')}
-        onClick={() => setOpen(true)}
+        onClick={onOpen}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <title>{t('title')}</title>
-          <path d="M7.5 9.5 4 12l3.5 2.5" />
-          <path d="M16.5 9.5 20 12l-3.5 2.5" />
-          <rect x="8.5" y="9.5" width="7" height="5" rx="1.2" />
-          <circle cx="12" cy="5" r="1.6" />
-          <circle cx="12" cy="19" r="1.6" />
-          <path d="M12 6.6v2.9M12 14.5v2.9" />
-        </svg>
-        {wide ? <span>{t('title')}</span> : null}
+        <McpIcon />
       </button>
-      {open ? <McpPanel t={t} variant="modal" onClose={() => setOpen(false)} /> : null}
-    </>
+    </div>
   );
 }
 
@@ -94,7 +91,7 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('sidebar.footer.action', () =>
     ctx.slots.register(
       { name: 'sidebar.footer.action', id: ROW_ID, order: 52, locale: NS },
-      SidebarAction,
+      (props) => <SidebarAction {...props} onOpen={() => openPluginConfig(ctx)} />,
     ),
   );
   ctx.slots.inject('plugins.row.config', () =>

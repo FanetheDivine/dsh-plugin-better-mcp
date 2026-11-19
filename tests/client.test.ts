@@ -11,7 +11,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PanelSnapshot } from '../src/client/api.ts';
-import { apply, inject, PACKAGE_NAME, ROW_ID, ROW_KEY } from '../src/client/index.tsx';
+import {
+  apply,
+  inject,
+  openPluginConfig,
+  PACKAGE_NAME,
+  ROW_ID,
+  ROW_KEY,
+} from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
 import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
 import {
@@ -23,6 +30,7 @@ import {
   ServerForm,
   type ServerFormValues,
   validateValues,
+  valuesFromDefinition,
 } from '../src/client/server-form.tsx';
 import { CLIENT_STYLES } from '../src/client/ui.tsx';
 import { makeClientCtx, translate } from './helpers.ts';
@@ -33,6 +41,7 @@ function values(overrides: Partial<ServerFormValues> = {}): ServerFormValues {
     ...emptyForm(),
     name: 'alpha',
     description: 'Alpha tools',
+    transport: 'streamable-http',
     url: 'https://example.com/mcp',
     ...overrides,
   };
@@ -58,7 +67,7 @@ function renderConfigPage(view: 'summary' | 'page', dict: Record<string, string>
 
 describe('前端入口', () => {
   it('声明客户端服务与插件行键', () => {
-    expect(inject).toEqual(['slots', 'locale']);
+    expect(inject).toEqual(['slots', 'locale', 'pluginNavigation']);
     expect(PACKAGE_NAME).toBe('dsh-plugin-better-mcp');
     expect(ROW_ID).toBe('better-mcp');
     expect(ROW_KEY).toBe('dsh-plugin-better-mcp#better-mcp');
@@ -88,13 +97,49 @@ describe('前端入口', () => {
       key: ROW_KEY,
       locale: NS,
     });
+
+    const sidebar = ctx._slotRegistrations[0]?.component;
+    const html = renderToStaticMarkup(
+      createElement(sidebar as never, { t: translate(zh), wide: true } as never),
+    );
+    expect(html).toContain('title="MCP 服务器"');
+    expect(html).toContain('aria-label="MCP 服务器"');
+    expect(html).toContain('viewBox="0 0 16 16"');
+    expect(html).toContain('data-dsh-part="entry"');
+    expect(html).not.toContain('data-rail="rail"');
+    expect(html).not.toContain('<span>MCP 服务器</span>');
+    const narrow = renderToStaticMarkup(
+      createElement(sidebar as never, { t: translate(zh), wide: false } as never),
+    );
+    expect(narrow).toContain('data-rail="rail"');
+  });
+
+  it('通过宿主导航打开本插件的行配置页', () => {
+    const openBundle = vi.fn();
+    const setView = vi.fn();
+    const ctx = {
+      pluginNavigation: { openBundle },
+      slots: {
+        entries: () => [
+          {
+            options: { key: 'plugins' },
+            store: { create: () => ({ actions: { setView } }) },
+          },
+        ],
+      },
+    };
+    openPluginConfig(ctx as never);
+    expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
+    expect(setView).toHaveBeenCalledWith({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
   });
 });
 
 describe('字典', () => {
   it('中英文键集一致且覆盖面板与表单文案', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
-    expect(Object.keys(zh)).toEqual(expect.arrayContaining(['title', 'add', 'delete', 'save']));
+    expect(Object.keys(zh)).toEqual(
+      expect.arrayContaining(['title', 'panelTitle', 'add', 'delete', 'save']),
+    );
   });
 
   it('每个键都被前端源码引用', () => {
@@ -107,7 +152,7 @@ describe('字典', () => {
   });
 
   it('英文徽标与开关使用 sentence case', () => {
-    for (const key of ['lazy', 'managed', 'external', 'authorized', 'needsAuth'] as const) {
+    for (const key of ['lazy', 'authorized', 'needsAuth'] as const) {
       expect(en[key].charAt(0)).toBe(en[key].charAt(0).toUpperCase());
     }
   });
@@ -142,24 +187,33 @@ describe('服务器表单辅助函数', () => {
     expect(validateValues(values({ description: '  ' }))).toBe('descriptionRequired');
   });
 
-  it('拒绝非回环的 OAuth 回调地址', () => {
-    expect(
-      validateValues(values({ auth: 'oauth', redirectUri: 'https://example.com/callback' })),
-    ).toBe('redirectInvalid');
+  it('新增表单默认 stdio，且 stdio 位于传输方式首位', () => {
+    expect(emptyForm().transport).toBe('stdio');
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: emptyForm(),
+          isEdit: false,
+          busy: false,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html.indexOf('value="stdio"')).toBeLessThan(html.indexOf('value="streamable-http"'));
+    expect(html).toContain('name="command"');
+    expect(html).not.toContain('name="url"');
   });
 
   it('接受合法的 http 配置', () => {
-    expect(
-      validateValues(values({ auth: 'oauth', redirectUri: 'http://127.0.0.1:19876/callback' })),
-    ).toBeUndefined();
-    expect(validateValues(values({ auth: 'none' }))).toBeUndefined();
+    expect(validateValues(values())).toBeUndefined();
   });
 
   it('http + OAuth 定义保留客户端标识与 scopes，不携带客户端密钥', () => {
     const definition = definitionFromValues(
       values({
         url: ' https://example.com/mcp ',
-        auth: 'oauth',
         clientId: 'client-1',
         clientSecret: 'secret-1',
         scopesText: 'read write',
@@ -174,19 +228,47 @@ describe('服务器表单辅助函数', () => {
     expect(oauth).not.toHaveProperty('clientSecret');
   });
 
+  it('DSH 备选项保持动态注册，Codex 备选项保存公开客户端标识', () => {
+    const dsh = definitionFromValues(values({ clientId: '', scopesText: '' }));
+    expect(dsh.auth).toBe('oauth');
+    expect(dsh).not.toHaveProperty('oauth');
+    const codex = definitionFromValues(
+      values({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann', scopesText: '' }),
+    );
+    expect(codex.oauth).toEqual({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' });
+  });
+
   it('stdio 定义固定 auth 为 none 并收集命令与参数', () => {
     const definition = definitionFromValues(
       values({
         transport: 'stdio',
         command: ' npx ',
         argsText: ' -y\n\n server \n',
-        auth: 'oauth',
       }),
     );
     expect(definition.auth).toBe('none');
     expect(definition.command).toBe('npx');
     expect(definition.args).toEqual(['-y', 'server']);
     expect(definition.description).toBe('Alpha tools');
+  });
+
+  it('HTTP 编辑保存固定 OAuth，保留 scopes 并丢弃回调地址输入状态', () => {
+    const formValues = valuesFromDefinition('figma', {
+      description: 'Figma',
+      transport: 'streamable-http',
+      auth: 'none',
+      url: 'https://mcp.figma.com/mcp',
+      oauth: {
+        scopes: ['mcp:connect'],
+        redirectUri: 'http://127.0.0.1:19876/callback',
+      },
+    });
+    expect(formValues.scopesText).toBe('mcp:connect');
+    expect(formValues).not.toHaveProperty('auth');
+    expect(formValues).not.toHaveProperty('redirectUri');
+    const definition = definitionFromValues(formValues);
+    expect(definition.auth).toBe('oauth');
+    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'] });
   });
 });
 
@@ -197,7 +279,6 @@ describe('表单错误定位', () => {
     expect(fieldForError('urlInvalid')).toBe('url');
     expect(fieldForError('headersInvalid')).toBe('headersText');
     expect(fieldForError('commandRequired')).toBe('command');
-    expect(fieldForError('redirectInvalid')).toBe('redirectUri');
   });
 });
 
@@ -208,7 +289,7 @@ describe('ServerForm', () => {
         ServerForm as never,
         {
           t: translate(zh),
-          initial: emptyForm(),
+          initial: values(),
           isEdit: false,
           busy: false,
           onSubmit: () => undefined,
@@ -224,6 +305,16 @@ describe('ServerForm', () => {
     expect(html).toContain('required=""');
     expect(html).toContain('name="clientSecret"');
     expect(html).toContain('autoComplete="new-password"');
+    expect(html).toContain('name="scopesText"');
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-controls="better-mcp-client-id-options"');
+    expect(html).toContain(zh.oauthClientDsh);
+    expect(html).toContain(zh.oauthClientCodex);
+    expect(html).toContain('app_EMoamEEZ73f0CkXaXp7hrann');
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain(zh.oauthClientHelpText);
+    expect(html).not.toContain('name="auth"');
+    expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');
   });
 
@@ -308,7 +399,6 @@ describe('McpPanel', () => {
       servers: [
         {
           name: 'alpha',
-          managed: true,
           transport: 'streamable-http',
           url: 'https://example.com/mcp',
           auth: 'oauth',
@@ -335,6 +425,9 @@ describe('McpPanel', () => {
     expect(html).toContain('data-testid="better-mcp-panel"');
     expect(html).toContain('Loading…');
     expect(html).toContain('role="status"');
+    expect(html).toContain(en.panelTitle);
+    expect(html).toContain(en.add);
+    expect(html).not.toContain('>Refresh<');
     // 静态渲染不执行 useEffect，因此不会发起状态请求。
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -350,7 +443,6 @@ function renderRow(row: Record<string, unknown>, dict: Record<string, string> = 
         t: translate(dict),
         row: {
           name: 'alpha',
-          managed: true,
           lazy: true,
           authorized: false,
           mounted: true,
@@ -374,7 +466,6 @@ describe('服务器行', () => {
     expect(
       statusParts(translate(zh), {
         name: 'a',
-        managed: true,
         lazy: true,
         authorized: false,
         mounted: true,
@@ -385,7 +476,6 @@ describe('服务器行', () => {
     expect(
       statusParts(translate(en), {
         name: 'a',
-        managed: true,
         lazy: true,
         authorized: false,
         mounted: true,
@@ -406,7 +496,16 @@ describe('服务器行', () => {
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('aria-label="为 alpha 启用懒加载"');
-    expect(html).toContain('aria-describedby="better-mcp-lazy-note"');
+    expect(html).not.toContain('aria-describedby="better-mcp-lazy-note"');
+  });
+
+  it('待授权徽标使用醒目的警告样式，已授权不使用', () => {
+    const pending = renderRow({ auth: 'oauth', authorized: false });
+    expect(pending).toContain('待授权');
+    expect(pending).toContain('data-attention="true"');
+    const authorized = renderRow({ auth: 'oauth', authorized: true });
+    expect(authorized).toContain('已授权');
+    expect(authorized).not.toContain('data-attention="true"');
   });
 
   it('连接诊断使用可展开区域', () => {
@@ -416,10 +515,13 @@ describe('服务器行', () => {
     expect(html).toContain('HTTP 502');
   });
 
-  it('其他来源的服务器只显示状态', () => {
-    const html = renderRow({ managed: false });
-    expect(html).toContain(zh.external);
-    expect(html).not.toContain('<button');
+  it('名称区域不显示行图标与来源标签', () => {
+    const html = renderRow({});
+    expect(html).not.toContain('better-mcp-server-icon');
+    expect(html).not.toContain('本插件');
+    expect(html).not.toContain('其他来源');
+    expect(html).toContain(zh.edit);
+    expect(html).toContain(zh.delete);
   });
 });
 
@@ -434,6 +536,16 @@ describe('主题样式', () => {
       expect(CLIENT_STYLES).toContain(token);
     }
     expect(CLIENT_STYLES).not.toMatch(/#[\da-f]{3,8}\b/i);
+    expect(CLIENT_STYLES).toMatch(/\.better-mcp-dialog-title\s*\{[^}]*flex:\s*1;/);
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-autocomplete-options\s*\{[^}]*bottom:\s*calc\(100% \+ 4px\)/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-section-title\s*\{[^}]*font-size:\s*18px;[^}]*font-weight:\s*600;/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-server-name\s*\{[^}]*font-size:\s*16px;[^}]*font-weight:\s*600;/,
+    );
   });
 });
 

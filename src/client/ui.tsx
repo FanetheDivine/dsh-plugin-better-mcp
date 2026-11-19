@@ -13,6 +13,26 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+/** VS Code Codicons 的 MCP 图形，来源：https://github.com/microsoft/vscode-codicons（MIT）。 */
+const MCP_ICON_PATH =
+  'M14.5565 7.87462C14.5385 7.89312 14.5205 7.91112 14.5025 7.92862L8.69849 13.6201C8.62599 13.6906 8.62449 13.8061 8.69499 13.8786C8.69599 13.8801 8.69749 13.8811 8.69849 13.8821L9.89049 15.0516C10.1075 15.2626 10.1125 15.6101 9.90149 15.8276C9.89799 15.8311 9.89449 15.8351 9.89049 15.8386C9.66699 16.0556 9.31199 16.0556 9.08849 15.8386L7.89649 14.6701C7.38949 14.1776 7.37799 13.3671 7.87049 12.8601C7.87899 12.8511 7.88749 12.8426 7.89649 12.8341L13.7005 7.14212C14.352 6.50762 14.3665 5.46512 13.732 4.81362C13.7215 4.80312 13.711 4.79262 13.7005 4.78212L13.667 4.74962C12.998 4.09862 11.9325 4.09762 11.2625 4.74762L6.48099 9.43712L6.47949 9.43862L6.41399 9.50312C6.19049 9.72062 5.83449 9.72062 5.61149 9.50312C5.39449 9.29162 5.38949 8.94462 5.60049 8.72712C5.60399 8.72362 5.60749 8.71962 5.61149 8.71612L10.46 3.96062C11.1105 3.32512 11.123 2.28262 10.4875 1.63212C10.478 1.62212 10.468 1.61262 10.458 1.60262C9.78799 0.950619 8.72099 0.950619 8.05149 1.60262L1.63499 7.89512C1.41149 8.11212 1.05649 8.11212 0.832987 7.89512C0.615987 7.68412 0.610987 7.33662 0.821987 7.11912C0.825487 7.11562 0.828987 7.11162 0.832987 7.10812L7.24999 0.815119C8.36599 -0.271381 10.1445 -0.271381 11.2605 0.815119C11.8905 1.42762 12.189 2.30512 12.063 3.17512C12.9435 3.05012 13.8325 3.34062 14.469 3.96162L14.5025 3.99512C15.5885 5.05162 15.613 6.78812 14.5565 7.87412V7.87462ZM12.8655 6.32212C13.083 6.11062 13.0875 5.76362 12.8765 5.54612C12.873 5.54262 12.8695 5.53862 12.8655 5.53512C12.642 5.31762 12.286 5.31762 12.063 5.53512L7.31699 10.1896C6.64699 10.8416 5.57999 10.8416 4.91049 10.1896C4.25899 9.55512 4.24449 8.51262 4.87899 7.86112C4.88949 7.85062 4.89999 7.84012 4.91049 7.82962L9.65699 3.17512C9.87399 2.96362 9.87899 2.61662 9.66799 2.39912C9.66449 2.39562 9.66099 2.39162 9.65699 2.38812C9.43349 2.17062 9.07749 2.17062 8.85449 2.38812L4.10849 7.04262C3.02249 8.09912 2.99799 9.83562 4.05449 10.9216C4.07249 10.9401 4.09049 10.9581 4.10849 10.9756C5.22499 12.0616 7.00299 12.0616 8.11899 10.9756L12.8655 6.32112V6.32212Z';
+
+/** MCP 图标。 */
+export function McpIcon({ size = 18 }: { size?: number }): JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path fillRule="evenodd" clipRule="evenodd" d={MCP_ICON_PATH} />
+    </svg>
+  );
+}
+
 /** 可参与弹层焦点循环的控件。 */
 const FOCUSABLE =
   'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]';
@@ -281,27 +301,31 @@ export const CLIENT_STYLES = String.raw`
 .better-mcp-dialog * {
   box-sizing: border-box;
 }
-.better-mcp-sidebar-action {
+.better-mcp-entry {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
-  width: 100%;
+  min-width: 0;
+}
+.better-mcp-sidebar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
-  border-radius: var(--dsw-radius-md);
+  border-radius: 50%;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font-size: 12px;
-  line-height: 18px;
-  text-align: left;
+  line-height: 1;
 }
-.better-mcp-sidebar-action[data-wide='true'] {
-  justify-content: flex-start;
-  padding: 6px 8px;
-}
-.better-mcp-sidebar-action[data-wide='false'] {
-  justify-content: center;
-  padding: 6px;
+[data-sidebar-collapsed] [class*="footerActions"]:has(.better-mcp-entry[data-rail='rail']) {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 .better-mcp-summary {
   color: var(--dsw-alias-label-secondary);
@@ -468,6 +492,7 @@ export const CLIENT_STYLES = String.raw`
   padding: 20px 16px 12px 24px;
 }
 .better-mcp-dialog-title {
+  flex: 1;
   min-width: 0;
   margin: 0;
   color: var(--dsw-alias-label-primary);
@@ -534,9 +559,9 @@ export const CLIENT_STYLES = String.raw`
   min-width: 120px;
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
 }
 .better-mcp-panel-body {
   display: flex;
@@ -568,17 +593,6 @@ export const CLIENT_STYLES = String.raw`
   gap: 16px;
   min-width: 0;
 }
-.better-mcp-server-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-md);
-  color: var(--dsw-alias-label-secondary);
-}
 .better-mcp-server-main {
   display: flex;
   flex: 1;
@@ -595,9 +609,9 @@ export const CLIENT_STYLES = String.raw`
 }
 .better-mcp-server-name {
   color: var(--dsw-alias-label-primary);
-  font-size: 13.5px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .better-mcp-badge {
@@ -610,6 +624,12 @@ export const CLIENT_STYLES = String.raw`
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 17px;
+}
+.better-mcp-badge[data-attention='true'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width) color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+  font-weight: 600;
 }
 .better-mcp-server-side {
   display: flex;
@@ -657,13 +677,6 @@ export const CLIENT_STYLES = String.raw`
   line-height: 18px;
   white-space: nowrap;
 }
-.better-mcp-lazy-note {
-  margin: 0 0 0 56px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
 .better-mcp-description {
   margin: 0;
   color: var(--dsw-alias-label-secondary);
@@ -676,7 +689,7 @@ export const CLIENT_STYLES = String.raw`
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  margin: 10px 0 0 56px;
+  margin: 10px 0 0;
 }
 .better-mcp-server-meta,
 .better-mcp-server-url {
@@ -766,6 +779,106 @@ export const CLIENT_STYLES = String.raw`
   font-size: 13px;
   line-height: 20px;
   font-weight: 500;
+}
+.better-mcp-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+}
+.better-mcp-help {
+  position: relative;
+  display: inline-flex;
+}
+.better-mcp-help-trigger {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l4);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: help;
+  font-size: 11px;
+  line-height: 14px;
+}
+.better-mcp-help-trigger:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+.better-mcp-help-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: -8px;
+  z-index: 20;
+  display: none;
+  width: 280px;
+  max-width: 80vw;
+  padding: 8px 10px;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.better-mcp-help:hover .better-mcp-help-tooltip,
+.better-mcp-help:focus-within .better-mcp-help-tooltip {
+  display: block;
+}
+.better-mcp-autocomplete {
+  position: relative;
+  min-width: 0;
+}
+.better-mcp-autocomplete-options {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  padding: 4px;
+  overflow-y: auto;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+.better-mcp-autocomplete-options[hidden] {
+  display: none;
+}
+.better-mcp-autocomplete-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.better-mcp-autocomplete-option[data-active] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.better-mcp-autocomplete-label {
+  font-size: 13px;
+  line-height: 18px;
+}
+.better-mcp-autocomplete-detail,
+.better-mcp-autocomplete-option code {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
 }
 .better-mcp-required {
   color: var(--dsw-alias-state-error-primary);
@@ -871,15 +984,14 @@ select.better-mcp-input {
     gap: 12px;
   }
   .better-mcp-server-main {
-    min-width: calc(100% - 52px);
+    min-width: 0;
   }
   .better-mcp-server-side {
     width: 100%;
     justify-content: space-between;
-    margin-left: 52px;
+    margin-left: 0;
   }
-  .better-mcp-server-extra,
-  .better-mcp-lazy-note {
+  .better-mcp-server-extra {
     margin-left: 0;
   }
   .better-mcp-form-grid {
