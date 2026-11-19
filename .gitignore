@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 *.log
+.env*
 *.zip
 .DS_Store
 Thumbs.db
