@@ -1,5 +1,7 @@
 # MCP 增强
 
+[![npm](https://img.shields.io/npm/v/dsh-plugin-better-mcp?logo=npm&label=npm)](https://www.npmjs.com/package/dsh-plugin-better-mcp)
+
 DSH 插件 `dsh-plugin-better-mcp`：用一个面板管理 MCP 服务器，让模型按需加载工具。
 
 - **可视化管理**：在面板里新增、编辑、删除服务器，随时查看连接状态。
