@@ -13,11 +13,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PanelSnapshot } from '../src/client/api.ts';
 import {
   apply,
+  hasPendingAuthorization,
   inject,
   openPluginConfig,
   PACKAGE_NAME,
   ROW_ID,
   ROW_KEY,
+  SidebarButton,
 } from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
 import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
@@ -132,6 +134,46 @@ describe('前端入口', () => {
     expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
     expect(setView).toHaveBeenCalledWith({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
   });
+  it('有待授权 OAuth 时侧边栏高亮，全部已授权或无 OAuth 时恢复', () => {
+    const snapshot = (servers: PanelSnapshot['servers']): PanelSnapshot => ({ servers });
+    const row = (overrides: Partial<PanelSnapshot['servers'][number]>) => ({
+      name: 'server',
+      lazy: true,
+      authorized: false,
+      mounted: false,
+      state: 'idle',
+      ...overrides,
+    });
+    expect(
+      hasPendingAuthorization(
+        snapshot([
+          row({ name: 'oauth', auth: 'oauth', authorized: false }),
+          row({ name: 'plain', auth: 'none', authorized: false }),
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      hasPendingAuthorization(snapshot([row({ name: 'oauth', auth: 'oauth', authorized: true })])),
+    ).toBe(false);
+    expect(hasPendingAuthorization(snapshot([row({ name: 'plain', auth: 'none' })]))).toBe(false);
+
+    const render = (needsAuth: boolean) =>
+      renderToStaticMarkup(
+        createElement(
+          SidebarButton as never,
+          {
+            t: translate(zh),
+            wide: true,
+            needsAuth,
+            onOpen: () => undefined,
+          } as never,
+        ),
+      );
+    expect(render(true)).toContain('data-attention="true"');
+    expect(render(true)).toContain('title="MCP 服务器：存在待授权 MCP"');
+    expect(render(true)).toContain('aria-label="MCP 服务器：存在待授权 MCP"');
+    expect(render(false)).not.toContain('data-attention="true"');
+  });
 });
 
 describe('字典', () => {
@@ -152,7 +194,7 @@ describe('字典', () => {
   });
 
   it('英文徽标与开关使用 sentence case', () => {
-    for (const key of ['lazy', 'authorized', 'needsAuth'] as const) {
+    for (const key of ['lazy', 'needsAuth'] as const) {
       expect(en[key].charAt(0)).toBe(en[key].charAt(0).toUpperCase());
     }
   });
@@ -228,14 +270,13 @@ describe('服务器表单辅助函数', () => {
     expect(oauth).not.toHaveProperty('clientSecret');
   });
 
-  it('DSH 备选项保持动态注册，Codex 备选项保存公开客户端标识', () => {
-    const dsh = definitionFromValues(values({ clientId: '', scopesText: '' }));
-    expect(dsh.auth).toBe('oauth');
-    expect(dsh).not.toHaveProperty('oauth');
-    const codex = definitionFromValues(
-      values({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann', scopesText: '' }),
-    );
-    expect(codex.oauth).toEqual({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' });
+  it('动态注册默认使用 Codex，可切换 DSH，固定客户端标识原样保存', () => {
+    const codex = definitionFromValues(values({ clientId: '', clientIdentity: 'codex' }));
+    expect(codex.oauth).toEqual({ clientName: 'Codex' });
+    const dsh = definitionFromValues(values({ clientId: '', clientIdentity: 'dsh' }));
+    expect(dsh.oauth).toEqual({ clientName: 'DeepSeek Harness (better-mcp)' });
+    const custom = definitionFromValues(values({ clientId: 'custom-client', scopesText: '' }));
+    expect(custom.oauth).toEqual({ clientId: 'custom-client' });
   });
 
   it('stdio 定义固定 auth 为 none 并收集命令与参数', () => {
@@ -268,7 +309,7 @@ describe('服务器表单辅助函数', () => {
     expect(formValues).not.toHaveProperty('redirectUri');
     const definition = definitionFromValues(formValues);
     expect(definition.auth).toBe('oauth');
-    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'] });
+    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'], clientName: 'Codex' });
   });
 });
 
@@ -308,14 +349,37 @@ describe('ServerForm', () => {
     expect(html).toContain('name="scopesText"');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-controls="better-mcp-client-id-options"');
-    expect(html).toContain(zh.oauthClientDsh);
-    expect(html).toContain(zh.oauthClientCodex);
-    expect(html).toContain('app_EMoamEEZ73f0CkXaXp7hrann');
+    expect(html).toContain('value="Codex"');
+    expect(html).toContain('readonly=""');
+    expect(html).toContain('>DSH</span>');
+    expect(html).toContain(zh.oauthClientCodexDetail);
+    expect(html).not.toContain('app_EMoamEEZ73f0CkXaXp7hrann');
+    expect(html).toContain('class="better-mcp-help"');
     expect(html).toContain('role="tooltip"');
-    expect(html).toContain(zh.oauthClientHelpText);
+    expect(html).not.toContain('data-open="true"');
     expect(html).not.toContain('name="auth"');
     expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');
+  });
+
+  it('DSH 保留帮助圆圈，浮窗由选择或点击触发', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: values({ clientIdentity: 'dsh' }),
+          isEdit: false,
+          busy: false,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html).toContain('value="DSH"');
+    expect(html).toContain('class="better-mcp-help"');
+    expect(html).not.toContain('data-open="true"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('role="tooltip"');
   });
 
   it('保存期间禁用全部字段', () => {
@@ -499,13 +563,48 @@ describe('服务器行', () => {
     expect(html).not.toContain('aria-describedby="better-mcp-lazy-note"');
   });
 
-  it('待授权徽标使用醒目的警告样式，已授权不使用', () => {
-    const pending = renderRow({ auth: 'oauth', authorized: false });
-    expect(pending).toContain('待授权');
-    expect(pending).toContain('data-attention="true"');
+  it('连接与授权合并为一个状态标签，懒加载紧随其后', () => {
+    const pending = renderRow({ auth: 'oauth', authorized: false, state: 'failed' });
+    expect(pending).toContain('>待授权</span>');
+    expect(pending).toContain('data-state="pending"');
+    expect(pending).not.toContain('better-mcp-server-side');
+    expect(pending).not.toContain('better-mcp-state-dot');
+    expect(pending.indexOf('data-state="pending"')).toBeLessThan(
+      pending.indexOf('class="better-mcp-lazy"'),
+    );
+    expect(renderRow({ auth: 'oauth', authorized: true, state: 'connecting' })).toContain(
+      '>连接中</span>',
+    );
+    expect(renderRow({ auth: 'oauth', authorized: true, state: 'failed' })).toContain(
+      '>连接失败</span>',
+    );
+    const connected = renderRow({ auth: 'oauth', authorized: true, state: 'connected' });
+    expect(connected).toContain('>已连接</span>');
+    expect(connected).not.toContain('已授权');
+  });
+
+  it('授权操作使用高亮原生链接并遵循默认外链行为', () => {
+    const pending = renderRow({ name: 'alpha beta', auth: 'oauth', authorized: false });
+    expect(pending).toMatch(
+      /<a[^>]*class="better-mcp-button better-mcp-button-primary better-mcp-button-sm"/,
+    );
+    expect(pending).toContain('href="/better-mcp/oauth/start?server=alpha%20beta"');
+    expect(pending).toContain('target="_blank"');
+    expect(pending).toContain('rel="noreferrer"');
+    expect(pending).toContain('aria-label="授权 alpha beta"');
+    expect(pending).toContain(`>${zh.authorize}</a>`);
+
     const authorized = renderRow({ auth: 'oauth', authorized: true });
-    expect(authorized).toContain('已授权');
-    expect(authorized).not.toContain('data-attention="true"');
+    expect(authorized).toContain('better-mcp-button-outline');
+    expect(authorized).toContain('aria-label="重新授权 alpha"');
+    expect(authorized).toContain(`>${zh.reauthorize}</a>`);
+    expect(authorized).not.toContain('better-mcp-button-primary');
+
+    const source = readFileSync(
+      path.join(import.meta.dirname, '..', 'src', 'client', 'panel.tsx'),
+      'utf8',
+    );
+    expect(source).not.toContain('window.open');
   });
 
   it('连接诊断使用可展开区域', () => {
@@ -545,6 +644,26 @@ describe('主题样式', () => {
     );
     expect(CLIENT_STYLES).toMatch(
       /\.better-mcp-server-name\s*\{[^}]*font-size:\s*16px;[^}]*font-weight:\s*600;/,
+    );
+  });
+
+  it('待授权 SVG 图标使用警告色投影呼吸，并在减少动效时停用', () => {
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*var\(--dsw-alias-state-warn-primary\)/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-sidebar-action\[data-attention='true'\] svg\s*\{[^}]*animation:\s*better-mcp-auth-breath/,
+    );
+    const breath = CLIENT_STYLES.slice(
+      CLIENT_STYLES.indexOf('@keyframes better-mcp-auth-breath'),
+      CLIENT_STYLES.indexOf('[data-sidebar-collapsed]'),
+    );
+    expect(breath).toContain('drop-shadow');
+    expect(breath).toContain('color: var(--dsw-alias-label-primary)');
+    expect(breath).toContain('color: var(--dsw-alias-state-warn-primary)');
+    expect(breath).not.toContain('box-shadow');
+    expect(CLIENT_STYLES).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.better-mcp-sidebar-action\[data-attention='true'\] svg\s*\{[^}]*animation:\s*none;/,
     );
   });
 });

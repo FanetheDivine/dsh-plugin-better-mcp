@@ -144,6 +144,16 @@ describe('服务器定义校验', () => {
     ).toBe('http://127.0.0.1:19876/callback');
   });
 
+  it('接受 OAuth 动态注册身份', () => {
+    const definition = normalizeServerDefinition('one', {
+      description: 'd',
+      transport: 'streamable-http',
+      url: 'https://x',
+      oauth: { clientName: 'Codex' },
+    });
+    expect(definition.oauth?.clientName).toBe('Codex');
+  });
+
   it('未知字段透传，供管理器使用', () => {
     const definition = normalizeServerDefinition('one', {
       description: 'd',

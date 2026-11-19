@@ -25,7 +25,10 @@ interface Harness {
 }
 
 /** 组装路由。 */
-function harness(initialServers: Record<string, unknown> = {}): Harness {
+function harness(
+  initialServers: Record<string, unknown> = {},
+  onAuthorizationChange: () => void = () => undefined,
+): Harness {
   const refs = { servers: volatile(initialServers) };
   const ctx = makeCtx({ config: refs });
   let current = readConfig(refs);
@@ -35,7 +38,13 @@ function harness(initialServers: Record<string, unknown> = {}): Harness {
   ctx._configStore = structuredClone(current) as unknown as Record<string, unknown>;
   const logger = { info: vi.fn(), warn: vi.fn() };
   const manager = new ServerManager(ctx, () => current, logger);
-  const routes = new PluginRoutes(ctx, () => current, manager);
+  const routes = new PluginRoutes(
+    ctx,
+    () => current,
+    manager,
+    async () => undefined,
+    onAuthorizationChange,
+  );
   routes.registerApi();
   routes.registerWeb();
   return { ctx, routes, manager, current: () => current, refs };
@@ -103,6 +112,83 @@ function webRoute(ctx: ReturnType<typeof makeCtx>, path: string): Record<string,
   const route = ctx._routes.find((candidate) => candidate.path === path);
   if (route === undefined) throw new Error(`missing web route ${path}`);
   return route;
+}
+
+/** 调用一条普通 Web 路由并读取状态、响应头与正文。 */
+async function callWeb(
+  ctx: ReturnType<typeof makeCtx>,
+  path: string,
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  const route = webRoute(ctx, path);
+  const { res, read } = makeRes();
+  await (route.handler as (req: never, res: never) => Promise<void>)(
+    makeReq('GET', url, undefined, headers),
+    res,
+  );
+  return read();
+}
+
+/** 替换回环监听，避免单元测试占用真实端口。 */
+function stubFixedListener(routes: PluginRoutes) {
+  const listener = vi.fn(async (redirectUri: string) => {
+    const actual = new URL(redirectUri);
+    if (actual.port === '0') actual.port = '54321';
+    return { server: { close: vi.fn() }, redirectUri: actual.toString() };
+  });
+  Object.assign(routes, { startLoopbackListener: listener });
+  return listener;
+}
+
+/** 模拟 Figma 官方 MCP 的授权发现与动态注册。 */
+function stubFigmaOAuth(registration: Array<Record<string, unknown>>): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(input);
+      if (init?.method === 'POST' && target === 'https://mcp.figma.com/mcp') {
+        return new Response('', {
+          status: 401,
+          headers: {
+            'www-authenticate':
+              'Bearer resource_metadata="https://mcp.figma.com/.well-known/oauth-protected-resource"',
+          },
+        });
+      }
+      if (target === 'https://mcp.figma.com/.well-known/oauth-protected-resource') {
+        return Response.json({
+          resource: 'https://mcp.figma.com/mcp',
+          authorization_servers: ['https://api.figma.com'],
+          scopes_supported: ['mcp:connect'],
+        });
+      }
+      if (target === 'https://api.figma.com/.well-known/oauth-authorization-server') {
+        return Response.json({
+          issuer: 'https://api.figma.com',
+          authorization_endpoint: 'https://www.figma.com/oauth/mcp',
+          token_endpoint: 'https://api.figma.com/v1/oauth/token',
+          registration_endpoint: 'https://api.figma.com/v1/oauth/mcp/register',
+        });
+      }
+      if (target === 'https://api.figma.com/v1/oauth/mcp/register') {
+        registration.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+        return Response.json(
+          { client_id: 'figma-dynamic-client', client_secret: 'figma-secret' },
+          { status: 201 },
+        );
+      }
+      if (target === 'https://api.figma.com/v1/oauth/token') {
+        return Response.json({
+          access_token: 'figma-access-token',
+          refresh_token: 'figma-refresh-token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        });
+      }
+      return new Response('unexpected', { status: 500 });
+    }),
+  );
 }
 
 describe('status 与懒加载', () => {
@@ -250,6 +336,14 @@ describe('OAuth 路由', () => {
         auth: 'oauth',
         lazy: true,
       },
+      dsh: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://mcp.example.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: [], clientName: 'DeepSeek Harness (better-mcp)' },
+      },
     });
     const registration: Array<Record<string, unknown>> = [];
     vi.stubGlobal(
@@ -299,9 +393,154 @@ describe('OAuth 路由', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body.redirectUri).toBe('http://127.0.0.1:3210/better-mcp/oauth/callback');
+    expect(registration[0]?.client_name).toBe('Codex');
     expect(registration[0]?.redirect_uris).toEqual([
       'http://127.0.0.1:3210/better-mcp/oauth/callback',
     ]);
+    const dshRequest = new Request('http://x/api/better-mcp/oauth/start?server=dsh', {
+      headers: { host: '127.0.0.1:3210' },
+    });
+    await fetchRoute(ctx, '/api/better-mcp/oauth/start')(dshRequest);
+    expect(registration[1]?.client_name).toBe('DeepSeek Harness (better-mcp)');
+  });
+
+  it('Figma 忽略 OpenAI 固定标识并用 Codex 动态注册', async () => {
+    const { ctx, routes } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: [], clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' },
+      },
+    });
+    const listener = stubFixedListener(routes);
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+
+    const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    expect(response.status).toBe(200);
+    expect(registration).toHaveLength(1);
+    expect(registration[0]?.client_name).toBe('Codex');
+    expect(registration[0]?.redirect_uris).toEqual(['http://127.0.0.1:54321/callback']);
+    expect(listener).toHaveBeenCalledWith('http://127.0.0.1:0/callback');
+    const target = new URL(String(response.json.url));
+    expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
+    expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
+    expect(target.searchParams.get('scope')).toBe('mcp:connect');
+  });
+
+  it('Figma 使用操作系统分配的回环端口与 /callback', async () => {
+    const { ctx, routes } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+    try {
+      const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+      expect(response.status).toBe(200);
+      const redirect = new URL(String(response.json.redirectUri));
+      expect(redirect.hostname).toBe('127.0.0.1');
+      expect(Number(redirect.port)).toBeGreaterThan(0);
+      expect(redirect.pathname).toBe('/callback');
+      expect(registration[0]?.redirect_uris).toEqual([redirect.toString()]);
+      expect(new URL(String(response.json.url)).searchParams.get('redirect_uri')).toBe(
+        redirect.toString(),
+      );
+    } finally {
+      routes.dispose();
+    }
+  });
+
+  it('Figma 保留其他显式客户端标识', async () => {
+    const { ctx, routes } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: ['mcp:connect'], clientId: 'custom-figma-client' },
+      },
+    });
+    stubFixedListener(routes);
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+
+    const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    expect(response.status).toBe(200);
+    expect(registration).toHaveLength(0);
+    expect(new URL(String(response.json.url)).searchParams.get('client_id')).toBe(
+      'custom-figma-client',
+    );
+  });
+
+  it('授权启动 Web 路由直接 302 到授权服务器', async () => {
+    const { ctx, routes } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+    stubFixedListener(routes);
+
+    const response = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=figma',
+      { host: '127.0.0.1:3210' },
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers['cache-control']).toBe('no-store');
+    const target = new URL(response.headers.location ?? '');
+    expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
+    expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
+    expect(target.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:54321/callback');
+  });
+
+  it('授权启动 Web 路由返回 400 与 502 HTML 错误页', async () => {
+    const { ctx } = harness({
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const missing = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=missing',
+    );
+    expect(missing.status).toBe(400);
+    expect(missing.body).toContain('Authorization failed');
+    expect(missing.body).toContain('Unknown server');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 500 })),
+    );
+    const failed = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=one',
+    );
+    expect(failed.status).toBe(502);
+    expect(failed.headers['cache-control']).toBe('no-store');
+    expect(failed.body).toContain('401');
   });
 
   it('配置固定客户端：写入配置与凭据库', async () => {
@@ -349,9 +588,46 @@ describe('OAuth 路由', () => {
 });
 
 describe('OAuth 回调', () => {
-  it('只注册 OAuth 回调一条 Web 路由', () => {
+  it('注册 OAuth 启动与回调 Web 路由', () => {
     const { ctx } = harness();
-    expect(ctx._routes.map((route) => route.path)).toEqual(['/better-mcp/oauth/callback']);
+    expect(ctx._routes.map((route) => route.path)).toEqual([
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/callback',
+    ]);
+  });
+
+  it('成功回调写入授权并触发一次会话目录更新', async () => {
+    const onAuthorizationChange = vi.fn();
+    const { ctx, routes } = harness(
+      {
+        figma: {
+          description: 'Figma',
+          transport: 'streamable-http',
+          url: 'https://mcp.figma.com/mcp',
+          auth: 'oauth',
+          lazy: true,
+        },
+      },
+      onAuthorizationChange,
+    );
+    stubFigmaOAuth([]);
+    stubFixedListener(routes);
+    const started = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    const state = new URL(String(started.json.url)).searchParams.get('state');
+
+    const callback = await callWeb(
+      ctx,
+      '/better-mcp/oauth/callback',
+      `/better-mcp/oauth/callback?code=code-1&state=${encodeURIComponent(state ?? '')}`,
+    );
+    expect(callback.status).toBe(200);
+    expect(callback.body).toContain('Authorization complete');
+    expect(callback.body).toContain('window.close()');
+    expect(await readGrant(ctx as never, 'figma')).toMatchObject({
+      accessToken: 'figma-access-token',
+      clientId: 'figma-dynamic-client',
+    });
+    expect(onAuthorizationChange).toHaveBeenCalledTimes(1);
   });
 
   it('回调未知 state 返回失败页', async () => {
@@ -366,6 +642,7 @@ describe('OAuth 回调', () => {
     const result = read();
     expect(result.status).toBe(400);
     expect(result.body).toContain('Authorization failed');
+    expect(result.body).not.toContain('window.close()');
   });
 
   it('回调携带 error 时返回失败页', async () => {

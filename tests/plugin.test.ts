@@ -39,7 +39,10 @@ describe('apply 接线', () => {
       '/api/better-mcp/servers/remove',
       '/api/better-mcp/status',
     ]);
-    expect(ctx._routes.map((route) => route.path)).toEqual(['/better-mcp/oauth/callback']);
+    expect(ctx._routes.map((route) => route.path)).toEqual([
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/callback',
+    ]);
     await flush();
   });
 

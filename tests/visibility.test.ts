@@ -1,6 +1,7 @@
 // 会话可见性：默认值、mcp_manage 切换、会话隔离与工具限制。
 import { describe, expect, it, vi } from 'vitest';
 
+import { deleteGrant, writeGrant } from '../src/credentials.ts';
 import { apply } from '../src/index.ts';
 import { serverOfTool } from '../src/visibility.ts';
 import { type FakeAgent, makeAgent, makeCtx, type RegisteredTool, volatile } from './helpers.ts';
@@ -23,8 +24,11 @@ function mcpTool(name: string): RegisteredTool {
 }
 
 /** 启用插件并等待会话可见性就绪。 */
-async function setup(agents: FakeAgent[] = [makeAgent()]) {
-  const config = { servers: volatile<unknown>(SERVERS) };
+async function setup(
+  agents: FakeAgent[] = [makeAgent()],
+  servers: Record<string, unknown> = SERVERS,
+) {
+  const config = { servers: volatile<unknown>(servers) };
   const ctx = makeCtx({ config });
   ctx._registeredTools.push(
     mcpTool('mcp__lazy__search'),
@@ -417,6 +421,52 @@ describe('目录消息', () => {
     });
     expect(JSON.stringify(first.inbox.nextStep[0]?.content)).toContain('Renamed');
     expect(JSON.stringify(second.inbox.nextStep[0]?.content)).toContain('Renamed');
+  });
+
+  it('未授权 OAuth 不进入目录，授权与退出立即更新全部在线会话', async () => {
+    const first = makeAgent('one');
+    const second = makeAgent('two');
+    const servers = {
+      pending: {
+        description: 'Pending tools',
+        transport: 'streamable-http',
+        url: 'https://example.com/mcp',
+        auth: 'oauth',
+        lazy: false,
+      },
+      plain: { description: 'Plain tools', transport: 'stdio', command: 'node', lazy: false },
+    };
+    const { ctx, config } = await setup([first, second], servers);
+    await vi.waitFor(() => expect(ctx._managerRegistered.has('plain')).toBe(true));
+
+    for (const agent of [first, second]) {
+      const initial = await step(ctx, agent);
+      expect(initial).toContain('- `plain` (active): Plain tools');
+      expect(initial).not.toContain('`pending`');
+    }
+
+    await writeGrant(ctx, 'pending', { accessToken: 'token' });
+    config.servers.set({ ...servers });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(() => {
+      expect(first.inbox.nextStep).toHaveLength(1);
+      expect(second.inbox.nextStep).toHaveLength(1);
+    });
+    for (const agent of [first, second]) {
+      expect(JSON.stringify(agent.inbox.nextStep[0]?.content)).toContain('`pending`');
+      expect(await step(ctx, agent)).toContain('- `pending` (active): Pending tools');
+    }
+
+    await deleteGrant(ctx, 'pending');
+    config.servers.set({ ...servers });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(() => {
+      expect(first.inbox.nextStep).toHaveLength(1);
+      expect(second.inbox.nextStep).toHaveLength(1);
+    });
+    for (const agent of [first, second]) {
+      expect(JSON.stringify(agent.inbox.nextStep[0]?.content)).not.toContain('`pending`');
+    }
   });
 
   it('配置内容不变时不注入重复目录', async () => {

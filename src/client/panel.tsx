@@ -9,13 +9,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   configureClient,
   fetchStatus,
+  oauthStartUrl,
   type PanelSnapshot,
   removeServer,
   restart,
   type ServerRow,
   setLazy,
   signOut,
-  startOAuth,
   upsertServer,
 } from './api.ts';
 import type { McpKey, NS } from './locales.ts';
@@ -26,7 +26,7 @@ import {
   type ServerFormValues,
   valuesFromDefinition,
 } from './server-form.tsx';
-import { Button, ClientStyles, Modal, Switch } from './ui.tsx';
+import { Button, ClientStyles, LinkButton, Modal, Switch } from './ui.tsx';
 
 /** 面板属性。 */
 export interface McpPanelProps {
@@ -112,7 +112,6 @@ export function ServerItem(props: {
   busy: string | undefined;
   onLazy: (lazy: boolean) => void;
   onRestart: () => void;
-  onAuth: () => void;
   onSignOut: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -120,10 +119,14 @@ export function ServerItem(props: {
   const { t, row } = props;
   const working = props.busy === row.name;
   const needsAuth = row.auth === 'oauth' && !row.authorized;
-  const flags: string[] = [];
-  if (row.auth === 'oauth') flags.push(row.authorized ? t('authorized') : t('needsAuth'));
-  const parts = statusParts(t, row);
-  const metadata = parts.slice(1);
+  const status = needsAuth
+    ? { key: 'needsAuth' as const, state: 'pending' }
+    : row.state === 'connected'
+      ? { key: 'stateConnected' as const, state: 'connected' }
+      : row.state === 'failed'
+        ? { key: 'stateFailed' as const, state: 'failed' }
+        : { key: 'stateConnecting' as const, state: 'connecting' };
+  const metadata = statusParts(t, row).slice(1);
   return (
     <li
       className="better-mcp-server"
@@ -134,31 +137,23 @@ export function ServerItem(props: {
         <div className="better-mcp-server-main">
           <div className="better-mcp-server-title">
             <span className="better-mcp-server-name">{row.name}</span>
-            {flags.map((flag) => (
-              <span key={flag} className="better-mcp-badge" data-attention={needsAuth || undefined}>
-                {flag}
-              </span>
-            ))}
+            <span className="better-mcp-badge" data-state={status.state}>
+              {t(status.key)}
+            </span>
+            <span className="better-mcp-lazy" title={t('lazyHint')}>
+              <Switch
+                checked={row.lazy}
+                disabled={working}
+                onChange={props.onLazy}
+                label={t('lazyFor', { name: row.name })}
+                title={t('lazyHint')}
+              />
+              <span>{t('lazy')}</span>
+            </span>
           </div>
           {row.description !== undefined ? (
             <p className="better-mcp-description">{row.description}</p>
           ) : null}
-        </div>
-        <div className="better-mcp-server-side">
-          <span className="better-mcp-state" data-state={row.state}>
-            <span className="better-mcp-state-dot" data-state={row.state} aria-hidden="true" />
-            {parts[0]}
-          </span>
-          <span className="better-mcp-lazy" title={t('lazyHint')}>
-            <Switch
-              checked={row.lazy}
-              disabled={working}
-              onChange={props.onLazy}
-              label={t('lazyFor', { name: row.name })}
-              title={t('lazyHint')}
-            />
-            <span>{t('lazy')}</span>
-          </span>
         </div>
       </div>
       <div className="better-mcp-server-extra">
@@ -177,9 +172,19 @@ export function ServerItem(props: {
             {working ? t('working') : t('restart')}
           </Button>
           {row.auth === 'oauth' ? (
-            <Button disabled={working} onClick={props.onAuth}>
+            <LinkButton
+              href={oauthStartUrl(row.name)}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={
+                row.authorized
+                  ? t('reauthorizeFor', { name: row.name })
+                  : t('authorizeFor', { name: row.name })
+              }
+              variant={needsAuth ? 'primary' : 'outline'}
+            >
               {row.authorized ? t('reauthorize') : t('authorize')}
-            </Button>
+            </LinkButton>
           ) : null}
           {row.auth === 'oauth' && row.authorized ? (
             <Button disabled={working} onClick={props.onSignOut}>
@@ -207,7 +212,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [editing, setEditing] = useState<EditingState | undefined>(undefined);
   const [deleting, setDeleting] = useState<ServerRow | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
-  const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
   const snapshotRevision = useRef(0);
 
   /** 写入操作快照，并使较早的在途读取失效。 */
@@ -252,24 +256,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
       return false;
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  /** 发起授权。 */
-  const authorize = async (row: ServerRow): Promise<void> => {
-    setBusy(row.name);
-    setActionError(undefined);
-    const tab = window.open('', '_blank');
-    try {
-      const result = await startOAuth(row.name);
-      setAuthUrl(result.url);
-      if (tab !== null) tab.location.href = result.url;
-      await load();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-      tab?.close();
     } finally {
       setBusy(undefined);
     }
@@ -351,13 +337,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           {actionError}
         </div>
       ) : null}
-      {authUrl !== undefined ? (
-        <div className="better-mcp-feedback" role="status">
-          <a href={authUrl} target="_blank" rel="noreferrer">
-            {authUrl}
-          </a>
-        </div>
-      ) : null}
       {snapshot === undefined && loadError === undefined ? (
         <div className="better-mcp-feedback" role="status">
           {t('loading')}
@@ -378,7 +357,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
               busy={busy}
               onLazy={(lazy) => void run(row.name, () => setLazy(row.name, lazy))}
               onRestart={() => void run(row.name, () => restart(row.name))}
-              onAuth={() => void authorize(row)}
               onSignOut={() => void run(row.name, () => signOut(row.name))}
               onEdit={() => {
                 setFormError(undefined);

@@ -18,6 +18,8 @@ import {
 export interface OAuthClientConfig {
   /** 请求的 scope 列表。 */
   scopes: string[];
+  /** 动态注册时使用的客户端名称。 */
+  clientName?: string;
   /** 固定客户端标识。 */
   clientId?: string;
   /** 固定客户端密钥；只读取旧配置，界面写入凭据库。 */
@@ -81,6 +83,7 @@ export interface Config {
 /** OAuth 参数 schema；只声明字段，不做默认值填充。 */
 const OAuthSchema = Schema.object({
   scopes: Schema.array(Schema.string()),
+  clientName: Schema.string(),
   clientId: Schema.string(),
   clientSecret: Schema.string(),
   redirectUri: Schema.string(),
@@ -151,6 +154,7 @@ function normalizeOAuth(name: string, raw: unknown): OAuthClientConfig {
   }
   const config: OAuthClientConfig = { scopes };
   for (const key of [
+    'clientName',
     'clientId',
     'clientSecret',
     'redirectUri',

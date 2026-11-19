@@ -14,6 +14,9 @@ export const PLUGIN_ROW_ID = 'better-mcp';
 /** 日志与错误消息使用的前缀。 */
 export const PLUGIN_LABEL = 'better-mcp';
 
+/** OAuth 启动路径，浏览器访问后重定向到授权服务器。 */
+export const OAUTH_START_PATH = '/better-mcp/oauth/start';
+
 /** OAuth 回调路径。 */
 export const CALLBACK_PATH = '/better-mcp/oauth/callback';
 

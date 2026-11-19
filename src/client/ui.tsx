@@ -1,9 +1,10 @@
 /**
  * 客户端共享控件与主题样式。
- * 导出 ClientStyles、Button、Switch、Modal，保持与宿主管理页一致的视觉和键盘语义。
+ * 导出 ClientStyles、Button、LinkButton、Switch、Modal，保持与宿主管理页一致的视觉和键盘语义。
  */
 
 import {
+  type AnchorHTMLAttributes,
   type ButtonHTMLAttributes,
   type ReactNode,
   type RefObject,
@@ -149,6 +150,32 @@ export function Button({
       aria-busy={busy || undefined}
     />
   );
+}
+
+/** 链接按钮属性。 */
+export interface LinkButtonProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
+  /** 视觉层级。 */
+  variant?: 'primary' | 'outline' | 'danger' | 'ghost';
+  /** 控件尺寸。 */
+  size?: 'sm' | 'md' | 'lg';
+}
+
+/** 保留原生链接语义的宿主风格按钮。 */
+export function LinkButton({
+  variant = 'outline',
+  size = 'sm',
+  className,
+  ...props
+}: LinkButtonProps): JSX.Element {
+  const classes = [
+    'better-mcp-button',
+    `better-mcp-button-${variant}`,
+    `better-mcp-button-${size}`,
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return <a {...props} className={classes} />;
 }
 
 /** 开关属性。 */
@@ -322,6 +349,23 @@ export const CLIENT_STYLES = String.raw`
   font-size: 12px;
   line-height: 1;
 }
+.better-mcp-sidebar-action[data-attention='true'] {
+  color: var(--dsw-alias-state-warn-primary);
+}
+.better-mcp-sidebar-action[data-attention='true'] svg {
+  animation: better-mcp-auth-breath 2.4s ease-in-out infinite;
+}
+@keyframes better-mcp-auth-breath {
+  0%,
+  100% {
+    color: var(--dsw-alias-label-primary);
+    filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dsw-alias-state-warn-primary) 0%, transparent));
+  }
+  50% {
+    color: var(--dsw-alias-state-warn-primary);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--dsw-alias-state-warn-primary) 90%, transparent));
+  }
+}
 [data-sidebar-collapsed] [class*="footerActions"]:has(.better-mcp-entry[data-rail='rail']) {
   flex-direction: column;
   align-items: center;
@@ -346,6 +390,7 @@ export const CLIENT_STYLES = String.raw`
   cursor: pointer;
   font-family: inherit;
   font-weight: 400;
+  text-decoration: none;
   white-space: nowrap;
 }
 .better-mcp-button-sm {
@@ -625,48 +670,23 @@ export const CLIENT_STYLES = String.raw`
   font-size: 11px;
   line-height: 17px;
 }
-.better-mcp-badge[data-attention='true'] {
+.better-mcp-badge[data-state='pending'] {
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);
   box-shadow: inset 0 0 0 var(--dsh-hairline-width) color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, transparent);
   color: var(--dsw-alias-state-warn-primary);
   font-weight: 600;
 }
-.better-mcp-server-side {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 16px;
+.better-mcp-badge[data-state='connecting'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
 }
-.better-mcp-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12.5px;
-  line-height: 18px;
-  white-space: nowrap;
-}
-.better-mcp-state[data-state='failed'] {
+.better-mcp-badge[data-state='failed'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
   color: var(--dsw-alias-state-error-primary);
 }
-.better-mcp-state-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dsw-alias-state-idle-primary);
-}
-.better-mcp-state-dot[data-state='connected'] {
-  background: var(--dsw-alias-state-success-primary);
-}
-.better-mcp-state-dot[data-state='connecting'],
-.better-mcp-state-dot[data-state='reconnecting'] {
-  background: var(--dsw-alias-state-business-primary);
-}
-.better-mcp-state-dot[data-state='waiting-credentials'] {
-  background: var(--dsw-alias-state-warn-primary);
-}
-.better-mcp-state-dot[data-state='failed'] {
-  background: var(--dsw-alias-state-error-primary);
+.better-mcp-badge[data-state='connected'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 12%, transparent);
+  color: var(--dsw-alias-state-success-primary);
 }
 .better-mcp-lazy {
   display: inline-flex;
@@ -826,7 +846,8 @@ export const CLIENT_STYLES = String.raw`
   overflow-wrap: anywhere;
 }
 .better-mcp-help:hover .better-mcp-help-tooltip,
-.better-mcp-help:focus-within .better-mcp-help-tooltip {
+.better-mcp-help:focus-within .better-mcp-help-tooltip,
+.better-mcp-help[data-open='true'] .better-mcp-help-tooltip {
   display: block;
 }
 .better-mcp-autocomplete {
@@ -1002,6 +1023,9 @@ select.better-mcp-input {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .better-mcp-sidebar-action[data-attention='true'] svg {
+    animation: none;
+  }
   .better-mcp-switch-thumb {
     transition: none;
   }

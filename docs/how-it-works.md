@@ -29,7 +29,7 @@
 - 需要热重载的 `Config` 字段用 `.volatile()` 标记。
 - 宿主类型经 `src/types.ts` 以 type-only 方式导入。
 
-浏览器入口导出 `inject = ['slots', 'locale']` 与 `apply`。
+浏览器入口导出 `inject = ['slots', 'locale', 'pluginNavigation']` 与 `apply`。
 
 ## 宿主运行时
 
@@ -37,7 +37,7 @@
 
 1. `readConfig` 展开 volatile 引用，`resolveConfig` 校验并冻结结果。
 2. 创建 `ServerManager` 与 `PluginRoutes`。
-3. 注册 `/api/better-mcp/*` 与 OAuth 回调路由。
+3. 注册 `/api/better-mcp/*`、OAuth 启动重定向与回调路由。
 4. 挂载全部服务器。
 5. `agents` 与 `sessionProjections` 可用时，创建 `VisibilityRuntime` 并注册 `mcp_manage`。
 6. 监听 `loader/volatile-update`，按新配置对账。
@@ -82,7 +82,7 @@
 - `mcp_manage` 执行时，只处理调用方会话；可见性实际变化后重算限制并注入目录。
 - `session/event` 提交 `turn/end` 后，清除目标 Agent 的待定选择并重算限制。完成、失败与取消使用相同处理。
 - `tools/change`：合并到一个微任务后重算全部会话。
-- 配置对账完成后，重算全部在线会话并注入目录。
+- 配置或授权状态对账完成后，重算全部在线会话并注入目录。
 
 deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change` 因此不会循环。
 
@@ -91,6 +91,8 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 ### 目录消息
 
 `notify` 复用 `catalogFor` 生成目录，通过 `agent.inject()` 把 `nextStep` 消息写入 Agent 待处理队列。队列最后一条待处理目录的 `source.entries` 相同时跳过注入。
+
+`ServerManager` 在挂载、快照、配置对账、授权完成与退出时从凭据库刷新授权状态内存表。`entriesOf` 排除 `auth: oauth` 且未授权的服务器，目录渲染与工具可见性继续共用现有 lazy 与显式选择。
 
 `catalogFor` 按会话投影与可见区决定消息：
 
@@ -143,16 +145,18 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 
 1. 探测端点 `initialize`，要求返回 `401`，读 `resource_metadata`。
 2. 读受保护资源元数据与授权服务器元数据，失败时尝试 `openid-configuration`。
-3. 有 `registration_endpoint` 时动态注册 `client_secret_post` 客户端。
+3. 有 `registration_endpoint` 时动态注册 `client_secret_post` 客户端，身份由 `oauth.clientName` 决定，默认 `Codex`。Figma 官方 MCP 监听 `127.0.0.1:0/callback`，由操作系统分配端口。OpenAI 登录固定标识在该场景由动态注册替代。
 4. 生成 PKCE S256 verifier 与 state，拼授权 URL（带 `resource`）。
-5. 回调换码，写授权记录，卸载旧实例并重新挂载。
+5. 回调换码，写授权记录，卸载旧实例并重新挂载，随后执行 `VisibilityRuntime.syncAll()` 与 `notifyAll()`。
 6. 距过期 30 秒内用刷新令牌换新；刷新失败沿用旧令牌并告警。
+
+配置面板的授权链接指向 `/better-mcp/oauth/start?server=<name>`。该 Web 路由复用授权启动逻辑，成功返回 `302 Location`，失败返回带原始原因的 HTML 错误页。同源 JSON 启动路由继续保留。
 
 回调地址取 `host` 头的来源加回调路径。Web 载体把 fetch 路由的请求 URL 解析到占位来源 `http://x`，真实来源只在 `host` 头里；缺少该头时回落到 Web 服务监听地址。
 
 令牌端点的客户端认证按注册结果选择 `client_secret_post` 或 `client_secret_basic`，注册时没给出结果时优先 `client_secret_post`。授权服务器元数据列出的方式未必都被实现。
 
-固定回调地址时，插件在指定回环端口临时监听；10 分钟无回调自动关闭。
+Figma 默认回调与显式 `oauth.redirectUri` 都使用临时回环监听；10 分钟无回调自动关闭。注册、授权与换码使用同一个实际回调地址。
 
 ### 秘密存放
 
@@ -168,19 +172,25 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 | 注册项 | 作用 |
 | --- | --- |
 | `locale.register` | 注册 `dsh-plugin-better-mcp` 命名空间的中英文字典 |
-| `sidebar.footer.action` | id `better-mcp`、order 52，打开弹窗面板 |
+| `sidebar.footer.action` | id `better-mcp`、order 52，打开行配置页并显示待授权状态 |
 | `plugins.row.config` | 键 `dsh-plugin-better-mcp#better-mcp`，渲染 summary 或内联面板 |
 
-两个入口使用同一个 `McpPanel`，都调用插件自己的 `/api` 路由。面板每 1 秒串行读取状态，快照序号防止旧响应覆盖新状态。
+配置页使用 `McpPanel` 调用插件自己的 `/api` 路由。面板与侧栏分别每 1 秒串行读取状态，卸载后停止；面板快照序号防止旧响应覆盖新状态。侧栏存在待授权服务器时显示警告色与阴影呼吸，`prefers-reduced-motion` 下停用持续动画。
 
 元数据与字典的完整规范见 [i18n.md](./i18n.md)。
 
 ## 数据流
 
 ```text
-共享 McpPanel
+共享 McpPanel / 侧栏
   → 每 1 秒串行读取状态
-    → 按快照序号接收最新响应
+    → 面板按快照序号接收最新响应
+    → 侧栏按待授权状态切换高亮
+
+OAuth 回调
+  → 写入授权并重新挂载
+    → VisibilityRuntime.syncAll / notifyAll
+      → agent.inject(nextStep)
 
 面板 / 配置页
   → /api/better-mcp/*

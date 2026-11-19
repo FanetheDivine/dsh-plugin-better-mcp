@@ -8,7 +8,7 @@ import { createServer, type Server } from 'node:http';
 
 import type { OAuthClientConfig, ServerDefinition } from './config.ts';
 import { normalizeServerDefinition } from './config.ts';
-import { CALLBACK_PATH, PENDING_TTL_MS } from './constants.ts';
+import { CALLBACK_PATH, OAUTH_START_PATH, PENDING_TTL_MS } from './constants.ts';
 import {
   deleteClientSecret,
   deleteGrant,
@@ -30,15 +30,59 @@ import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from 
 /** 固定回调地址不合法时的错误文本。 */
 const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
 
+/** OpenAI 登录客户端标识，不能作为 Figma MCP 的固定客户端。 */
+const OPENAI_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+
+/** Figma 回环回调；端口 0 由操作系统分配空闲端口。 */
+const FIGMA_CALLBACK_URL = 'http://127.0.0.1:0/callback';
+
+/** 判断是否为 Figma 官方远程 MCP 地址。 */
+function isFigmaMcpEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'mcp.figma.com' &&
+      url.pathname.replace(/\/+$/, '') === '/mcp'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** 授权启动失败及其 HTTP 状态。 */
+class AuthorizationStartError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 502,
+  ) {
+    super(message);
+  }
+}
+
+/** 授权启动结果。 */
+interface AuthorizationStartResult {
+  url: string;
+  scopes: string[];
+  redirectUri: string;
+}
+
 /** 待完成授权上下文。 */
 interface PendingContext extends PendingAuthorization {
-  /** 固定回环监听器。 */
+  /** 固定或动态回环监听器。 */
   listener?: Server | undefined;
 }
 
-/** 结果页标题与正文。 */
-function resultPage(title: string, detail: string): string {
-  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;padding:32px;line-height:1.5"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p></body>`;
+/** 已监听的回环服务器及实际回调地址。 */
+interface LoopbackListener {
+  server: Server;
+  redirectUri: string;
+}
+
+/** 结果页标题与正文；授权成功后请求浏览器关闭当前标签页。 */
+function resultPage(title: string, detail: string, autoClose = false): string {
+  const close = autoClose ? '<script>setTimeout(() => window.close(), 0)</script>' : '';
+  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;padding:32px;line-height:1.5"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p>${close}</body>`;
 }
 
 /** 路由与 OAuth 运行时。 */
@@ -55,6 +99,7 @@ export class PluginRoutes {
     private readonly getSettings: SettingsReader,
     private readonly manager: ServerManager,
     private readonly waitIdle: () => Promise<void> = async () => undefined,
+    private readonly onAuthorizationChange: () => void = () => undefined,
   ) {}
 
   /** 注册全部同源 JSON 路由。 */
@@ -120,9 +165,33 @@ export class PluginRoutes {
     });
   }
 
-  /** 注册 OAuth 回调路由。 */
+  /** 注册 OAuth 启动重定向与回调路由。 */
   registerWeb(): void {
     this.ctx.inject(['webServer'], (serverCtx) => {
+      this.disposers.push(
+        serverCtx.webServer.register({
+          kind: 'exact',
+          path: OAUTH_START_PATH,
+          handler: async (req, res) => {
+            const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+            try {
+              const result = await this.prepareAuthorization(
+                url.searchParams.get('server') ?? '',
+                this.originOf(req.headers.host ?? null),
+              );
+              res.writeHead(302, { location: result.url, 'cache-control': 'no-store' });
+              res.end();
+            } catch (error) {
+              const status = error instanceof AuthorizationStartError ? error.status : 502;
+              res.writeHead(status, {
+                'content-type': 'text/html; charset=utf-8',
+                'cache-control': 'no-store',
+              });
+              res.end(resultPage('Authorization failed', messageOf(error)));
+            }
+          },
+        } satisfies ServerRoute),
+      );
       this.disposers.push(
         serverCtx.webServer.register({
           kind: 'exact',
@@ -138,6 +207,7 @@ export class PluginRoutes {
               resultPage(
                 result.ok ? 'Authorization complete' : 'Authorization failed',
                 result.detail,
+                result.ok,
               ),
             );
           },
@@ -281,67 +351,107 @@ export class PluginRoutes {
     return jsonResponse(await this.currentSnapshot());
   }
 
-  /** 发起 OAuth。 */
+  /** 发起 OAuth 并返回 JSON，供现有同源 API 使用。 */
   private async startOAuth(request: Request): Promise<Response> {
     const url = new URL(request.url, 'http://127.0.0.1');
     const serverName = url.searchParams.get('server') ?? '';
+    try {
+      const result = await this.prepareAuthorization(
+        serverName,
+        this.originOf(request.headers.get('host')),
+      );
+      return jsonResponse(result);
+    } catch (error) {
+      const status = error instanceof AuthorizationStartError ? error.status : 502;
+      return jsonResponse({ error: messageOf(error) }, status);
+    }
+  }
+
+  /** 发现授权服务器、准备客户端并登记待完成授权。 */
+  private async prepareAuthorization(
+    serverName: string,
+    origin: string,
+  ): Promise<AuthorizationStartResult> {
     const definition = this.getSettings().servers[serverName];
-    if (definition === undefined)
-      return jsonResponse({ error: `Unknown server '${serverName}'` }, 400);
+    if (definition === undefined) {
+      throw new AuthorizationStartError(`Unknown server '${serverName}'`, 400);
+    }
     const endpoint = asString(definition.url);
     if (endpoint === undefined) {
-      return jsonResponse({ error: 'Only streamable-http servers can use OAuth.' }, 400);
+      throw new AuthorizationStartError('Only streamable-http servers can use OAuth.', 400);
     }
     try {
       const oauthDefinition: OAuthClientConfig = definition.oauth ?? { scopes: [] };
       const discovery = await discover(endpoint);
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
-      const redirectUri =
-        oauthDefinition.redirectUri ?? `${this.originOf(request)}${CALLBACK_PATH}`;
-      let clientId = oauthDefinition.clientId;
-      let clientSecret =
-        oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
-      if (clientId === undefined) {
-        const registered = await registerClient(discovery, {
-          clientName: 'DeepSeek Harness (better-mcp)',
-          redirectUri,
-          scopes,
-        });
-        clientId = registered.clientId;
-        clientSecret = registered.clientSecret;
-      }
-      const flow = authorizationUrl(discovery, {
-        clientId,
-        redirectUri,
-        scopes,
-        resource: discovery.resource,
-      });
-      const context: PendingContext = {
-        serverName,
-        verifier: flow.verifier,
-        redirectUri,
-        clientId,
-        ...(clientSecret === undefined ? {} : { clientSecret }),
-        resource: discovery.resource,
-        authorization: discovery.authorization,
-        createdAt: Date.now(),
-      };
-      this.pending.set(flow.state, context);
-      if (oauthDefinition.redirectUri !== undefined) {
+      const figma = isFigmaMcpEndpoint(endpoint);
+      let earlyListener: LoopbackListener | undefined;
+      let redirectUri = oauthDefinition.redirectUri ?? `${origin}${CALLBACK_PATH}`;
+      if (figma && oauthDefinition.redirectUri === undefined) {
         try {
-          context.listener = await this.startLoopbackListener(redirectUri);
+          earlyListener = await this.startLoopbackListener(FIGMA_CALLBACK_URL);
+          redirectUri = earlyListener.redirectUri;
         } catch (error) {
-          this.pending.delete(flow.state);
-          return jsonResponse(
-            { error: `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}` },
+          throw new AuthorizationStartError(
+            `Could not bind the loopback callback: ${messageOf(error)}`,
             502,
           );
         }
       }
-      return jsonResponse({ url: flow.url, scopes, redirectUri });
+      try {
+        let clientId =
+          figma && oauthDefinition.clientId === OPENAI_CODEX_CLIENT_ID
+            ? undefined
+            : oauthDefinition.clientId;
+        let clientSecret =
+          oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
+        if (clientId === undefined) {
+          const registered = await registerClient(discovery, {
+            clientName: oauthDefinition.clientName ?? 'Codex',
+            redirectUri,
+            scopes,
+          });
+          clientId = registered.clientId;
+          clientSecret = registered.clientSecret;
+        }
+        const flow = authorizationUrl(discovery, {
+          clientId,
+          redirectUri,
+          scopes,
+          resource: discovery.resource,
+        });
+        const context: PendingContext = {
+          serverName,
+          verifier: flow.verifier,
+          redirectUri,
+          clientId,
+          ...(clientSecret === undefined ? {} : { clientSecret }),
+          resource: discovery.resource,
+          authorization: discovery.authorization,
+          createdAt: Date.now(),
+          ...(earlyListener === undefined ? {} : { listener: earlyListener.server }),
+        };
+        earlyListener = undefined;
+        this.pending.set(flow.state, context);
+        if (oauthDefinition.redirectUri !== undefined) {
+          try {
+            context.listener = (await this.startLoopbackListener(redirectUri)).server;
+          } catch (error) {
+            this.pending.delete(flow.state);
+            throw new AuthorizationStartError(
+              `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}`,
+              502,
+            );
+          }
+        }
+        return { url: flow.url, scopes, redirectUri };
+      } finally {
+        earlyListener?.server.close();
+      }
     } catch (error) {
-      return jsonResponse({ error: messageOf(error) }, 502);
+      if (error instanceof AuthorizationStartError) throw error;
+      throw new AuthorizationStartError(messageOf(error), 502);
     }
   }
 
@@ -351,7 +461,9 @@ export class PluginRoutes {
     const serverName = asString(body.server);
     if (serverName === undefined) return jsonResponse({ error: 'server is required' }, 400);
     await deleteGrant(this.ctx, serverName);
+    await this.manager.refreshAuthorization(serverName);
     await this.manager.unmount(serverName);
+    this.onAuthorizationChange();
     return jsonResponse(await this.currentSnapshot());
   }
 
@@ -412,6 +524,7 @@ export class PluginRoutes {
         authorizedAt: Date.now(),
       });
       await this.manager.restart(context.serverName);
+      this.onAuthorizationChange();
       return { ok: true, detail: `Signed in for '${context.serverName}'. You can close this tab.` };
     } catch (error) {
       return { ok: false, detail: messageOf(error) };
@@ -421,10 +534,10 @@ export class PluginRoutes {
   /**
    * 浏览器访问本服务的来源。
    * Web 载体把 fetch 路由的请求 URL 解析到占位来源，真实来源只在 `host` 头里。
-   * @param request - 面板发出的请求。
+   * @param host - 请求的 `host` 头。
    * @returns 协议与 `host` 头拼成的来源；缺少 `host` 头时回落到监听地址。
    */
-  private originOf(request: Request): string {
+  private originOf(host: string | null): string {
     let fallback = 'http://127.0.0.1';
     try {
       fallback = this.ctx.get('webServer')?.getOrigin?.() ?? fallback;
@@ -432,13 +545,12 @@ export class PluginRoutes {
       // 监听器尚未绑定端口，保持回环默认值。
     }
     const protocol = new URL(fallback).protocol;
-    const host = request.headers.get('host');
     if (host === null || host === '') return fallback;
     return `${protocol}//${host}`;
   }
 
-  /** 在固定回环端口监听一次回调。 */
-  private async startLoopbackListener(redirectUri: string): Promise<Server> {
+  /** 在固定端口或操作系统分配的端口监听一次回调。 */
+  private async startLoopbackListener(redirectUri: string): Promise<LoopbackListener> {
     if (!isLoopbackHttpUrl(redirectUri)) throw new Error(LOOPBACK_REDIRECT_ERROR);
     const redirect = new URL(redirectUri);
     const server = createServer(async (req, res) => {
@@ -454,7 +566,11 @@ export class PluginRoutes {
         'cache-control': 'no-store',
       });
       res.end(
-        resultPage(result.ok ? 'Authorization complete' : 'Authorization failed', result.detail),
+        resultPage(
+          result.ok ? 'Authorization complete' : 'Authorization failed',
+          result.detail,
+          result.ok,
+        ),
       );
       setTimeout(() => server.close(), 100);
     });
@@ -472,7 +588,14 @@ export class PluginRoutes {
       clearTimeout(timer);
       this.listeners.delete(server);
     });
-    return server;
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      server.close();
+      throw new Error('Could not resolve the loopback listener address');
+    }
+    const actualRedirect = new URL(redirectUri);
+    actualRedirect.port = String(address.port);
+    return { server, redirectUri: actualRedirect.toString() };
   }
 }
 

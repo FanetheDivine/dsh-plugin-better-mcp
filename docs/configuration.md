@@ -41,9 +41,15 @@
 | `auth` | 可选 | `oauth` 或 `none`。http 默认 `oauth`，stdio 默认 `none` |
 | `lazy` | 可选 | 默认 `true`，新会话默认隐藏这台服务器的工具 |
 | `oauth.scopes` | 可选 | 请求的授权范围；留空用服务器建议值 |
+| `oauth.clientName` | 可选 | 动态注册身份，默认 `Codex`；选 DSH 时为 `DeepSeek Harness (better-mcp)` |
 | `oauth.clientId` | 可选 | 固定客户端标识；留空走动态注册 |
 | `oauth.redirectUri` | 可选 | 固定回调地址，必须是 `127.0.0.1` 或 `localhost` 的 http 地址 |
 | `oauth.clientSecret` | 兼容 | 旧配置的客户端密钥；面板会把它写入凭据库 |
+
+## Figma 官方 MCP
+
+- 授权使用注册名 `Codex` 与 `http://127.0.0.1:<系统分配端口>/callback`，无需配置 `oauth.clientId`。
+- 配置里的 `app_EMoamEEZ73f0CkXaXp7hrann` 对 Figma 无效，授权启动时改走动态注册。
 
 ## 规则
 
