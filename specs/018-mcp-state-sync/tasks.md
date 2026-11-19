@@ -79,10 +79,10 @@ description: "MCP 状态与会话同步实施任务"
 
 **Purpose**: 同步用户文档、机制说明与完整质量门禁。
 
-- [ ] T010 [P] 更新 `README.md` 的面板自动刷新和变化后立即注入提醒行为
-- [ ] T011 [P] 更新 `docs/how-it-works.md` 的目录消息时机、数据流与面板刷新机制
-- [ ] T012 [P] 更新 `docs/known-risks.md` 的注入持久化、取消与空闲会话边界
-- [ ] T013 按 `specs/018-mcp-state-sync/quickstart.md` 运行 `pnpm format && pnpm check`、`pnpm full-check` 和真实宿主验证
+- [X] T010 [P] 更新 `README.md` 的面板自动刷新和变化后立即注入提醒行为
+- [X] T011 [P] 更新 `docs/how-it-works.md` 的目录消息时机、数据流与面板刷新机制
+- [X] T012 [P] 更新 `docs/known-risks.md` 的注入持久化、取消与空闲会话边界
+- [X] T013 按 `specs/018-mcp-state-sync/quickstart.md` 运行 `pnpm format && pnpm check`、`pnpm full-check` 和真实宿主验证
 
 ---
 

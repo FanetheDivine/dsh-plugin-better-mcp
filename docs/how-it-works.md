@@ -78,9 +78,9 @@
 限制在以下时刻重算：
 
 - `agent/created`：会话创建、恢复、清空或压缩后。
-- `mcp_manage` 执行时，只重算调用方会话。
+- `mcp_manage` 执行时，只处理调用方会话；可见性实际变化后重算限制并注入目录。
 - `tools/change`：合并到一个微任务后重算全部会话。
-- 配置对账完成后。
+- 配置对账完成后，重算全部在线会话并注入目录。
 
 deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change` 因此不会循环。
 
@@ -88,14 +88,23 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 
 ### 目录消息
 
-`agent/pre-step` 在 `next()` 之后检查会话，按需追加一条 user 角色消息：
+`notify` 复用 `catalogFor` 生成目录，通过 `agent.inject()` 把 `nextStep` 消息写入 Agent 待处理队列。队列最后一条待处理目录的 `source.entries` 相同时跳过注入。
 
-| 条件 | 动作 |
+`catalogFor` 按会话投影与可见区决定消息：
+
+| 条件 | 结果 |
 | --- | --- |
 | 目录未变，上次的消息在 `session.surface.nodes` 中 | 不写 |
-| 上次的消息不在可见区，或从未写过 | 写完整目录 |
-| 目录变化 | 写更新消息 |
+| 上次的消息不在可见区，或从未写过 | 完整目录 |
+| 目录变化 | 更新消息与完整目录 |
 | 从未写过且没有服务器 | 不写 |
+
+`agent/pre-step` 在 `next()` 之后处理目录：
+
+1. 过滤本来源的目录消息。
+2. 按最新配置与可见性追加至多一条 user 角色消息。
+
+配置恢复时也会移除过期的待处理目录。
 
 - 消息正文以 `<system-reminder>` 包裹，文本由 `src/catalog.ts` 渲染。
 - `source.kind` 为 `better-mcp-catalog`，`form` 为 `catalog`。
@@ -110,6 +119,7 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 - 配置被更高层覆盖时返回 409。
 - 面板的懒加载开关写回 `servers.<name>.lazy`。
 - 写入触发 volatile 更新；插件串行对账：卸载移除项、重建连接参数变化的项、挂载新增项。
+- 对账后执行 `VisibilityRuntime.syncAll()` 与 `notifyAll()`，同步全部在线 Agent 的工具限制与目录。
 - 面板快照会等待对账完成。
 
 ### OAuth
@@ -144,27 +154,38 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 | `sidebar.footer.action` | id `better-mcp`、order 52，打开弹窗面板 |
 | `plugins.row.config` | 键 `dsh-plugin-better-mcp#better-mcp`，渲染 summary 或内联面板 |
 
-两个入口使用同一个 `McpPanel`，都调用插件自己的 `/api` 路由。
+两个入口使用同一个 `McpPanel`，都调用插件自己的 `/api` 路由。面板每 1 秒串行读取状态，快照序号防止旧响应覆盖新状态。
 
 元数据与字典的完整规范见 [i18n.md](./i18n.md)。
 
 ## 数据流
 
 ```text
+共享 McpPanel
+  → 每 1 秒串行读取状态
+    → 按快照序号接收最新响应
+
 面板 / 配置页
   → /api/better-mcp/*
     → configEditor / credentials
       → loader/volatile-update
         → ServerManager.reconcile
           → mcpManager.register / dispose
-        → VisibilityRuntime.syncAll
+        → VisibilityRuntime.syncAll / notifyAll
+          → agent.inject(nextStep)
 
 模型
   → mcp_manage
     → VisibilityRuntime.setActive
-      → agent.ctx.tools.restrict
+      → 可见性实际变化后
+        → agent.ctx.tools.restrict
+        → notify 当前 Agent
+          → agent.inject(nextStep)
+
+Agent
   → agent/pre-step
-    → 目录消息写入会话日志
+    → 过滤本来源目录
+    → 按最新设置添加至多一条目录消息
       → better-mcp-catalog 投影
 ```
 

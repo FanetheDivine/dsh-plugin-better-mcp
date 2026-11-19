@@ -35,7 +35,11 @@ pnpm 的 minimum release age 策略会拒绝发布时间过短的包。
 
 - 隐藏工具依赖宿主的 `tools.restrict` 与 `agent/pre-step`；宿主调整这两个接口后可见性失效。
 - 工具归属按 `mcp__<server>__` 前缀判断；其他来源注册了同前缀的工具时也会被隐藏。
-- `mcp_manage` 的选择在下一步写入目录消息后才进入会话日志；之前进程退出会丢失这次选择。
+- `mcp_manage` 的选择与配置目录通过 `agent.inject` 立即持久化到 Agent 的 `nextStep` 待处理队列。
+- `agent.inject` 不唤醒 idle Agent。
+- `cancel` 默认可能清除 `pending`，导致待处理目录丢失。
+- 已 claim 的输入若被拒绝或取消，可能未成为 `user/message`，随输入注入的目录也可能未进入会话日志。
+- 后续 `agent/pre-step` 会按最新目录兜底，但不会恢复未成为 `user/message` 的输入。
 - 宿主缺少 `agents` 或 `sessionProjections` 服务时，所有服务器的工具对所有会话可见，模型没有 `mcp_manage`。
 - 目录消息占用上下文，长度随服务器数量与简介长度增长。
 
