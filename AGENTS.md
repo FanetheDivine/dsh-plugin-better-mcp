@@ -7,7 +7,8 @@ DSH 插件 `dsh-plugin-better-mcp`：可视化地管理 MCP 服务器与 OAuth �
 
 # 文档索引
 
-- [README.md](./README.md)：功能、安装与配置。
+- [README.md](./README.md)：面向用户的插件简介与面板截图。
+- [configuration.md](./docs/configuration.md)：YAML 配置参考。
 - [how-it-works.md](./docs/how-it-works.md)：插件的构造方式与运行流程。
 - [known-risks.md](./docs/known-risks.md)：已知风险与宿主限制。
 - [development.md](./docs/development.md)：本地开发、命令、测试、Spec Kit 命令一览、worktree 扩展维护与文件地图。
@@ -30,12 +31,12 @@ DSH 插件 `dsh-plugin-better-mcp`：可视化地管理 MCP 服务器与 OAuth �
 
 | 步骤 | skill | 执行条件与要求 |
 | --- | --- | --- |
-| 1 | `speckit-specify` | 必做 |
-| 2 | `speckit-clarify` | 存在不确定项时执行，确认行为预期、边界、影响范围与验收标准 |
-| 3 | `speckit-plan` | 必做。Constitution Check MUST 逐条通过 |
-| 4 | `speckit-tasks` | 必做 |
+| 1 | `speckit-specify` | 必做。生成规格草稿与待确认决策，固定进入 clarify |
+| 2 | `speckit-clarify` | 必做。先完成代码库与文档探索，再按依赖分批确认全部需求；每批提出当前全部独立问题。写回后由用户审查完整规格，获得 `Approved` 或 `Waived` 才能计划 |
+| 3 | `speckit-plan` | 必做。先核验规格门禁，再完成技术探索并按依赖分批确认全部实现细节；用户审查完整计划并获得 `Approved` 或 `Waived` 才能生成任务。Constitution Check MUST 逐条通过 |
+| 4 | `speckit-tasks` | 必做。先核验规格与计划状态，以及全部待确认决策 |
 | 5 | `speckit-analyze` | 按需 |
-| 6 | `speckit-implement` | 必做 |
+| 6 | `speckit-implement` | 必做。实现前复核门禁；出现新未决项时暂停受影响工作，返回对应探索、访谈与审查 |
 | 7 | `speckit-worktree-finish` | 用户验收或放弃后执行 |
 
 实施：
