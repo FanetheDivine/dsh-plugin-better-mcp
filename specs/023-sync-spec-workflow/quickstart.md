@@ -13,19 +13,34 @@
 3. 确认 plan、tasks 与 implement 的阶段门禁符合 [workflow.md](./contracts/workflow.md)。
 4. 确认 `AGENTS.md` 与 `docs/development.md` 保留本仓库项目专有内容。
 
-预期：九个受管文件与模板提交一致，项目文档只包含通用 Spec Kit 规则变化。
+预期：九个同步文件与模板提交一致，项目文档只包含通用 Spec Kit 规则变化。
 
 ## 摘要核验
 
 运行：
 
 ```sh
-sha256sum .dsh/skills/speckit-*/SKILL.md .specify/templates/*.md
+node --input-type=commonjs <<'NODE'
+const fs = require("fs");
+const crypto = require("crypto");
+
+for (const manifest of [
+  ".specify/integrations/dsh.manifest.json",
+  ".specify/integrations/speckit.manifest.json",
+]) {
+  const data = JSON.parse(fs.readFileSync(manifest, "utf8"));
+  for (const [file, expected] of Object.entries(data.files)) {
+    const actual = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    if (actual !== expected) throw new Error(`${file}: ${actual} != ${expected}`);
+  }
+}
+console.log("All managed file hashes match.");
+NODE
 ```
 
-对照 `.specify/integrations/dsh.manifest.json` 与 `.specify/integrations/speckit.manifest.json`。
+该命令读取 `.specify/integrations/dsh.manifest.json` 与 `.specify/integrations/speckit.manifest.json`，并核验清单中的全部文件。
 
-预期：所有受管文件的摘要匹配，未修改文件的摘要保持原值。
+预期：21/21 个受管文件的摘要匹配。
 
 ## 场景核验
 

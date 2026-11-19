@@ -93,7 +93,7 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Goal**: 主流程入口、维护说明和文件清单准确反映同步后的流程。
 
-**Independent Test**: `AGENTS.md` 与 `docs/development.md` 包含通用流程规则，九个受管文件的摘要与实际内容一致。
+**Independent Test**: `AGENTS.md` 与 `docs/development.md` 包含通用流程规则，九个同步文件与模板提交一致，七个本次修改的受管文件摘要与实际内容一致。
 
 - [x] T011 [P] [US2] 更新 `AGENTS.md` 的开发流程表，写明 specify、clarify、plan、tasks、implement 的访谈、审查和未决项门禁
 - [x] T012 [P] [US2] 更新 `docs/development.md` 的 Spec Kit 流程、纯文档质量要求、核心流程维护说明与文件地图，保留本仓库专有测试和实机验证内容
@@ -107,7 +107,7 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Purpose**: 验证文件一致性、流程行为与仓库质量门禁。
 
-- [ ] T014 [US2] 按 [quickstart.md](./quickstart.md) 审查完整 diff，并运行 `git diff --check`、`pnpm format && pnpm check` 与 `pnpm run full-check`
+- [x] T014 [US2] 按 [quickstart.md](./quickstart.md) 审查完整 diff，并运行 `git diff --check`、`pnpm format && pnpm check` 与 `pnpm run full-check`
 
 **阶段提交**：`docs(023): 同步 Spec Kit 访谈与审查流程`
 
