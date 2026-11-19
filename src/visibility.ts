@@ -49,6 +49,8 @@ export interface CatalogState {
   readonly entries: readonly CatalogEntry[];
   /** 消息记录的显式选择。 */
   readonly overrides: Readonly<Record<string, boolean>>;
+  /** 最近一个 turn/end 的 seq；没有时为 null。 */
+  readonly turnEndSeq: number | null;
 }
 
 /** 空投影状态。 */
@@ -56,6 +58,7 @@ const EMPTY_STATE: CatalogState = Object.freeze({
   seq: null,
   entries: Object.freeze([]),
   overrides: Object.freeze({}),
+  turnEndSeq: null,
 });
 
 /** 读取一份目录条目数组；格式不符时返回 undefined。 */
@@ -89,19 +92,27 @@ export function parseCatalogState(value: unknown): CatalogState {
   if (seq !== null && (typeof seq !== 'number' || !Number.isInteger(seq) || seq < 0)) {
     throw new Error('better-mcp catalog state seq must be a non-negative integer or null');
   }
+  const turnEndSeq = value.turnEndSeq;
+  if (
+    turnEndSeq !== null &&
+    (typeof turnEndSeq !== 'number' || !Number.isInteger(turnEndSeq) || turnEndSeq < 0)
+  ) {
+    throw new Error('better-mcp catalog state turnEndSeq must be a non-negative integer or null');
+  }
   const entries = readEntries(value.entries);
   if (entries === undefined) throw new Error('better-mcp catalog state entries are invalid');
-  return { seq, entries, overrides: readOverrides(value.overrides) };
+  return { seq, entries, overrides: readOverrides(value.overrides), turnEndSeq };
 }
 
-/** 折叠一条会话事件：只关心本插件的目录消息。 */
+/** 折叠一条会话事件：关心本插件的目录消息与 Turn 结束边界。 */
 export function applyCatalogEvent(state: CatalogState, event: SessionEvent): CatalogState {
+  if (event.type === 'turn/end') return { ...state, turnEndSeq: event.seq };
   if (event.type !== 'user/message') return state;
   const source = (event.data as { source?: unknown }).source;
   if (!isRecord(source) || source.kind !== CATALOG_SOURCE) return state;
   const entries = readEntries(source.entries);
   if (entries === undefined) return state;
-  return { seq: event.seq, entries, overrides: readOverrides(source.overrides) };
+  return { ...state, seq: event.seq, entries, overrides: readOverrides(source.overrides) };
 }
 
 /** 目录投影定义：宿主私有，不进入客户端快照。 */
@@ -111,7 +122,7 @@ export const catalogProjection = {
     typeof CATALOG_SOURCE,
     CatalogState
   >['stateSchema'],
-  stateVersion: 1,
+  stateVersion: 2,
   init: () => EMPTY_STATE,
   apply: applyCatalogEvent,
 } satisfies Omit<ProjectionDefinition<typeof CATALOG_SOURCE, CatalogState>, 'wire'>;
@@ -177,7 +188,11 @@ export class VisibilityRuntime {
   /** 本会话的显式选择：投影记录与待定选择合并，只保留已配置的服务器。 */
   overridesOf(agent: Agent): Record<string, boolean> {
     const servers = this.getSettings().servers;
-    const recorded = this.catalogState(agent).overrides;
+    const state = this.catalogState(agent);
+    const reset = state.turnEndSeq !== null && (state.seq === null || state.seq < state.turnEndSeq);
+    const recorded = reset
+      ? Object.fromEntries(Object.keys(servers).map((name) => [name, false]))
+      : state.overrides;
     const pending = this.pending.get(agent);
     if (pending !== undefined) {
       for (const [name, active] of Object.entries(pending)) {
@@ -222,6 +237,12 @@ export class VisibilityRuntime {
     this.pending.set(agent, pending);
     this.sync(agent);
     this.notify(agent);
+  }
+
+  /** Turn 结束后清除待定选择并重算限制；目录更新留到下一模型步骤。 */
+  deactivateAfterTurn(agent: Agent): void {
+    this.pending.delete(agent);
+    this.sync(agent);
   }
 
   /** 按当前可见性重算一个 Agent 的工具限制。 */

@@ -25,9 +25,9 @@ description: "Turn 结束后自动停用 MCP 的实施任务"
 
 **⚠️ CRITICAL**: 两个用户故事都依赖此阶段
 
-- [ ] T003 [P] 在 `src/visibility.ts` 为 CatalogState 增加 `turnEndSeq: number | null`，将投影版本升为 2，并提供结束后清除待定选择与重算限制的方法
-- [ ] T004 [P] 在 `tests/helpers.ts` 增加向会话日志提交指定结束原因的 `turn/end` 并发出 `session/event` 的模拟能力
-- [ ] T005 运行 `pnpm test:code tests/visibility.test.ts` 验证现有行为并提交 Phase 2 的 `src/visibility.ts` 与 `tests/helpers.ts`
+- [x] T003 [P] 在 `src/visibility.ts` 为 CatalogState 增加 `turnEndSeq: number | null`，将投影版本升为 2，并提供结束后清除待定选择与重算限制的方法
+- [x] T004 [P] 在 `tests/helpers.ts` 增加向会话日志提交指定结束原因的 `turn/end` 并发出 `session/event` 的模拟能力
+- [x] T005 运行 `pnpm test:code tests/visibility.test.ts` 验证现有行为并提交 Phase 2 的 `src/visibility.ts` 与 `tests/helpers.ts`
 
 **Checkpoint**: 投影能跨恢复识别 Turn 边界，测试能模拟结束事件
 
