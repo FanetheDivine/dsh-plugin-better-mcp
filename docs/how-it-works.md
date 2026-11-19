@@ -71,20 +71,22 @@
 | --- | --- |
 | 隐藏工具 | `agent.ctx.tools.restrict({ deny })`，deny 为不可见服务器的 `mcp__<server>__` 工具 |
 | 工具归属 | 按最长服务器名匹配 `mcp__<server>__` 前缀 |
-| 默认值 | 会话未显式选择时取 `!lazy` |
+| 默认值 | 会话首个 Turn 未显式选择时取 `!lazy` |
 | 显式选择 | `mcp_manage` 写入内存待定表，下一步的目录消息把它记入 `source.overrides` |
-| 读取历史 | 宿主私有投影 `better-mcp-catalog` 折叠最近一条目录消息 |
+| Turn 结束 | 目录消息早于最近 `turn/end` 时，全部服务器按 inactive 计算 |
+| 读取历史 | 宿主私有投影 `better-mcp-catalog` 折叠最近一条目录消息与最近 `turn/end` 的 seq |
 
 限制在以下时刻重算：
 
 - `agent/created`：会话创建、恢复、清空或压缩后。
 - `mcp_manage` 执行时，只处理调用方会话；可见性实际变化后重算限制并注入目录。
+- `session/event` 提交 `turn/end` 后，清除目标 Agent 的待定选择并重算限制。完成、失败与取消使用相同处理。
 - `tools/change`：合并到一个微任务后重算全部会话。
 - 配置对账完成后，重算全部在线会话并注入目录。
 
 deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change` 因此不会循环。
 
-宿主在 `agent/pre-step` 之前解析工具集，限制必须在步骤开始前生效。
+宿主在 `agent/pre-step` 之前解析工具集，限制必须在步骤开始前生效。`turn/end` 的处理不调用 `notify`，避免待处理目录延续 Agent 执行。
 
 ### 目录消息
 
@@ -104,7 +106,7 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 1. 过滤本来源的目录消息。
 2. 按最新配置与可见性追加至多一条 user 角色消息。
 
-配置恢复时也会移除过期的待处理目录。
+配置恢复时也会移除过期的待处理目录。Turn 结束后的下一模型步骤按相同流程写入全 inactive 目录；目录未变时跳过。
 
 - 消息正文以 `<system-reminder>` 包裹，文本由 `src/catalog.ts` 渲染。
 - `source.kind` 为 `better-mcp-catalog`，`form` 为 `catalog`。
@@ -181,6 +183,12 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
         → agent.ctx.tools.restrict
         → notify 当前 Agent
           → agent.inject(nextStep)
+
+Agent
+  → session/event(turn/end)
+    → VisibilityRuntime.deactivateAfterTurn
+      → 清除待定选择
+      → agent.ctx.tools.restrict
 
 Agent
   → agent/pre-step

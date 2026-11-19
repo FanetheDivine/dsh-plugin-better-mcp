@@ -95,6 +95,11 @@ export function apply(ctx: Context, config?: unknown): void {
       return undefined;
     });
     scoped.on('agent/disposed', ({ agent }) => visibility.forget(agent));
+    scoped.on('session/event', (session, event) => {
+      if (event.type !== 'turn/end') return;
+      const agent = scoped.agents.get(session.id);
+      if (agent !== undefined) visibility.deactivateAfterTurn(agent);
+    });
     scoped.on('agent/pre-step', async ({ agent }, next) => {
       const decision = await next();
       if (decision.kind === 'reject') return decision;

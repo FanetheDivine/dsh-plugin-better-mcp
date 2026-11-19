@@ -50,7 +50,7 @@ export function renderManageResult(result: ManageResult): string {
   const { server } = result;
   if (!result.active) return `${server} is now inactive. Do not call mcp__${server}__ tools.`;
   if (result.state === 'connected') {
-    return `${server} is now active. Its ${result.toolCount ?? 0} tools are available as mcp__${server}__<tool> from the next step.`;
+    return `${server} is now active. Its ${result.toolCount ?? 0} tools are available as mcp__${server}__<tool> from the next step until the current turn ends.`;
   }
   const reason = result.detail === undefined ? '' : `: ${result.detail}`;
   return `${server} is now active, but it is ${result.state}${reason}. Its tools appear once it connects.`;
@@ -65,7 +65,7 @@ export function buildManageTool(
   return {
     name: 'mcp_manage',
     description:
-      "Show or hide one MCP server's tools in this session. Active servers expose their tools as mcp__<server>__<tool> from the next step; inactive servers' tools are removed. The session's MCP catalog lists the servers.",
+      "Show or hide one MCP server's tools in this session. Active servers expose their tools as mcp__<server>__<tool> from the next step until the current turn ends; inactive servers' tools are removed. The session's MCP catalog lists the servers.",
     parameters: {
       type: 'object',
       properties: {

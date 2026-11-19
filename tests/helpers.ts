@@ -68,7 +68,7 @@ export interface FakeMessage {
 /** 可编程 Agent 模拟。 */
 export interface FakeAgent {
   id: string;
-  session: { events: FakeEvent[]; surface: { nodes: number[] }; readonly seq: number };
+  session: { id: string; events: FakeEvent[]; surface: { nodes: number[] }; readonly seq: number };
   ctx: { tools: { restrict(filter: { allow?: string[]; deny?: string[] }): () => void } };
   /** 等待后续步骤准入的消息。 */
   inbox: { nextStep: FakeMessage[]; nextTurn: FakeMessage[] };
@@ -92,6 +92,7 @@ export function makeAgent(id = 'agent-1'): FakeAgent {
   const events: FakeEvent[] = [];
   const nextStep: FakeMessage[] = [];
   const session = {
+    id,
     events,
     surface: { nodes: [] as number[] },
     get seq() {
@@ -149,6 +150,8 @@ export interface MockCtxState {
   _loggerCalls: Array<{ level: string; args: unknown[] }>;
   _setStatus(name: string, status: McpManagedServerStatus): void;
   _setExecuteResult(result: { content: unknown[]; isError: boolean }): void;
+  /** 提交并发布一个 Turn 结束事件。 */
+  _endTurn(agent: FakeAgent, kind?: 'completed' | 'error' | 'aborted'): void;
   _emit(type: string, ...args: unknown[]): void;
   /** 依注册顺序执行一个 waterfall 事件。 */
   _waterfall(type: string, payload: unknown, base: unknown): Promise<unknown>;
@@ -332,6 +335,7 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
       },
     },
     agents: {
+      get: (id: string) => state._agents.find((agent) => agent.id === id),
       list: () => [...state._agents],
     },
     sessionProjections: {
@@ -386,6 +390,13 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
       (
         ctx as unknown as { executeResult: { content: unknown[]; isError: boolean } }
       ).executeResult = result;
+    },
+    _endTurn(agent: FakeAgent, kind = 'completed') {
+      const seq = agent.session.events.length;
+      const turn = agent.session.events.filter((event) => event.type === 'turn/end').length + 1;
+      const event = { seq, type: 'turn/end', data: { turn, reason: { kind } } };
+      agent.session.events.push(event);
+      (ctx as unknown as MockCtxState)._emit('session/event', agent.session, event);
     },
     _emit(type: string, ...args: unknown[]) {
       for (const listener of state._listeners.get(type) ?? []) listener(...args);

@@ -32,7 +32,7 @@ function renderList(entries: readonly CatalogEntry[]): string[] {
 
 /** 用法说明。 */
 const USAGE =
-  'Call `mcp_manage` with `{ "server": "<name>", "command": "active" }` before you need an inactive server\'s tools, and with `"inactive"` when you no longer need them. This list replaces earlier MCP server lists in this session.';
+  'Call `mcp_manage` with `{ "server": "<name>", "command": "active" }` before you need an inactive server\'s tools, and with `"inactive"` when you no longer need them. Active servers become inactive when the current turn ends. This list replaces earlier MCP server lists in this session.';
 
 /** 渲染完整目录。 */
 export function renderCatalog(entries: readonly CatalogEntry[]): string {
