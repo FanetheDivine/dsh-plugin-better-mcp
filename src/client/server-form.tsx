@@ -177,21 +177,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** OAuth 客户端标识备选项。 */
 const OAUTH_CLIENT_PRESETS: readonly {
-  id: 'dsh' | 'codex';
+  id: 'dsh';
   value: string;
   labelKey: McpKey;
   detailKey: McpKey;
 }[] = [
   { id: 'dsh', value: '', labelKey: 'oauthClientDsh', detailKey: 'oauthClientDshDetail' },
-  {
-    id: 'codex',
-    value: 'app_EMoamEEZ73f0CkXaXp7hrann',
-    labelKey: 'oauthClientCodex',
-    detailKey: 'oauthClientCodexDetail',
-  },
 ];
 
-/** 可自由输入并始终提供 DSH 与 Codex 备选项的客户端标识控件。 */
+/** 可自由输入并提供 DSH 动态注册备选项的客户端标识控件。 */
 function OAuthClientInput({
   t,
   value,

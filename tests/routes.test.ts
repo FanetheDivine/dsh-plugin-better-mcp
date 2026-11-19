@@ -105,6 +105,48 @@ function webRoute(ctx: ReturnType<typeof makeCtx>, path: string): Record<string,
   return route;
 }
 
+/** 模拟 Figma 官方 MCP 的授权发现与动态注册。 */
+function stubFigmaOAuth(registration: Array<Record<string, unknown>>): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const target = String(input);
+      if (init?.method === 'POST' && target === 'https://mcp.figma.com/mcp') {
+        return new Response('', {
+          status: 401,
+          headers: {
+            'www-authenticate':
+              'Bearer resource_metadata="https://mcp.figma.com/.well-known/oauth-protected-resource"',
+          },
+        });
+      }
+      if (target === 'https://mcp.figma.com/.well-known/oauth-protected-resource') {
+        return Response.json({
+          resource: 'https://mcp.figma.com/mcp',
+          authorization_servers: ['https://api.figma.com'],
+          scopes_supported: ['mcp:connect'],
+        });
+      }
+      if (target === 'https://api.figma.com/.well-known/oauth-authorization-server') {
+        return Response.json({
+          issuer: 'https://api.figma.com',
+          authorization_endpoint: 'https://www.figma.com/oauth/mcp',
+          token_endpoint: 'https://api.figma.com/v1/oauth/token',
+          registration_endpoint: 'https://api.figma.com/v1/oauth/mcp/register',
+        });
+      }
+      if (target === 'https://api.figma.com/v1/oauth/mcp/register') {
+        registration.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+        return Response.json(
+          { client_id: 'figma-dynamic-client', client_secret: 'figma-secret' },
+          { status: 201 },
+        );
+      }
+      return new Response('unexpected', { status: 500 });
+    }),
+  );
+}
+
 describe('status 与懒加载', () => {
   it('返回服务器列表', async () => {
     const { ctx } = harness({
@@ -299,9 +341,56 @@ describe('OAuth 路由', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body.redirectUri).toBe('http://127.0.0.1:3210/better-mcp/oauth/callback');
+    expect(registration[0]?.client_name).toBe('DeepSeek Harness (better-mcp)');
     expect(registration[0]?.redirect_uris).toEqual([
       'http://127.0.0.1:3210/better-mcp/oauth/callback',
     ]);
+  });
+
+  it('Figma 忽略 OpenAI 固定标识并用 Codex 动态注册', async () => {
+    const { ctx } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: [], clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' },
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+
+    const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    expect(response.status).toBe(200);
+    expect(registration).toHaveLength(1);
+    expect(registration[0]?.client_name).toBe('Codex');
+    const target = new URL(String(response.json.url));
+    expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
+    expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
+    expect(target.searchParams.get('scope')).toBe('mcp:connect');
+  });
+
+  it('Figma 保留其他显式客户端标识', async () => {
+    const { ctx } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: ['mcp:connect'], clientId: 'custom-figma-client' },
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+
+    const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    expect(response.status).toBe(200);
+    expect(registration).toHaveLength(0);
+    expect(new URL(String(response.json.url)).searchParams.get('client_id')).toBe(
+      'custom-figma-client',
+    );
   });
 
   it('配置固定客户端：写入配置与凭据库', async () => {

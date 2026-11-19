@@ -36,13 +36,13 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ### Tests for User Story 1
 
-- [ ] T003 [P] [US1] 在 `tests/routes.test.ts` 覆盖 Figma 官方地址的 DCR 注册名、旧 `app_` 标识兼容、动态 client_id 与显式自定义客户端保留
-- [ ] T004 [P] [US1] 在 `tests/client.test.ts` 覆盖客户端表单仅提供 DSH 动态注册与自由输入，不再输出 Codex 固定 `app_` 备选项
+- [X] T003 [P] [US1] 在 `tests/routes.test.ts` 覆盖 Figma 官方地址的 DCR 注册名、旧 `app_` 标识兼容、动态 client_id 与显式自定义客户端保留
+- [X] T004 [P] [US1] 在 `tests/client.test.ts` 覆盖客户端表单仅提供 DSH 动态注册与自由输入，不再输出 Codex 固定 `app_` 备选项
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] 在 `src/routes.ts` 对 `https://mcp.figma.com/mcp` 使用 `client_name: Codex` 动态注册，并仅在 Figma 场景忽略 `app_EMoamEEZ73f0CkXaXp7hrann`
-- [ ] T006 [US1] 在 `src/client/server-form.tsx` 与 `src/client/locales.ts` 移除 Codex 固定标识备选项，保留动态注册和自由输入说明
+- [X] T005 [US1] 在 `src/routes.ts` 对 `https://mcp.figma.com/mcp` 使用 `client_name: Codex` 动态注册，并仅在 Figma 场景忽略 `app_EMoamEEZ73f0CkXaXp7hrann`
+- [X] T006 [US1] 在 `src/client/server-form.tsx` 与 `src/client/locales.ts` 移除 Codex 固定标识备选项，保留动态注册和自由输入说明
 
 **Checkpoint**: Figma 启动授权不再把 OpenAI 固定标识发送给 Figma
 

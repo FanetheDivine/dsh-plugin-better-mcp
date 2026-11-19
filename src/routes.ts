@@ -30,6 +30,23 @@ import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from 
 /** 固定回调地址不合法时的错误文本。 */
 const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
 
+/** OpenAI 登录客户端标识，不能作为 Figma MCP 的固定客户端。 */
+const OPENAI_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
+
+/** 判断是否为 Figma 官方远程 MCP 地址。 */
+function isFigmaMcpEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'mcp.figma.com' &&
+      url.pathname.replace(/\/+$/, '') === '/mcp'
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** 授权启动失败及其 HTTP 状态。 */
 class AuthorizationStartError extends Error {
   constructor(
@@ -333,12 +350,16 @@ export class PluginRoutes {
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
       const redirectUri = oauthDefinition.redirectUri ?? `${origin}${CALLBACK_PATH}`;
-      let clientId = oauthDefinition.clientId;
+      const figma = isFigmaMcpEndpoint(endpoint);
+      let clientId =
+        figma && oauthDefinition.clientId === OPENAI_CODEX_CLIENT_ID
+          ? undefined
+          : oauthDefinition.clientId;
       let clientSecret =
         oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
       if (clientId === undefined) {
         const registered = await registerClient(discovery, {
-          clientName: 'DeepSeek Harness (better-mcp)',
+          clientName: figma ? 'Codex' : 'DeepSeek Harness (better-mcp)',
           redirectUri,
           scopes,
         });
