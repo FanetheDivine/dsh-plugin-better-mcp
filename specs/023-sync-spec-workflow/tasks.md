@@ -55,8 +55,8 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Independent Test**: 无未决标记的规格仍进入需求访谈；批次覆盖全部可独立问题，依赖未满足的问题延后。
 
-- [ ] T004 [P] [US1] 将 `.dsh/skills/speckit-specify/SKILL.md` 同步到模板提交 `03c8e9e`，保留 front matter 与创建流程，固定进入 clarify
-- [ ] T005 [P] [US1] 将 `.dsh/skills/speckit-clarify/SKILL.md` 同步到模板提交 `03c8e9e`，落实探索前置、稳定编号、依赖分批、推荐答案和部分回答处理
+- [x] T004 [P] [US1] 将 `.dsh/skills/speckit-specify/SKILL.md` 同步到模板提交 `03c8e9e`，保留 front matter 与创建流程，固定进入 clarify
+- [x] T005 [P] [US1] 将 `.dsh/skills/speckit-clarify/SKILL.md` 同步到模板提交 `03c8e9e`，落实探索前置、稳定编号、依赖分批、推荐答案和部分回答处理
 
 **Checkpoint**: 需求访谈阶段可跨会话恢复，未答复项保持可见。
 
