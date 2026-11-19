@@ -4,7 +4,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   configureClient,
@@ -59,6 +59,29 @@ const STATE_KEYS: Record<string, McpKey> = {
   disabled: 'stateDisabled',
   closed: 'stateClosed',
 };
+
+/** 面板状态轮询间隔。 */
+const STATUS_POLL_INTERVAL_MS = 1000;
+
+/** 立即读取并串行轮询；返回停止函数，停止后在途请求也不会续排。 */
+export function startStatusPolling(refresh: () => Promise<void>): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tick = async (): Promise<void> => {
+    try {
+      await refresh();
+    } catch {
+      // 读取函数负责展示错误，后续轮询继续。
+    }
+    if (stopped) return;
+    timer = setTimeout(() => void tick(), STATUS_POLL_INTERVAL_MS);
+  };
+  void tick();
+  return () => {
+    stopped = true;
+    if (timer !== undefined) clearTimeout(timer);
+  };
+}
 
 /** 把服务器状态格式化为状态名与补充元数据。 */
 export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[] {
@@ -214,19 +237,34 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [deleting, setDeleting] = useState<ServerRow | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
   const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
+  const snapshotRevision = useRef(0);
 
-  /** 重新读取快照。 */
+  /** 写入操作快照，并使较早的在途读取失效。 */
+  const acceptSnapshot = (next: PanelSnapshot): void => {
+    snapshotRevision.current += 1;
+    setSnapshot(next);
+  };
+
+  /** 重新读取快照；只有最新读取可以更新面板。 */
   const load = useCallback(async (): Promise<void> => {
+    const revision = ++snapshotRevision.current;
     try {
-      setSnapshot(await fetchStatus());
+      const next = await fetchStatus();
+      if (revision !== snapshotRevision.current) return;
+      setSnapshot(next);
       setLoadError(undefined);
     } catch (error) {
+      if (revision !== snapshotRevision.current) return;
       setLoadError(error instanceof Error ? error.message : String(error));
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    const stop = startStatusPolling(load);
+    return () => {
+      snapshotRevision.current += 1;
+      stop();
+    };
   }, [load]);
 
   /** 执行一个带忙态的操作并返回是否成功。 */
@@ -238,7 +276,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     setActionError(undefined);
     try {
       const result = await operation();
-      if (result !== undefined) setSnapshot(result);
+      if (result !== undefined) acceptSnapshot(result);
       return true;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
@@ -285,7 +323,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           ...(values.redirectUri.trim() === '' ? {} : { redirectUri: values.redirectUri.trim() }),
         });
       }
-      setSnapshot(next);
+      acceptSnapshot(next);
       setEditing(undefined);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : String(error));

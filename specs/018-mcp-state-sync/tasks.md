@@ -44,12 +44,12 @@ description: "MCP 状态与会话同步实施任务"
 
 ### Tests for User Story 1
 
-- [ ] T003 [US1] 在 `tests/client.test.ts` 增加立即读取、1 秒串行刷新、慢请求不重叠、失败后续刷新与卸载清理测试，并确认新增测试失败
+- [X] T003 [US1] 在 `tests/client.test.ts` 增加立即读取、1 秒串行刷新、慢请求不重叠、失败后续刷新与卸载清理测试，并确认新增测试失败
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] 在 `src/client/panel.tsx` 实现串行状态轮询、最新快照序号和卸载失效处理，接入手动刷新与表单结果
-- [ ] T005 [US1] 运行 `tests/client.test.ts` 与相关源码测试，验证弹窗和配置页共享面板的刷新行为
+- [X] T004 [US1] 在 `src/client/panel.tsx` 实现串行状态轮询、最新快照序号和卸载失效处理，接入手动刷新与表单结果
+- [X] T005 [US1] 运行 `tests/client.test.ts` 与相关源码测试，验证弹窗和配置页共享面板的刷新行为
 
 **Checkpoint**: 用户保持弹窗打开即可看到最终连接状态，US1 可以独立交付。
 
