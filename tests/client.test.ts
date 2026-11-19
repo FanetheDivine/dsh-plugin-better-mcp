@@ -84,11 +84,7 @@ describe('前端入口', () => {
     expect(dictionary?.dicts.zh).toBe(zh);
     expect(dictionary?.dicts.en).toBe(en);
 
-    expect(ctx._slotInjections).toEqual([
-      'sidebar.footer.action',
-      'plugins.row.config',
-      'plugins.bundle.config',
-    ]);
+    expect(ctx._slotInjections).toEqual(['sidebar.footer.action', 'plugins.row.config']);
 
     expect(ctx._slotRegistrations[0]?.options).toEqual({
       name: 'sidebar.footer.action',
@@ -99,11 +95,6 @@ describe('前端入口', () => {
     expect(ctx._slotRegistrations[1]?.options).toEqual({
       name: 'plugins.row.config',
       key: ROW_KEY,
-      locale: NS,
-    });
-    expect(ctx._slotRegistrations[2]?.options).toEqual({
-      name: 'plugins.bundle.config',
-      key: PACKAGE_NAME,
       locale: NS,
     });
 
@@ -123,10 +114,23 @@ describe('前端入口', () => {
     expect(narrow).toContain('data-rail="rail"');
   });
 
-  it('通过宿主导航打开本插件配置页', () => {
+  it('通过宿主导航打开本插件的行配置页', () => {
     const openBundle = vi.fn();
-    openPluginConfig({ pluginNavigation: { openBundle } } as never);
+    const setView = vi.fn();
+    const ctx = {
+      pluginNavigation: { openBundle },
+      slots: {
+        entries: () => [
+          {
+            options: { key: 'plugins' },
+            store: { create: () => ({ actions: { setView } }) },
+          },
+        ],
+      },
+    };
+    openPluginConfig(ctx as never);
     expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
+    expect(setView).toHaveBeenCalledWith({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
   });
 });
 

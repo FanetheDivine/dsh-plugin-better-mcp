@@ -28,9 +28,16 @@ export const ROW_ID = 'better-mcp';
 /** 配置页的槽位键。 */
 export const ROW_KEY = `${PACKAGE_NAME}#${ROW_ID}`;
 
-/** 打开本插件的配置页。 */
+/** 打开本插件的行配置页。 */
 export function openPluginConfig(ctx: Context): void {
   ctx.pluginNavigation.openBundle(PACKAGE_NAME);
+  // 宿主的 main 槽位键未纳入 SlotMap 类型声明。
+  const entry = ctx.slots
+    .entries('main' as never)
+    .find((candidate) => candidate.options.key === 'plugins');
+  const store = entry?.store;
+  if (store === undefined || typeof store === 'function') return;
+  store.create().actions.setView?.({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
 }
 
 /** 侧栏触发按钮。 */
@@ -89,11 +96,5 @@ export function apply(ctx: Context): void {
   );
   ctx.slots.inject('plugins.row.config', () =>
     ctx.slots.register({ name: 'plugins.row.config', key: ROW_KEY, locale: NS }, ConfigPage),
-  );
-  ctx.slots.inject('plugins.bundle.config', () =>
-    ctx.slots.register(
-      { name: 'plugins.bundle.config', key: PACKAGE_NAME, locale: NS },
-      ConfigPage,
-    ),
   );
 }

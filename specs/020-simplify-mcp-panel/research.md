@@ -42,6 +42,6 @@
 
 ## 配置页导航
 
-- Decision: 客户端声明 `pluginNavigation` 注入，侧栏调用 `openBundle` 打开插件详情，并同时注册 `plugins.bundle.config` 与 `plugins.row.config`。
-- Rationale: 使用宿主导航可以直接显示配置面板，无需模拟点击行配置按钮。
-- Alternatives considered: 打开 MCP 弹窗不符合要求；仅注册行配置仍需第二次点击。
+- Decision: 客户端声明 `pluginNavigation` 注入，先用 `openBundle` 选中插件页，再通过该页注册的导航 store 设置 `kind: row` 与 `better-mcp` 行 id。只注册 `plugins.row.config`。
+- Rationale: 宿主公开接口没有 `openRow`；导航 store 是页面自身的行选择状态，直接进入内层配置页且无需模拟点击。
+- Alternatives considered: 在包详情注册额外面板会产生重复入口；DOM 模拟点击依赖按钮文案与渲染时序。

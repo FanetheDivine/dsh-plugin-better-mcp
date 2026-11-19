@@ -62,6 +62,11 @@
 - [x] T022 在 `src/client/index.tsx` 使用宿主插件导航打开本插件详情，并在 `plugins.bundle.config` 注册同一面板；更新 `tests/client.test.ts`
 - [x] T023 更新 `README.md`、`specs/020-simplify-mcp-panel/quickstart.md` 与实机报告，运行完整检查并复验三项修正
 
+## Phase 8: 行配置页导航
+
+- [x] T024 在 `src/client/index.tsx` 移除包详情面板注册，通过插件页导航 store 直接选择 `better-mcp` 行，并在 `tests/client.test.ts` 覆盖目标页面
+- [x] T025 更新 `README.md` 与规格文档，运行检查并实机确认进入行配置页且包详情无重复面板
+
 ## Dependencies & Execution Order
 
 - Setup → Foundational → US1 → US2 → US3 → Polish。
