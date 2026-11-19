@@ -56,13 +56,13 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ### Tests for User Story 2
 
-- [ ] T007 [P] [US2] 在 `tests/routes.test.ts` 与 `tests/plugin.test.ts` 覆盖启动 Web 路由注册、302 Location、400/502 错误页与回调路由共存
-- [ ] T008 [P] [US2] 在 `tests/client.test.ts` 覆盖授权链接语义、URL 编码、待授权高亮、重新授权次要样式和键盘可聚焦性
+- [X] T007 [P] [US2] 在 `tests/routes.test.ts` 与 `tests/plugin.test.ts` 覆盖启动 Web 路由注册、302 Location、400/502 错误页与回调路由共存
+- [X] T008 [P] [US2] 在 `tests/client.test.ts` 覆盖授权链接语义、URL 编码、待授权高亮、重新授权次要样式和键盘可聚焦性
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] 在 `src/routes.ts` 注册 `GET /better-mcp/oauth/start`，成功返回 302 与 `Cache-Control: no-store`，失败返回含原始原因的 HTML 错误页
-- [ ] T010 [US2] 在 `src/client/panel.tsx`、`src/client/api.ts` 与 `src/client/ui.tsx` 用高亮 `<a target="_blank" rel="noreferrer">` 替代授权按钮和 `window.open` 流程
+- [X] T009 [US2] 在 `src/routes.ts` 注册 `GET /better-mcp/oauth/start`，成功返回 302 与 `Cache-Control: no-store`，失败返回含原始原因的 HTML 错误页
+- [X] T010 [US2] 在 `src/client/panel.tsx`、`src/client/api.ts` 与 `src/client/ui.tsx` 用高亮 `<a target="_blank" rel="noreferrer">` 替代授权按钮和 `window.open` 流程
 
 **Checkpoint**: 点击一次授权链接即可由 DSH 默认行为打开有效授权页
 

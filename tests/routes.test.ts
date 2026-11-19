@@ -105,6 +105,22 @@ function webRoute(ctx: ReturnType<typeof makeCtx>, path: string): Record<string,
   return route;
 }
 
+/** 调用一条普通 Web 路由并读取状态、响应头与正文。 */
+async function callWeb(
+  ctx: ReturnType<typeof makeCtx>,
+  path: string,
+  url: string,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  const route = webRoute(ctx, path);
+  const { res, read } = makeRes();
+  await (route.handler as (req: never, res: never) => Promise<void>)(
+    makeReq('GET', url, undefined, headers),
+    res,
+  );
+  return read();
+}
+
 /** 模拟 Figma 官方 MCP 的授权发现与动态注册。 */
 function stubFigmaOAuth(registration: Array<Record<string, unknown>>): void {
   vi.stubGlobal(
@@ -393,6 +409,65 @@ describe('OAuth 路由', () => {
     );
   });
 
+  it('授权启动 Web 路由直接 302 到授权服务器', async () => {
+    const { ctx } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+
+    const response = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=figma',
+      { host: '127.0.0.1:3210' },
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers['cache-control']).toBe('no-store');
+    const target = new URL(response.headers.location ?? '');
+    expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
+    expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
+    expect(target.searchParams.get('redirect_uri')).toBe(
+      'http://127.0.0.1:3210/better-mcp/oauth/callback',
+    );
+  });
+
+  it('授权启动 Web 路由返回 400 与 502 HTML 错误页', async () => {
+    const { ctx } = harness({
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const missing = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=missing',
+    );
+    expect(missing.status).toBe(400);
+    expect(missing.body).toContain('Authorization failed');
+    expect(missing.body).toContain('Unknown server');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));
+    const failed = await callWeb(
+      ctx,
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/start?server=one',
+    );
+    expect(failed.status).toBe(502);
+    expect(failed.headers['cache-control']).toBe('no-store');
+    expect(failed.body).toContain('401');
+  });
+
   it('配置固定客户端：写入配置与凭据库', async () => {
     const { ctx, refs } = harness({
       one: {
@@ -438,9 +513,12 @@ describe('OAuth 路由', () => {
 });
 
 describe('OAuth 回调', () => {
-  it('只注册 OAuth 回调一条 Web 路由', () => {
+  it('注册 OAuth 启动与回调 Web 路由', () => {
     const { ctx } = harness();
-    expect(ctx._routes.map((route) => route.path)).toEqual(['/better-mcp/oauth/callback']);
+    expect(ctx._routes.map((route) => route.path)).toEqual([
+      '/better-mcp/oauth/start',
+      '/better-mcp/oauth/callback',
+    ]);
   });
 
   it('回调未知 state 返回失败页', async () => {

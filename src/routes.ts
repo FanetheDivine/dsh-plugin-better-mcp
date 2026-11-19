@@ -8,7 +8,7 @@ import { createServer, type Server } from 'node:http';
 
 import type { OAuthClientConfig, ServerDefinition } from './config.ts';
 import { normalizeServerDefinition } from './config.ts';
-import { CALLBACK_PATH, PENDING_TTL_MS } from './constants.ts';
+import { CALLBACK_PATH, OAUTH_START_PATH, PENDING_TTL_MS } from './constants.ts';
 import {
   deleteClientSecret,
   deleteGrant,
@@ -154,9 +154,33 @@ export class PluginRoutes {
     });
   }
 
-  /** 注册 OAuth 回调路由。 */
+  /** 注册 OAuth 启动重定向与回调路由。 */
   registerWeb(): void {
     this.ctx.inject(['webServer'], (serverCtx) => {
+      this.disposers.push(
+        serverCtx.webServer.register({
+          kind: 'exact',
+          path: OAUTH_START_PATH,
+          handler: async (req, res) => {
+            const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+            try {
+              const result = await this.prepareAuthorization(
+                url.searchParams.get('server') ?? '',
+                this.originOf(req.headers.host ?? null),
+              );
+              res.writeHead(302, { location: result.url, 'cache-control': 'no-store' });
+              res.end();
+            } catch (error) {
+              const status = error instanceof AuthorizationStartError ? error.status : 502;
+              res.writeHead(status, {
+                'content-type': 'text/html; charset=utf-8',
+                'cache-control': 'no-store',
+              });
+              res.end(resultPage('Authorization failed', messageOf(error)));
+            }
+          },
+        } satisfies ServerRoute),
+      );
       this.disposers.push(
         serverCtx.webServer.register({
           kind: 'exact',

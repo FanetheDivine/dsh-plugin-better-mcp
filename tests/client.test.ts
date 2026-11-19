@@ -506,6 +506,28 @@ describe('服务器行', () => {
     expect(authorized).not.toContain('data-attention="true"');
   });
 
+  it('授权操作使用高亮原生链接并遵循默认外链行为', () => {
+    const pending = renderRow({ name: 'alpha beta', auth: 'oauth', authorized: false });
+    expect(pending).toMatch(
+      /<a[^>]*class="better-mcp-button better-mcp-button-primary better-mcp-button-sm"/,
+    );
+    expect(pending).toContain('href="/better-mcp/oauth/start?server=alpha%20beta"');
+    expect(pending).toContain('target="_blank"');
+    expect(pending).toContain('rel="noreferrer"');
+    expect(pending).toContain(`>${zh.authorize}</a>`);
+
+    const authorized = renderRow({ auth: 'oauth', authorized: true });
+    expect(authorized).toContain('better-mcp-button-outline');
+    expect(authorized).toContain(`>${zh.reauthorize}</a>`);
+    expect(authorized).not.toContain('better-mcp-button-primary');
+
+    const source = readFileSync(
+      path.join(import.meta.dirname, '..', 'src', 'client', 'panel.tsx'),
+      'utf8',
+    );
+    expect(source).not.toContain('window.open');
+  });
+
   it('连接诊断使用可展开区域', () => {
     const html = renderRow({ error: 'HTTP 502' });
     expect(html).toContain('<details class="better-mcp-diagnostics"');

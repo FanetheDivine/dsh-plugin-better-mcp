@@ -30,11 +30,9 @@ export interface PanelSnapshot {
 /** 服务器定义（面板提交的结构）。 */
 export type ServerDefinition = Record<string, unknown>;
 
-/** 授权启动结果。 */
-export interface OAuthStart {
-  url: string;
-  scopes: string[];
-  redirectUri: string;
+/** 生成可直接导航的授权启动地址。 */
+export function oauthStartUrl(server: string): string {
+  return `/better-mcp/oauth/start?server=${encodeURIComponent(server)}`;
 }
 
 /** 发起一个路由请求并解析 JSON。 */
@@ -89,11 +87,6 @@ export function upsertServer(server: string, definition: ServerDefinition): Prom
 /** 删除服务器。 */
 export function removeServer(server: string): Promise<PanelSnapshot> {
   return call('/api/better-mcp/servers/remove', { method: 'POST', body: { server } });
-}
-
-/** 发起授权。 */
-export function startOAuth(server: string): Promise<OAuthStart> {
-  return call(`/api/better-mcp/oauth/start?server=${encodeURIComponent(server)}`);
 }
 
 /** 退出登录。 */
