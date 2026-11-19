@@ -282,16 +282,11 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     try {
       const definition = definitionFromValues(values);
       let next = await upsertServer(values.name, definition);
-      if (
-        values.transport === 'streamable-http' &&
-        values.auth === 'oauth' &&
-        values.clientSecret !== ''
-      ) {
+      if (values.transport === 'streamable-http' && values.clientSecret !== '') {
         next = await configureClient({
           server: values.name,
           clientSecret: values.clientSecret,
           ...(values.clientId.trim() === '' ? {} : { clientId: values.clientId.trim() }),
-          ...(values.redirectUri.trim() === '' ? {} : { redirectUri: values.redirectUri.trim() }),
         });
       }
       acceptSnapshot(next);

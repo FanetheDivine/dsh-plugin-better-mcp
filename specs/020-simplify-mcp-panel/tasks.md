@@ -34,9 +34,9 @@
 
 **Independent Test**: 新增表单默认 stdio；HTTP 定义固定 `auth: oauth`；stdio 定义固定 `auth: none`；scopes 保持回填与保存。
 
-- [ ] T010 [US2] 在 `tests/client.test.ts` 更新表单默认值、校验、字段渲染与提交结构测试
-- [ ] T011 [US2] 在 `src/client/server-form.tsx` 将传输顺序与默认值改为 stdio，移除 `auth` 和 `redirectUri` 表单状态，HTTP 固定 OAuth
-- [ ] T012 [US2] 在 `src/client/panel.tsx` 停止提交 `redirectUri`，保留客户端密钥独立写入
+- [x] T010 [US2] 在 `tests/client.test.ts` 更新表单默认值、校验、字段渲染与提交结构测试
+- [x] T011 [US2] 在 `src/client/server-form.tsx` 将传输顺序与默认值改为 stdio，移除 `auth` 和 `redirectUri` 表单状态，HTTP 固定 OAuth
+- [x] T012 [US2] 在 `src/client/panel.tsx` 停止提交 `redirectUri`，保留客户端密钥独立写入
 
 ## Phase 5: User Story 3 - 选择兼容的 OAuth 客户端 (P3)
 

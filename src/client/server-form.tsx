@@ -24,28 +24,19 @@ export interface ServerFormValues {
   command: string;
   /** stdio 参数文本。 */
   argsText: string;
-  /** 认证方式。 */
-  auth: 'oauth' | 'none';
   /** 是否懒加载。 */
   lazy: boolean;
   /** OAuth 客户端标识。 */
   clientId: string;
   /** OAuth 客户端密钥。 */
   clientSecret: string;
-  /** OAuth 回调地址。 */
-  redirectUri: string;
   /** scopes 文本。 */
   scopesText: string;
 }
 
 /** 校验失败时返回的文案键。 */
 export type FormErrorKey =
-  | 'nameInvalid'
-  | 'descriptionRequired'
-  | 'urlInvalid'
-  | 'commandRequired'
-  | 'headersInvalid'
-  | 'redirectInvalid';
+  'nameInvalid' | 'descriptionRequired' | 'urlInvalid' | 'commandRequired' | 'headersInvalid';
 
 const FIELD_FOR_ERROR: Record<FormErrorKey, keyof ServerFormValues> = {
   nameInvalid: 'name',
@@ -53,7 +44,6 @@ const FIELD_FOR_ERROR: Record<FormErrorKey, keyof ServerFormValues> = {
   urlInvalid: 'url',
   headersInvalid: 'headersText',
   commandRequired: 'command',
-  redirectInvalid: 'redirectUri',
 };
 
 /** 把校验错误映射到对应的表单字段。 */
@@ -66,16 +56,14 @@ export function emptyForm(): ServerFormValues {
   return {
     name: '',
     description: '',
-    transport: 'streamable-http',
+    transport: 'stdio',
     url: '',
     headersText: '',
     command: '',
     argsText: '',
-    auth: 'oauth',
     lazy: true,
     clientId: '',
     clientSecret: '',
-    redirectUri: '',
     scopesText: '',
   };
 }
@@ -100,11 +88,9 @@ export function valuesFromDefinition(name: string, definition: ServerDefinition)
     argsText: Array.isArray(definition.args)
       ? definition.args.filter((value): value is string => typeof value === 'string').join('\n')
       : '',
-    auth: definition.auth === 'none' ? 'none' : 'oauth',
     lazy: definition.lazy !== false,
     clientId: typeof oauth.clientId === 'string' ? oauth.clientId : '',
     clientSecret: '',
-    redirectUri: typeof oauth.redirectUri === 'string' ? oauth.redirectUri : '',
     scopesText: scopes.join(' '),
   };
 }
@@ -146,19 +132,6 @@ export function validateValues(values: ServerFormValues): FormErrorKey | undefin
       return 'urlInvalid';
     }
     if (parseHeaders(values.headersText) === undefined) return 'headersInvalid';
-    if (values.auth === 'oauth' && values.redirectUri.trim() !== '') {
-      try {
-        const url = new URL(values.redirectUri);
-        if (
-          url.protocol !== 'http:' ||
-          (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost')
-        ) {
-          return 'redirectInvalid';
-        }
-      } catch {
-        return 'redirectInvalid';
-      }
-    }
   } else if (values.command.trim() === '') {
     return 'commandRequired';
   }
@@ -171,23 +144,20 @@ export function definitionFromValues(values: ServerFormValues): ServerDefinition
     description: values.description.trim(),
     transport: values.transport,
     lazy: values.lazy,
-    auth: values.transport === 'stdio' ? 'none' : values.auth,
+    auth: values.transport === 'stdio' ? 'none' : 'oauth',
   };
   if (values.transport === 'streamable-http') {
     definition.url = values.url.trim();
     const headers = parseHeaders(values.headersText) ?? {};
     if (Object.keys(headers).length > 0) definition.headers = headers;
-    if (values.auth === 'oauth') {
-      const oauth: Record<string, unknown> = {};
-      const scopes = values.scopesText
-        .split(/[\s,]+/)
-        .map((value) => value.trim())
-        .filter((value) => value !== '');
-      if (scopes.length > 0) oauth.scopes = scopes;
-      if (values.clientId.trim() !== '') oauth.clientId = values.clientId.trim();
-      if (values.redirectUri.trim() !== '') oauth.redirectUri = values.redirectUri.trim();
-      if (Object.keys(oauth).length > 0) definition.oauth = oauth;
-    }
+    const oauth: Record<string, unknown> = {};
+    const scopes = values.scopesText
+      .split(/[\s,]+/)
+      .map((value) => value.trim())
+      .filter((value) => value !== '');
+    if (scopes.length > 0) oauth.scopes = scopes;
+    if (values.clientId.trim() !== '') oauth.clientId = values.clientId.trim();
+    if (Object.keys(oauth).length > 0) definition.oauth = oauth;
   } else {
     definition.command = values.command.trim();
     const args = parseArgs(values.argsText);
@@ -314,8 +284,8 @@ export function ServerForm({
               update('transport', event.target.value === 'stdio' ? 'stdio' : 'streamable-http')
             }
           >
-            <option value="streamable-http">{t('transportHttp')}</option>
             <option value="stdio">{t('transportStdio')}</option>
+            <option value="streamable-http">{t('transportHttp')}</option>
           </select>
         </div>
         <div className="better-mcp-field better-mcp-field-full">
@@ -377,89 +347,50 @@ export function ServerForm({
               {fieldError('headersText')}
             </div>
             <div className="better-mcp-field">
-              <label className="better-mcp-label" htmlFor="better-mcp-auth">
-                {t('auth')}
+              <label className="better-mcp-label" htmlFor="better-mcp-clientId">
+                {t('oauthClient')}
               </label>
-              <select
-                id="better-mcp-auth"
-                name="auth"
+              <input
+                id="better-mcp-clientId"
+                name="clientId"
                 className="better-mcp-input"
-                value={values.auth}
-                aria-invalid={invalidField === 'auth'}
-                aria-describedby={describedBy('auth')}
-                onChange={(event) =>
-                  update('auth', event.target.value === 'none' ? 'none' : 'oauth')
-                }
-              >
-                <option value="oauth">{t('authOAuth')}</option>
-                <option value="none">{t('authNone')}</option>
-              </select>
+                value={values.clientId}
+                aria-invalid={invalidField === 'clientId'}
+                aria-describedby={describedBy('clientId')}
+                onChange={(event) => update('clientId', event.target.value)}
+              />
             </div>
-            {values.auth === 'oauth' ? (
-              <>
-                <div className="better-mcp-field">
-                  <label className="better-mcp-label" htmlFor="better-mcp-clientId">
-                    {t('oauthClient')}
-                  </label>
-                  <input
-                    id="better-mcp-clientId"
-                    name="clientId"
-                    className="better-mcp-input"
-                    value={values.clientId}
-                    aria-invalid={invalidField === 'clientId'}
-                    aria-describedby={describedBy('clientId')}
-                    onChange={(event) => update('clientId', event.target.value)}
-                  />
-                </div>
-                <div className="better-mcp-field">
-                  <label className="better-mcp-label" htmlFor="better-mcp-clientSecret">
-                    {t('clientSecret')}
-                  </label>
-                  <input
-                    id="better-mcp-clientSecret"
-                    name="clientSecret"
-                    className="better-mcp-input"
-                    type="password"
-                    autoComplete="new-password"
-                    value={values.clientSecret}
-                    placeholder={isEdit ? t('secretPlaceholder') : ''}
-                    aria-invalid={invalidField === 'clientSecret'}
-                    aria-describedby={describedBy('clientSecret')}
-                    onChange={(event) => update('clientSecret', event.target.value)}
-                  />
-                </div>
-                <div className="better-mcp-field better-mcp-field-full">
-                  <label className="better-mcp-label" htmlFor="better-mcp-redirectUri">
-                    {t('redirectUri')}
-                  </label>
-                  <input
-                    id="better-mcp-redirectUri"
-                    name="redirectUri"
-                    className="better-mcp-input"
-                    value={values.redirectUri}
-                    placeholder="http://127.0.0.1:19876/callback"
-                    aria-invalid={invalidField === 'redirectUri'}
-                    aria-describedby={describedBy('redirectUri')}
-                    onChange={(event) => update('redirectUri', event.target.value)}
-                  />
-                  {fieldError('redirectUri')}
-                </div>
-                <div className="better-mcp-field better-mcp-field-full">
-                  <label className="better-mcp-label" htmlFor="better-mcp-scopesText">
-                    {t('scopes')}
-                  </label>
-                  <input
-                    id="better-mcp-scopesText"
-                    name="scopesText"
-                    className="better-mcp-input"
-                    value={values.scopesText}
-                    aria-invalid={invalidField === 'scopesText'}
-                    aria-describedby={describedBy('scopesText')}
-                    onChange={(event) => update('scopesText', event.target.value)}
-                  />
-                </div>
-              </>
-            ) : null}
+            <div className="better-mcp-field">
+              <label className="better-mcp-label" htmlFor="better-mcp-clientSecret">
+                {t('clientSecret')}
+              </label>
+              <input
+                id="better-mcp-clientSecret"
+                name="clientSecret"
+                className="better-mcp-input"
+                type="password"
+                autoComplete="new-password"
+                value={values.clientSecret}
+                placeholder={isEdit ? t('secretPlaceholder') : ''}
+                aria-invalid={invalidField === 'clientSecret'}
+                aria-describedby={describedBy('clientSecret')}
+                onChange={(event) => update('clientSecret', event.target.value)}
+              />
+            </div>
+            <div className="better-mcp-field better-mcp-field-full">
+              <label className="better-mcp-label" htmlFor="better-mcp-scopesText">
+                {t('scopes')}
+              </label>
+              <input
+                id="better-mcp-scopesText"
+                name="scopesText"
+                className="better-mcp-input"
+                value={values.scopesText}
+                aria-invalid={invalidField === 'scopesText'}
+                aria-describedby={describedBy('scopesText')}
+                onChange={(event) => update('scopesText', event.target.value)}
+              />
+            </div>
           </>
         ) : (
           <>

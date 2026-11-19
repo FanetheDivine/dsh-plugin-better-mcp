@@ -23,6 +23,7 @@ import {
   ServerForm,
   type ServerFormValues,
   validateValues,
+  valuesFromDefinition,
 } from '../src/client/server-form.tsx';
 import { CLIENT_STYLES } from '../src/client/ui.tsx';
 import { makeClientCtx, translate } from './helpers.ts';
@@ -33,6 +34,7 @@ function values(overrides: Partial<ServerFormValues> = {}): ServerFormValues {
     ...emptyForm(),
     name: 'alpha',
     description: 'Alpha tools',
+    transport: 'streamable-http',
     url: 'https://example.com/mcp',
     ...overrides,
   };
@@ -153,24 +155,33 @@ describe('服务器表单辅助函数', () => {
     expect(validateValues(values({ description: '  ' }))).toBe('descriptionRequired');
   });
 
-  it('拒绝非回环的 OAuth 回调地址', () => {
-    expect(
-      validateValues(values({ auth: 'oauth', redirectUri: 'https://example.com/callback' })),
-    ).toBe('redirectInvalid');
+  it('新增表单默认 stdio，且 stdio 位于传输方式首位', () => {
+    expect(emptyForm().transport).toBe('stdio');
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: emptyForm(),
+          isEdit: false,
+          busy: false,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html.indexOf('value="stdio"')).toBeLessThan(html.indexOf('value="streamable-http"'));
+    expect(html).toContain('name="command"');
+    expect(html).not.toContain('name="url"');
   });
 
   it('接受合法的 http 配置', () => {
-    expect(
-      validateValues(values({ auth: 'oauth', redirectUri: 'http://127.0.0.1:19876/callback' })),
-    ).toBeUndefined();
-    expect(validateValues(values({ auth: 'none' }))).toBeUndefined();
+    expect(validateValues(values())).toBeUndefined();
   });
 
   it('http + OAuth 定义保留客户端标识与 scopes，不携带客户端密钥', () => {
     const definition = definitionFromValues(
       values({
         url: ' https://example.com/mcp ',
-        auth: 'oauth',
         clientId: 'client-1',
         clientSecret: 'secret-1',
         scopesText: 'read write',
@@ -191,13 +202,31 @@ describe('服务器表单辅助函数', () => {
         transport: 'stdio',
         command: ' npx ',
         argsText: ' -y\n\n server \n',
-        auth: 'oauth',
       }),
     );
     expect(definition.auth).toBe('none');
     expect(definition.command).toBe('npx');
     expect(definition.args).toEqual(['-y', 'server']);
     expect(definition.description).toBe('Alpha tools');
+  });
+
+  it('HTTP 编辑保存固定 OAuth，保留 scopes 并丢弃回调地址输入状态', () => {
+    const formValues = valuesFromDefinition('figma', {
+      description: 'Figma',
+      transport: 'streamable-http',
+      auth: 'none',
+      url: 'https://mcp.figma.com/mcp',
+      oauth: {
+        scopes: ['mcp:connect'],
+        redirectUri: 'http://127.0.0.1:19876/callback',
+      },
+    });
+    expect(formValues.scopesText).toBe('mcp:connect');
+    expect(formValues).not.toHaveProperty('auth');
+    expect(formValues).not.toHaveProperty('redirectUri');
+    const definition = definitionFromValues(formValues);
+    expect(definition.auth).toBe('oauth');
+    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'] });
   });
 });
 
@@ -208,7 +237,6 @@ describe('表单错误定位', () => {
     expect(fieldForError('urlInvalid')).toBe('url');
     expect(fieldForError('headersInvalid')).toBe('headersText');
     expect(fieldForError('commandRequired')).toBe('command');
-    expect(fieldForError('redirectInvalid')).toBe('redirectUri');
   });
 });
 
@@ -219,7 +247,7 @@ describe('ServerForm', () => {
         ServerForm as never,
         {
           t: translate(zh),
-          initial: emptyForm(),
+          initial: values(),
           isEdit: false,
           busy: false,
           onSubmit: () => undefined,
@@ -235,6 +263,9 @@ describe('ServerForm', () => {
     expect(html).toContain('required=""');
     expect(html).toContain('name="clientSecret"');
     expect(html).toContain('autoComplete="new-password"');
+    expect(html).toContain('name="scopesText"');
+    expect(html).not.toContain('name="auth"');
+    expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');
   });
 
