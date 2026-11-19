@@ -77,7 +77,10 @@ export function apply(ctx: Context, config?: unknown): void {
     const visibility = new VisibilityRuntime(scoped, () => settings, logger);
     await visibility.start();
     scoped.effect(() => {
-      afterReconcile = () => visibility.syncAll();
+      afterReconcile = () => {
+        visibility.syncAll();
+        visibility.notifyAll();
+      };
       return () => {
         afterReconcile = undefined;
         visibility.dispose();
@@ -96,12 +99,12 @@ export function apply(ctx: Context, config?: unknown): void {
       const decision = await next();
       if (decision.kind === 'reject') return decision;
       const catalog = visibility.catalogFor(agent);
-      if (catalog === undefined) return decision;
-      // 每步最多一条目录消息。
+      // 每步最多一条目录消息，配置恢复时也移除过期待处理目录。
       const rest = decision.messages.filter(
         (message) => (message.source as { kind?: unknown }).kind !== CATALOG_SOURCE,
       );
-      return { ...decision, messages: [...rest, catalog] };
+      if (catalog === undefined && rest.length === decision.messages.length) return decision;
+      return { ...decision, messages: catalog === undefined ? rest : [...rest, catalog] };
     });
     scoped.on('tools/change', () => visibility.scheduleSyncAll());
     visibility.syncAll();

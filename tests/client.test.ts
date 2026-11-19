@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PanelSnapshot } from '../src/client/api.ts';
 import { apply, inject, PACKAGE_NAME, ROW_ID, ROW_KEY } from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
-import { McpPanel, ServerItem, statusParts } from '../src/client/panel.tsx';
+import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
 import {
   definitionFromValues,
   emptyForm,
@@ -243,6 +243,58 @@ describe('ServerForm', () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('<fieldset');
     expect(html).toContain('disabled=""');
+  });
+});
+
+describe('状态轮询', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('立即读取，慢请求结束后才安排下一秒刷新', async () => {
+    vi.useFakeTimers();
+    const first = Promise.withResolvers<void>();
+    const refresh = vi.fn(() => first.promise);
+    const stop = startStatusPolling(refresh);
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    first.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('读取失败后继续刷新，停止后清除计时器', async () => {
+    vi.useFakeTimers();
+    const refresh = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(undefined);
+    const stop = startStatusPolling(refresh);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+    stop();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('停止后在途请求不再安排刷新', async () => {
+    vi.useFakeTimers();
+    const pending = Promise.withResolvers<void>();
+    const refresh = vi.fn(() => pending.promise);
+    const stop = startStatusPolling(refresh);
+
+    stop();
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 
