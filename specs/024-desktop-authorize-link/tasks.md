@@ -46,4 +46,4 @@ description: "桌面端鉴权链接实施任务"
 
 **Purpose**: 产出可安装包并装入 desktop profile
 
-- [ ] T008 运行 `pnpm format`、`pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm exec tsdown`、`pnpm build:types`，把构建产物装入 desktop profile 供用户实测
+- [X] T008 运行 `pnpm format`、`pnpm exec tsc --noEmit`、`pnpm lint`、`pnpm exec tsdown`、`pnpm build:types`，把构建产物装入 desktop profile 供用户实测
