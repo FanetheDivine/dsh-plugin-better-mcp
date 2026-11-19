@@ -95,9 +95,9 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Independent Test**: `AGENTS.md` 与 `docs/development.md` 包含通用流程规则，九个受管文件的摘要与实际内容一致。
 
-- [ ] T011 [P] [US2] 更新 `AGENTS.md` 的开发流程表，写明 specify、clarify、plan、tasks、implement 的访谈、审查和未决项门禁
-- [ ] T012 [P] [US2] 更新 `docs/development.md` 的 Spec Kit 流程、纯文档质量要求、核心流程维护说明与文件地图，保留本仓库专有测试和实机验证内容
-- [ ] T013 [US2] 更新 `.specify/integrations/dsh.manifest.json` 与 `.specify/integrations/speckit.manifest.json` 中五个 skill、两个模板的 SHA-256
+- [x] T011 [P] [US2] 更新 `AGENTS.md` 的开发流程表，写明 specify、clarify、plan、tasks、implement 的访谈、审查和未决项门禁
+- [x] T012 [P] [US2] 更新 `docs/development.md` 的 Spec Kit 流程、纯文档质量要求、核心流程维护说明与文件地图，保留本仓库专有测试和实机验证内容
+- [x] T013 [US2] 更新 `.specify/integrations/dsh.manifest.json` 与 `.specify/integrations/speckit.manifest.json` 中五个 skill、两个模板的 SHA-256
 
 **Checkpoint**: 仓库内流程说明与受管文件保持一致。
 
