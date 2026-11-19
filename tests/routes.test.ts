@@ -336,6 +336,14 @@ describe('OAuth 路由', () => {
         auth: 'oauth',
         lazy: true,
       },
+      dsh: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://mcp.example.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+        oauth: { scopes: [], clientName: 'DeepSeek Harness (better-mcp)' },
+      },
     });
     const registration: Array<Record<string, unknown>> = [];
     vi.stubGlobal(
@@ -385,10 +393,15 @@ describe('OAuth 路由', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body.redirectUri).toBe('http://127.0.0.1:3210/better-mcp/oauth/callback');
-    expect(registration[0]?.client_name).toBe('DeepSeek Harness (better-mcp)');
+    expect(registration[0]?.client_name).toBe('Codex');
     expect(registration[0]?.redirect_uris).toEqual([
       'http://127.0.0.1:3210/better-mcp/oauth/callback',
     ]);
+    const dshRequest = new Request('http://x/api/better-mcp/oauth/start?server=dsh', {
+      headers: { host: '127.0.0.1:3210' },
+    });
+    await fetchRoute(ctx, '/api/better-mcp/oauth/start')(dshRequest);
+    expect(registration[1]?.client_name).toBe('DeepSeek Harness (better-mcp)');
   });
 
   it('Figma 忽略 OpenAI 固定标识并用 Codex 动态注册', async () => {
@@ -609,6 +622,7 @@ describe('OAuth 回调', () => {
     );
     expect(callback.status).toBe(200);
     expect(callback.body).toContain('Authorization complete');
+    expect(callback.body).toContain('window.close()');
     expect(await readGrant(ctx as never, 'figma')).toMatchObject({
       accessToken: 'figma-access-token',
       clientId: 'figma-dynamic-client',
@@ -628,6 +642,7 @@ describe('OAuth 回调', () => {
     const result = read();
     expect(result.status).toBe(400);
     expect(result.body).toContain('Authorization failed');
+    expect(result.body).not.toContain('window.close()');
   });
 
   it('回调携带 error 时返回失败页', async () => {

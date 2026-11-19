@@ -7,7 +7,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | `pnpm format` | 通过 |
-| `pnpm check` | 13 个测试文件，211 项测试通过 |
+| `pnpm check` | 13 个测试文件，213 项测试通过 |
 | `pnpm build` | 构建成功，5 项产物测试通过 |
 | UI/UX 子代理评审 | 无阻塞问题；2 项可访问性建议已修复并回归 |
 
@@ -44,6 +44,9 @@
 | R5 减少动态效果 | `animation-name: none`，静态提示保留 |
 | R6 Figma 授权重定向 | 302 到 `https://www.figma.com/oauth/mcp`，使用动态 client_id 与 `http://127.0.0.1:<系统分配端口>/callback` |
 | R7 控制台 | 0 个错误 |
+| R8 OAuth 身份选择 | 默认 Codex；DSH 无选项说明；Codex 显示连接说明；DSH 状态可通过帮助按钮显示身份限制提示 |
+| R9 侧栏 SVG 呼吸 | 图标使用 `drop-shadow` 呼吸，按钮背景透明且 `box-shadow: none` |
+| R10 成功页自动关闭 | Chrome 中由 `target="_blank"` 打开的回调页执行 `window.close()` 并关闭 |
 
 动态回调矩阵实测：
 
@@ -70,5 +73,5 @@
 
 以下步骤需要用户账号和当前 Desktop 配置，未自动执行：
 
-1. 在新建 Web profile `rdt-figma-dynamic-022` 中点击 Figma 授权，完成账号授权回调并确认工具连接。
+1. 在新建 Web profile `rdt-figma-polish-022` 中点击 Figma 授权，完成账号授权回调并确认成功标签页关闭与工具连接。
 2. 在当前 Desktop 安装构建产物后，确认默认浏览器打开行为与完整授权流程。

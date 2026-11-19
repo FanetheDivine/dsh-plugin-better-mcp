@@ -270,10 +270,11 @@ describe('服务器表单辅助函数', () => {
     expect(oauth).not.toHaveProperty('clientSecret');
   });
 
-  it('DSH 备选项保持动态注册，自由输入原样保存客户端标识', () => {
-    const dsh = definitionFromValues(values({ clientId: '', scopesText: '' }));
-    expect(dsh.auth).toBe('oauth');
-    expect(dsh).not.toHaveProperty('oauth');
+  it('动态注册默认使用 Codex，可切换 DSH，固定客户端标识原样保存', () => {
+    const codex = definitionFromValues(values({ clientId: '', clientIdentity: 'codex' }));
+    expect(codex.oauth).toEqual({ clientName: 'Codex' });
+    const dsh = definitionFromValues(values({ clientId: '', clientIdentity: 'dsh' }));
+    expect(dsh.oauth).toEqual({ clientName: 'DeepSeek Harness (better-mcp)' });
     const custom = definitionFromValues(values({ clientId: 'custom-client', scopesText: '' }));
     expect(custom.oauth).toEqual({ clientId: 'custom-client' });
   });
@@ -308,7 +309,7 @@ describe('服务器表单辅助函数', () => {
     expect(formValues).not.toHaveProperty('redirectUri');
     const definition = definitionFromValues(formValues);
     expect(definition.auth).toBe('oauth');
-    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'] });
+    expect(definition.oauth).toEqual({ scopes: ['mcp:connect'], clientName: 'Codex' });
   });
 });
 
@@ -348,14 +349,33 @@ describe('ServerForm', () => {
     expect(html).toContain('name="scopesText"');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-controls="better-mcp-client-id-options"');
-    expect(html).toContain(zh.oauthClientDsh);
+    expect(html).toContain('value="Codex"');
+    expect(html).toContain('readonly=""');
+    expect(html).toContain('>DSH</span>');
+    expect(html).toContain(zh.oauthClientCodexDetail);
     expect(html).not.toContain('app_EMoamEEZ73f0CkXaXp7hrann');
-    expect(html).not.toContain('>Codex<');
-    expect(html).toContain('role="tooltip"');
-    expect(html).toContain(zh.oauthClientHelpText);
+    expect(html).not.toContain('role="tooltip"');
     expect(html).not.toContain('name="auth"');
     expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');
+  });
+
+  it('选择 DSH 时显示客户端身份提示且选中项只显示名称', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: values({ clientIdentity: 'dsh' }),
+          isEdit: false,
+          busy: false,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html).toContain('value="DSH"');
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain(zh.oauthClientHelpText);
   });
 
   it('保存期间禁用全部字段', () => {
@@ -612,16 +632,21 @@ describe('主题样式', () => {
     );
   });
 
-  it('待授权图标使用警告色阴影呼吸，并在减少动效时停用', () => {
+  it('待授权 SVG 图标使用警告色投影呼吸，并在减少动效时停用', () => {
     expect(CLIENT_STYLES).toMatch(
       /\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*var\(--dsw-alias-state-warn-primary\)/,
     );
     expect(CLIENT_STYLES).toMatch(
-      /\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*animation:\s*better-mcp-auth-breath/,
+      /\.better-mcp-sidebar-action\[data-attention='true'\] svg\s*\{[^}]*animation:\s*better-mcp-auth-breath/,
     );
-    expect(CLIENT_STYLES).toMatch(/@keyframes better-mcp-auth-breath\s*\{[\s\S]*box-shadow:/);
+    const breath = CLIENT_STYLES.slice(
+      CLIENT_STYLES.indexOf('@keyframes better-mcp-auth-breath'),
+      CLIENT_STYLES.indexOf('[data-sidebar-collapsed]'),
+    );
+    expect(breath).toContain('drop-shadow');
+    expect(breath).not.toContain('box-shadow');
     expect(CLIENT_STYLES).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.better-mcp-sidebar-action\[data-attention='true'\]\s*\{[^}]*animation:\s*none;/,
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.better-mcp-sidebar-action\[data-attention='true'\] svg\s*\{[^}]*animation:\s*none;/,
     );
   });
 });

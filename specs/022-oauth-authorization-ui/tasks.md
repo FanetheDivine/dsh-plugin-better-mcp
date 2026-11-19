@@ -122,6 +122,15 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ---
 
+## Phase 9: Acceptance Feedback
+
+- [X] T021 在 `src/routes.ts` 与 `tests/routes.test.ts` 让成功回调页调用 `window.close()`，失败页保留错误信息
+- [X] T022 在 `src/config.ts`、`src/client/server-form.tsx` 与 `src/client/locales.ts` 增加 DSH/Codex 动态注册身份，默认 Codex，并实现选项说明与 DSH 帮助提示
+- [X] T023 在 `src/client/ui.tsx` 将呼吸投影应用到 SVG 图标，保持按钮背景透明并覆盖减少动效测试
+- [X] T024 在新 Web profile 实测身份选择、DSH tooltip、SVG 投影与 Chrome 成功页自动关闭，更新验证报告
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

@@ -79,9 +79,10 @@ interface LoopbackListener {
   redirectUri: string;
 }
 
-/** 结果页标题与正文。 */
-function resultPage(title: string, detail: string): string {
-  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;padding:32px;line-height:1.5"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p></body>`;
+/** 结果页标题与正文；授权成功后请求浏览器关闭当前标签页。 */
+function resultPage(title: string, detail: string, autoClose = false): string {
+  const close = autoClose ? '<script>setTimeout(() => window.close(), 0)</script>' : '';
+  return `<!doctype html><meta charset="utf-8"><title>${escapeHtml(title)}</title><body style="font-family:system-ui,sans-serif;padding:32px;line-height:1.5"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(detail)}</p>${close}</body>`;
 }
 
 /** 路由与 OAuth 运行时。 */
@@ -206,6 +207,7 @@ export class PluginRoutes {
               resultPage(
                 result.ok ? 'Authorization complete' : 'Authorization failed',
                 result.detail,
+                result.ok,
               ),
             );
           },
@@ -406,7 +408,7 @@ export class PluginRoutes {
           oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
         if (clientId === undefined) {
           const registered = await registerClient(discovery, {
-            clientName: figma ? 'Codex' : 'DeepSeek Harness (better-mcp)',
+            clientName: oauthDefinition.clientName ?? 'Codex',
             redirectUri,
             scopes,
           });
@@ -564,7 +566,11 @@ export class PluginRoutes {
         'cache-control': 'no-store',
       });
       res.end(
-        resultPage(result.ok ? 'Authorization complete' : 'Authorization failed', result.detail),
+        resultPage(
+          result.ok ? 'Authorization complete' : 'Authorization failed',
+          result.detail,
+          result.ok,
+        ),
       );
       setTimeout(() => server.close(), 100);
     });

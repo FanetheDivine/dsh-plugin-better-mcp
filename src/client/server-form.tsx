@@ -26,7 +26,9 @@ export interface ServerFormValues {
   argsText: string;
   /** 是否懒加载。 */
   lazy: boolean;
-  /** OAuth 客户端标识。 */
+  /** OAuth 动态注册身份。 */
+  clientIdentity: 'dsh' | 'codex';
+  /** OAuth 固定客户端标识。 */
   clientId: string;
   /** OAuth 客户端密钥。 */
   clientSecret: string;
@@ -66,6 +68,7 @@ export function emptyForm(): ServerFormValues {
     command: '',
     argsText: '',
     lazy: true,
+    clientIdentity: 'codex',
     clientId: '',
     clientSecret: '',
     scopesText: '',
@@ -93,6 +96,7 @@ export function valuesFromDefinition(name: string, definition: ServerDefinition)
       ? definition.args.filter((value): value is string => typeof value === 'string').join('\n')
       : '',
     lazy: definition.lazy !== false,
+    clientIdentity: oauth.clientName === 'DeepSeek Harness (better-mcp)' ? 'dsh' : 'codex',
     clientId: typeof oauth.clientId === 'string' ? oauth.clientId : '',
     clientSecret: '',
     scopesText: scopes.join(' '),
@@ -160,7 +164,12 @@ export function definitionFromValues(values: ServerFormValues): ServerDefinition
       .map((value) => value.trim())
       .filter((value) => value !== '');
     if (scopes.length > 0) oauth.scopes = scopes;
-    if (values.clientId.trim() !== '') oauth.clientId = values.clientId.trim();
+    if (values.clientId.trim() !== '') {
+      oauth.clientId = values.clientId.trim();
+    } else {
+      oauth.clientName =
+        values.clientIdentity === 'codex' ? 'Codex' : 'DeepSeek Harness (better-mcp)';
+    }
     if (Object.keys(oauth).length > 0) definition.oauth = oauth;
   } else {
     definition.command = values.command.trim();
@@ -175,15 +184,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** OAuth 客户端标识备选项。 */
+/** OAuth 动态注册身份备选项。 */
 const OAUTH_CLIENT_PRESETS: readonly {
-  id: 'dsh';
-  value: string;
+  id: 'dsh' | 'codex';
   labelKey: McpKey;
-  detailKey: McpKey;
-}[] = [{ id: 'dsh', value: '', labelKey: 'oauthClientDsh', detailKey: 'oauthClientDshDetail' }];
+  detailKey?: McpKey;
+}[] = [
+  { id: 'dsh', labelKey: 'oauthClientDsh' },
+  { id: 'codex', labelKey: 'oauthClientCodex', detailKey: 'oauthClientCodexDetail' },
+];
 
-/** 可自由输入并提供 DSH 动态注册备选项的客户端标识控件。 */
+/** 选择动态注册身份；选中项只显示客户端名称。 */
 function OAuthClientInput({
   t,
   value,
@@ -192,16 +203,17 @@ function OAuthClientInput({
   onChange,
 }: {
   t: TranslateNS<typeof NS>;
-  value: string;
+  value: 'dsh' | 'codex';
   invalid: boolean;
   describedBy: string | undefined;
-  onChange: (value: string) => void;
+  onChange: (value: 'dsh' | 'codex') => void;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
+  const selected = OAUTH_CLIENT_PRESETS.find((preset) => preset.id === value);
 
   /** 选择备选项并保留输入框焦点。 */
-  const select = (value: string): void => {
+  const select = (value: 'dsh' | 'codex'): void => {
     onChange(value);
     setOpen(false);
     setActive(-1);
@@ -229,7 +241,7 @@ function OAuthClientInput({
     if (event.key === 'Enter' && open && active >= 0) {
       event.preventDefault();
       const preset = OAUTH_CLIENT_PRESETS[active];
-      if (preset !== undefined) select(preset.value);
+      if (preset !== undefined) select(preset.id);
     }
   };
 
@@ -237,13 +249,13 @@ function OAuthClientInput({
     <div className="better-mcp-autocomplete">
       <input
         id="better-mcp-clientId"
-        name="clientId"
+        name="clientIdentity"
         className="better-mcp-input"
-        value={value}
+        value={selected === undefined ? '' : t(selected.labelKey)}
+        readOnly
         role="combobox"
         autoComplete="off"
-        placeholder={t('oauthClientPlaceholder')}
-        aria-autocomplete="list"
+        aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="better-mcp-client-id-options"
         aria-activedescendant={
@@ -255,11 +267,6 @@ function OAuthClientInput({
         onClick={() => setOpen(true)}
         onBlur={() => {
           setOpen(false);
-          setActive(-1);
-        }}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(true);
           setActive(-1);
         }}
         onKeyDown={onKeyDown}
@@ -280,14 +287,15 @@ function OAuthClientInput({
             tabIndex={-1}
             className="better-mcp-autocomplete-option"
             data-active={active === index || undefined}
-            aria-selected={value === preset.value}
+            aria-selected={value === preset.id}
             onMouseDown={(event) => event.preventDefault()}
             onMouseEnter={() => setActive(index)}
-            onClick={() => select(preset.value)}
+            onClick={() => select(preset.id)}
           >
             <span className="better-mcp-autocomplete-label">{t(preset.labelKey)}</span>
-            <span className="better-mcp-autocomplete-detail">{t(preset.detailKey)}</span>
-            {preset.value !== '' ? <code>{preset.value}</code> : null}
+            {preset.detailKey === undefined ? null : (
+              <span className="better-mcp-autocomplete-detail">{t(preset.detailKey)}</span>
+            )}
           </button>
         ))}
       </div>
@@ -475,30 +483,32 @@ export function ServerForm({
                 <label className="better-mcp-label" htmlFor="better-mcp-clientId">
                   {t('oauthClient')}
                 </label>
-                <span className="better-mcp-help">
-                  <button
-                    type="button"
-                    className="better-mcp-help-trigger"
-                    aria-label={t('oauthClientHelp')}
-                    aria-describedby="better-mcp-oauth-client-help"
-                  >
-                    ?
-                  </button>
-                  <span
-                    id="better-mcp-oauth-client-help"
-                    className="better-mcp-help-tooltip"
-                    role="tooltip"
-                  >
-                    {t('oauthClientHelpText')}
+                {values.clientIdentity === 'dsh' ? (
+                  <span className="better-mcp-help">
+                    <button
+                      type="button"
+                      className="better-mcp-help-trigger"
+                      aria-label={t('oauthClientHelp')}
+                      aria-describedby="better-mcp-oauth-client-help"
+                    >
+                      ?
+                    </button>
+                    <span
+                      id="better-mcp-oauth-client-help"
+                      className="better-mcp-help-tooltip"
+                      role="tooltip"
+                    >
+                      {t('oauthClientHelpText')}
+                    </span>
                   </span>
-                </span>
+                ) : null}
               </div>
               <OAuthClientInput
                 t={t}
-                value={values.clientId}
+                value={values.clientIdentity}
                 invalid={invalidField === 'clientId'}
                 describedBy={describedBy('clientId')}
-                onChange={(value) => update('clientId', value)}
+                onChange={(value) => update('clientIdentity', value)}
               />
             </div>
             <div className="better-mcp-field">
