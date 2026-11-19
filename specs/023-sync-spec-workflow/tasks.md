@@ -42,8 +42,8 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Independent Test**: 两个模板包含四类区块，原执行步骤保持不变。
 
-- [ ] T002 [P] [US2] 将 `.specify/templates/spec-template.md` 同步到模板提交 `03c8e9e`，增加 `Draft`、`Approved`、`Waived` 状态说明以及三个记录区块
-- [ ] T003 [P] [US2] 将 `.specify/templates/plan-template.md` 同步到模板提交 `03c8e9e`，保留技术背景、宪章检查和项目结构并增加三个记录区块
+- [x] T002 [P] [US2] 将 `.specify/templates/spec-template.md` 同步到模板提交 `03c8e9e`，增加 `Draft`、`Approved`、`Waived` 状态说明以及三个记录区块
+- [x] T003 [P] [US2] 将 `.specify/templates/plan-template.md` 同步到模板提交 `03c8e9e`，保留技术背景、宪章检查和项目结构并增加三个记录区块
 
 **Checkpoint**: 两个模板与模板提交一致。
 
