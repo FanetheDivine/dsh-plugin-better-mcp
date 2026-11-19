@@ -4,7 +4,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { type KeyboardEvent, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import type { ServerDefinition } from './api.ts';
 import type { McpKey, NS } from './locales.ts';
 
@@ -332,6 +332,30 @@ export function ServerForm({
   const [values, setValues] = useState<ServerFormValues>(initial);
   const [invalid, setInvalid] = useState<FormErrorKey | undefined>(undefined);
   const invalidField = invalid === undefined ? undefined : fieldForError(invalid);
+  const clientHelp = useRef<HTMLSpanElement>(null);
+  const [clientHelpOpen, setClientHelpOpen] = useState(false);
+
+  useEffect(() => {
+    if (!clientHelpOpen) return;
+    const close = (): void => {
+      clientHelp.current?.querySelector('button')?.blur();
+      setClientHelpOpen(false);
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (target instanceof Node && clientHelp.current?.contains(target)) return;
+      close();
+    };
+    const onKeyDown = (event: { key: string }): void => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [clientHelpOpen]);
 
   const update = <K extends keyof ServerFormValues>(key: K, value: ServerFormValues[K]): void => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -483,32 +507,39 @@ export function ServerForm({
                 <label className="better-mcp-label" htmlFor="better-mcp-clientId">
                   {t('oauthClient')}
                 </label>
-                {values.clientIdentity === 'dsh' ? (
-                  <span className="better-mcp-help">
-                    <button
-                      type="button"
-                      className="better-mcp-help-trigger"
-                      aria-label={t('oauthClientHelp')}
-                      aria-describedby="better-mcp-oauth-client-help"
-                    >
-                      ?
-                    </button>
-                    <span
-                      id="better-mcp-oauth-client-help"
-                      className="better-mcp-help-tooltip"
-                      role="tooltip"
-                    >
-                      {t('oauthClientHelpText')}
-                    </span>
+                <span
+                  ref={clientHelp}
+                  className="better-mcp-help"
+                  data-open={clientHelpOpen || undefined}
+                >
+                  <button
+                    type="button"
+                    className="better-mcp-help-trigger"
+                    aria-label={t('oauthClientHelp')}
+                    aria-describedby="better-mcp-oauth-client-help"
+                    aria-expanded={clientHelpOpen}
+                    onClick={() => setClientHelpOpen((open) => !open)}
+                  >
+                    ?
+                  </button>
+                  <span
+                    id="better-mcp-oauth-client-help"
+                    className="better-mcp-help-tooltip"
+                    role="tooltip"
+                  >
+                    {t('oauthClientHelpText')}
                   </span>
-                ) : null}
+                </span>
               </div>
               <OAuthClientInput
                 t={t}
                 value={values.clientIdentity}
                 invalid={invalidField === 'clientId'}
                 describedBy={describedBy('clientId')}
-                onChange={(value) => update('clientIdentity', value)}
+                onChange={(value) => {
+                  update('clientIdentity', value);
+                  setClientHelpOpen(value === 'dsh');
+                }}
               />
             </div>
             <div className="better-mcp-field">

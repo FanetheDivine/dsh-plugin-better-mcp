@@ -131,6 +131,15 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ---
 
+## Phase 10: Compact Status UI
+
+- [X] T025 在 `src/client/server-form.tsx` 与 `src/client/ui.tsx` 保留帮助圆圈，选择 DSH 或点击圆圈时展开浮窗，支持外部点击与 Escape 关闭
+- [X] T026 在 `src/client/ui.tsx` 为侧栏 SVG 增加主题前景色到警告橙色的颜色过渡并增强投影
+- [X] T027 在 `src/client/panel.tsx` 合并四类状态标签，将懒加载开关紧随标签并更新测试
+- [X] T028 保持当前 Web profile 运行，更新已安装插件并完成真实页面回归
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

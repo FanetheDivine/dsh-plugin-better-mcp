@@ -194,7 +194,7 @@ describe('字典', () => {
   });
 
   it('英文徽标与开关使用 sentence case', () => {
-    for (const key of ['lazy', 'authorized', 'needsAuth'] as const) {
+    for (const key of ['lazy', 'needsAuth'] as const) {
       expect(en[key].charAt(0)).toBe(en[key].charAt(0).toUpperCase());
     }
   });
@@ -354,13 +354,15 @@ describe('ServerForm', () => {
     expect(html).toContain('>DSH</span>');
     expect(html).toContain(zh.oauthClientCodexDetail);
     expect(html).not.toContain('app_EMoamEEZ73f0CkXaXp7hrann');
-    expect(html).not.toContain('role="tooltip"');
+    expect(html).toContain('class="better-mcp-help"');
+    expect(html).toContain('role="tooltip"');
+    expect(html).not.toContain('data-open="true"');
     expect(html).not.toContain('name="auth"');
     expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');
   });
 
-  it('选择 DSH 时显示客户端身份提示且选中项只显示名称', () => {
+  it('DSH 保留帮助圆圈，浮窗由选择或点击触发', () => {
     const html = renderToStaticMarkup(
       createElement(
         ServerForm as never,
@@ -374,8 +376,10 @@ describe('ServerForm', () => {
       ),
     );
     expect(html).toContain('value="DSH"');
+    expect(html).toContain('class="better-mcp-help"');
+    expect(html).not.toContain('data-open="true"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('role="tooltip"');
-    expect(html).toContain(zh.oauthClientHelpText);
   });
 
   it('保存期间禁用全部字段', () => {
@@ -559,13 +563,24 @@ describe('服务器行', () => {
     expect(html).not.toContain('aria-describedby="better-mcp-lazy-note"');
   });
 
-  it('待授权徽标使用醒目的警告样式，已授权不使用', () => {
-    const pending = renderRow({ auth: 'oauth', authorized: false });
-    expect(pending).toContain('待授权');
-    expect(pending).toContain('data-attention="true"');
-    const authorized = renderRow({ auth: 'oauth', authorized: true });
-    expect(authorized).toContain('已授权');
-    expect(authorized).not.toContain('data-attention="true"');
+  it('连接与授权合并为一个状态标签，懒加载紧随其后', () => {
+    const pending = renderRow({ auth: 'oauth', authorized: false, state: 'failed' });
+    expect(pending).toContain('>待授权</span>');
+    expect(pending).toContain('data-state="pending"');
+    expect(pending).not.toContain('better-mcp-server-side');
+    expect(pending).not.toContain('better-mcp-state-dot');
+    expect(pending.indexOf('data-state="pending"')).toBeLessThan(
+      pending.indexOf('class="better-mcp-lazy"'),
+    );
+    expect(renderRow({ auth: 'oauth', authorized: true, state: 'connecting' })).toContain(
+      '>连接中</span>',
+    );
+    expect(renderRow({ auth: 'oauth', authorized: true, state: 'failed' })).toContain(
+      '>连接失败</span>',
+    );
+    const connected = renderRow({ auth: 'oauth', authorized: true, state: 'connected' });
+    expect(connected).toContain('>已连接</span>');
+    expect(connected).not.toContain('已授权');
   });
 
   it('授权操作使用高亮原生链接并遵循默认外链行为', () => {
@@ -644,6 +659,8 @@ describe('主题样式', () => {
       CLIENT_STYLES.indexOf('[data-sidebar-collapsed]'),
     );
     expect(breath).toContain('drop-shadow');
+    expect(breath).toContain('color: var(--dsw-alias-label-primary)');
+    expect(breath).toContain('color: var(--dsw-alias-state-warn-primary)');
     expect(breath).not.toContain('box-shadow');
     expect(CLIENT_STYLES).toMatch(
       /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*\.better-mcp-sidebar-action\[data-attention='true'\] svg\s*\{[^}]*animation:\s*none;/,

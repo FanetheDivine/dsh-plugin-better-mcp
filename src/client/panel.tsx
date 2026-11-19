@@ -119,10 +119,14 @@ export function ServerItem(props: {
   const { t, row } = props;
   const working = props.busy === row.name;
   const needsAuth = row.auth === 'oauth' && !row.authorized;
-  const flags: string[] = [];
-  if (row.auth === 'oauth') flags.push(row.authorized ? t('authorized') : t('needsAuth'));
-  const parts = statusParts(t, row);
-  const metadata = parts.slice(1);
+  const status = needsAuth
+    ? { key: 'needsAuth' as const, state: 'pending' }
+    : row.state === 'connected'
+      ? { key: 'stateConnected' as const, state: 'connected' }
+      : row.state === 'failed'
+        ? { key: 'stateFailed' as const, state: 'failed' }
+        : { key: 'stateConnecting' as const, state: 'connecting' };
+  const metadata = statusParts(t, row).slice(1);
   return (
     <li
       className="better-mcp-server"
@@ -133,31 +137,23 @@ export function ServerItem(props: {
         <div className="better-mcp-server-main">
           <div className="better-mcp-server-title">
             <span className="better-mcp-server-name">{row.name}</span>
-            {flags.map((flag) => (
-              <span key={flag} className="better-mcp-badge" data-attention={needsAuth || undefined}>
-                {flag}
-              </span>
-            ))}
+            <span className="better-mcp-badge" data-state={status.state}>
+              {t(status.key)}
+            </span>
+            <span className="better-mcp-lazy" title={t('lazyHint')}>
+              <Switch
+                checked={row.lazy}
+                disabled={working}
+                onChange={props.onLazy}
+                label={t('lazyFor', { name: row.name })}
+                title={t('lazyHint')}
+              />
+              <span>{t('lazy')}</span>
+            </span>
           </div>
           {row.description !== undefined ? (
             <p className="better-mcp-description">{row.description}</p>
           ) : null}
-        </div>
-        <div className="better-mcp-server-side">
-          <span className="better-mcp-state" data-state={row.state}>
-            <span className="better-mcp-state-dot" data-state={row.state} aria-hidden="true" />
-            {parts[0]}
-          </span>
-          <span className="better-mcp-lazy" title={t('lazyHint')}>
-            <Switch
-              checked={row.lazy}
-              disabled={working}
-              onChange={props.onLazy}
-              label={t('lazyFor', { name: row.name })}
-              title={t('lazyHint')}
-            />
-            <span>{t('lazy')}</span>
-          </span>
         </div>
       </div>
       <div className="better-mcp-server-extra">

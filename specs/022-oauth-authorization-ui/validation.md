@@ -44,9 +44,11 @@
 | R5 减少动态效果 | `animation-name: none`，静态提示保留 |
 | R6 Figma 授权重定向 | 302 到 `https://www.figma.com/oauth/mcp`，使用动态 client_id 与 `http://127.0.0.1:<系统分配端口>/callback` |
 | R7 控制台 | 0 个错误 |
-| R8 OAuth 身份选择 | 默认 Codex；DSH 无选项说明；Codex 显示连接说明；DSH 状态可通过帮助按钮显示身份限制提示 |
-| R9 侧栏 SVG 呼吸 | 图标使用 `drop-shadow` 呼吸，按钮背景透明且 `box-shadow: none` |
+| R8 OAuth 身份选择 | 默认 Codex；DSH 无选项说明；Codex 显示连接说明；帮助圆圈始终显示，选择 DSH 或点击圆圈展开浮窗，外部点击可关闭 |
+| R9 侧栏 SVG 呼吸 | 图标颜色在主题前景色与警告橙色之间过渡，使用 `drop-shadow`，按钮背景透明且 `box-shadow: none` |
 | R10 成功页自动关闭 | Chrome 中由 `target="_blank"` 打开的回调页执行 `window.close()` 并关闭 |
+| R11 统一状态标签 | 每行一个标签，实测待授权与已连接；懒加载开关紧随标签 |
+| R12 当前 profile 更新 | `rdt-figma-polish-022` 保持运行，新包原位安装，真实页面回归无脚本错误 |
 
 动态回调矩阵实测：
 
