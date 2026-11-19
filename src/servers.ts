@@ -33,6 +33,8 @@ export interface ServerRow extends StatusView {
   lazy: boolean;
   /** 是否已有授权。 */
   authorized: boolean;
+  /** 完整鉴权地址，仅在快照返回时补上。 */
+  authorizeUrl?: string;
   /** 是否已由本插件挂载。 */
   mounted: boolean;
   /** 已脱敏的定义，只随面板快照返回。 */

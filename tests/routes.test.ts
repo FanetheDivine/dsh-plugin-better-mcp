@@ -203,6 +203,28 @@ describe('status 与懒加载', () => {
     expect(Object.keys(json)).toEqual(['servers']);
   });
 
+  it('为 OAuth 服务器提供完整鉴权地址', async () => {
+    const { ctx } = harness({
+      one: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://mcp.example.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+      two: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: true },
+    });
+    const { json } = await call(ctx, '/api/better-mcp/status');
+    const servers = json.servers as Array<Record<string, unknown>>;
+    const oauth = servers.find((row) => row.name === 'one');
+    const target = new URL(String(oauth?.authorizeUrl));
+    expect(target.protocol).toBe('http:');
+    expect(target.pathname).toBe('/better-mcp/oauth/start');
+    expect(target.searchParams.get('server')).toBe('one');
+    const plain = servers.find((row) => row.name === 'two');
+    expect(plain?.authorizeUrl).toBeUndefined();
+  });
+
   it('切换懒加载写回配置，连接保持', async () => {
     const { ctx, manager, refs } = harness({
       one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },

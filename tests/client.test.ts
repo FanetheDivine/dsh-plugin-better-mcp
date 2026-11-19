@@ -134,7 +134,7 @@ describe('前端入口', () => {
     expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
     expect(setView).toHaveBeenCalledWith({ kind: 'row', name: PACKAGE_NAME, rowId: ROW_ID });
   });
-  it('有待授权 OAuth 时侧边栏高亮，全部已授权或无 OAuth 时恢复', () => {
+  it('有待鉴权 OAuth 时侧边栏高亮，全部已鉴权或无 OAuth 时恢复', () => {
     const snapshot = (servers: PanelSnapshot['servers']): PanelSnapshot => ({ servers });
     const row = (overrides: Partial<PanelSnapshot['servers'][number]>) => ({
       name: 'server',
@@ -170,8 +170,8 @@ describe('前端入口', () => {
         ),
       );
     expect(render(true)).toContain('data-attention="true"');
-    expect(render(true)).toContain('title="MCP 服务器：存在待授权 MCP"');
-    expect(render(true)).toContain('aria-label="MCP 服务器：存在待授权 MCP"');
+    expect(render(true)).toContain('title="MCP 服务器：存在待鉴权 MCP"');
+    expect(render(true)).toContain('aria-label="MCP 服务器：存在待鉴权 MCP"');
     expect(render(false)).not.toContain('data-attention="true"');
   });
 });
@@ -516,7 +516,6 @@ function renderRow(row: Record<string, unknown>, dict: Record<string, string> = 
         busy: undefined,
         onLazy: noop,
         onRestart: noop,
-        onAuth: noop,
         onSignOut: noop,
         onEdit: noop,
         onDelete: noop,
@@ -563,9 +562,9 @@ describe('服务器行', () => {
     expect(html).not.toContain('aria-describedby="better-mcp-lazy-note"');
   });
 
-  it('连接与授权合并为一个状态标签，懒加载紧随其后', () => {
+  it('连接与鉴权合并为一个状态标签，懒加载紧随其后', () => {
     const pending = renderRow({ auth: 'oauth', authorized: false, state: 'failed' });
-    expect(pending).toContain('>待授权</span>');
+    expect(pending).toContain('>待鉴权</span>');
     expect(pending).toContain('data-state="pending"');
     expect(pending).not.toContain('better-mcp-server-side');
     expect(pending).not.toContain('better-mcp-state-dot');
@@ -583,28 +582,47 @@ describe('服务器行', () => {
     expect(connected).not.toContain('已授权');
   });
 
-  it('授权操作使用高亮原生链接并遵循默认外链行为', () => {
-    const pending = renderRow({ name: 'alpha beta', auth: 'oauth', authorized: false });
-    expect(pending).toMatch(
-      /<a[^>]*class="better-mcp-button better-mcp-button-primary better-mcp-button-sm"/,
-    );
-    expect(pending).toContain('href="/better-mcp/oauth/start?server=alpha%20beta"');
+  it('鉴权入口是操作按钮行下方的完整地址链接', () => {
+    const url = 'http://127.0.0.1:3210/better-mcp/oauth/start?server=alpha%20beta';
+    const pending = renderRow({
+      name: 'alpha beta',
+      auth: 'oauth',
+      authorized: false,
+      authorizeUrl: url,
+    });
+    expect(pending).toContain('<p class="better-mcp-auth-line">');
+    expect(pending).toContain(zh.authHint);
+    expect(pending).toContain(`href="${url}"`);
     expect(pending).toContain('target="_blank"');
     expect(pending).toContain('rel="noreferrer"');
-    expect(pending).toContain('aria-label="授权 alpha beta"');
-    expect(pending).toContain(`>${zh.authorize}</a>`);
+    expect(pending).toContain('aria-label="鉴权 alpha beta"');
+    expect(pending).toContain(`>${url}</a>`);
+    expect(pending.indexOf('better-mcp-actions')).toBeLessThan(
+      pending.indexOf('better-mcp-auth-line'),
+    );
+    expect(pending).not.toContain('better-mcp-button-primary');
 
-    const authorized = renderRow({ auth: 'oauth', authorized: true });
-    expect(authorized).toContain('better-mcp-button-outline');
-    expect(authorized).toContain('aria-label="重新授权 alpha"');
-    expect(authorized).toContain(`>${zh.reauthorize}</a>`);
-    expect(authorized).not.toContain('better-mcp-button-primary');
+    const authorized = renderRow({ auth: 'oauth', authorized: true, authorizeUrl: url });
+    expect(authorized).not.toContain('better-mcp-auth-line');
+    expect(authorized).not.toContain(zh.authHint);
+
+    expect(renderRow({ auth: 'oauth', authorized: false })).not.toContain('better-mcp-auth-line');
 
     const source = readFileSync(
       path.join(import.meta.dirname, '..', 'src', 'client', 'panel.tsx'),
       'utf8',
     );
     expect(source).not.toContain('window.open');
+    expect(source).not.toContain('oauthStartUrl');
+  });
+
+  it('鉴权行沿用简介字号与警告色', () => {
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-auth-line\s*\{[^}]*font-size:\s*13px;[^}]*line-height:\s*20px;/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-auth-line\s*\{[^}]*color:\s*var\(--dsw-alias-state-warn-primary\)/,
+    );
   });
 
   it('连接诊断使用可展开区域', () => {
