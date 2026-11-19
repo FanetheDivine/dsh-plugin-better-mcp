@@ -46,7 +46,7 @@
 
 **Independent Test**: 在 README 定位 Figma 授权被拒、连接失败、配置错误三类问题的处理步骤。
 
-- [ ] T009 [US4] 在 `README.md` 新增「常见问题」：Figma 授权被拒、授权页未弹出、连接失败、令牌失效、插件因配置错误停用、保存返回冲突
+- [x] T009 [US4] 在 `README.md` 新增「常见问题」：Figma 授权被拒、授权页未弹出、连接失败、令牌失效、插件因配置错误停用、保存返回冲突
 
 ## Phase 6: User Story 5 + Polish (Priority: P3)
 
