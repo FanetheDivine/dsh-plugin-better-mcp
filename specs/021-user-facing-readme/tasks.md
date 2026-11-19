@@ -28,8 +28,8 @@
 
 **Independent Test**: 读 README 前 5 行说出三项好处；按快速开始接入一台 stdio 服务器。
 
-- [ ] T005 [US1] 重写 `README.md` 开头：一句话用途与三项好处，删除内部术语
-- [ ] T006 [US2] 在 `README.md` 新增「快速开始」：安装、打开面板、新增 MCP、授权、在对话中使用，引用 `src/client/locales.ts` 中的中文界面文案
+- [x] T005 [US1] 重写 `README.md` 开头：一句话用途与三项好处，删除内部术语
+- [x] T006 [US2] 在 `README.md` 新增「快速开始」：安装、打开面板、新增 MCP、授权、在对话中使用，引用 `src/client/locales.ts` 中的中文界面文案
 
 ## Phase 4: User Story 3 - 理解懒加载与授权 (Priority: P2)
 
