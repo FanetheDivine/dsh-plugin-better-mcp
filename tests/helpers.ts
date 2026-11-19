@@ -59,17 +59,29 @@ export interface FakeEvent {
   data: Record<string, unknown>;
 }
 
+/** 模拟会话消息。 */
+export interface FakeMessage {
+  source: unknown;
+  content?: unknown;
+}
+
 /** 可编程 Agent 模拟。 */
 export interface FakeAgent {
   id: string;
   session: { events: FakeEvent[]; surface: { nodes: number[] }; readonly seq: number };
   ctx: { tools: { restrict(filter: { allow?: string[]; deny?: string[] }): () => void } };
+  /** 等待后续步骤准入的消息。 */
+  inbox: { nextStep: FakeMessage[]; nextTurn: FakeMessage[] };
+  /** 把上下文写入下一步队列，不唤醒 Agent。 */
+  inject(message: FakeMessage): void;
   /** 当前生效的 deny 列表。 */
   _deny(): string[];
   /** 当前生效的限制数。 */
   _restrictionCount(): number;
   /** 把消息写入会话日志并放进可见区。 */
-  _commit(message: { source: unknown; content?: unknown }): number;
+  _commit(message: FakeMessage): number;
+  /** 取走下一步队列中的全部消息。 */
+  _claim(): FakeMessage[];
   /** 模拟压缩：清空可见区。 */
   _compact(): void;
 }
@@ -78,6 +90,7 @@ export interface FakeAgent {
 export function makeAgent(id = 'agent-1'): FakeAgent {
   const restrictions = new Set<{ deny?: string[] }>();
   const events: FakeEvent[] = [];
+  const nextStep: FakeMessage[] = [];
   const session = {
     events,
     surface: { nodes: [] as number[] },
@@ -98,6 +111,10 @@ export function makeAgent(id = 'agent-1'): FakeAgent {
         },
       },
     },
+    inbox: { nextStep, nextTurn: [] },
+    inject(message) {
+      nextStep.push(message);
+    },
     _deny: () => [...restrictions].flatMap((filter) => filter.deny ?? []).sort(),
     _restrictionCount: () => restrictions.size,
     _commit(message) {
@@ -105,6 +122,9 @@ export function makeAgent(id = 'agent-1'): FakeAgent {
       events.push({ seq, type: 'user/message', data: { role: 'user', ...message } });
       session.surface.nodes.push(seq);
       return seq;
+    },
+    _claim() {
+      return nextStep.splice(0);
     },
     _compact() {
       session.surface.nodes = [];

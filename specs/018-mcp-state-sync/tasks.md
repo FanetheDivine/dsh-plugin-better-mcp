@@ -30,7 +30,7 @@ description: "MCP 状态与会话同步实施任务"
 
 **Purpose**: 让模拟 Agent 支持宿主的真实待处理队列与注入行为。
 
-- [ ] T002 在 `tests/helpers.ts` 为 FakeAgent 增加 `inbox.nextStep`、`inject()` 与队列观测能力，保持现有 `ctx` 模拟契约
+- [X] T002 在 `tests/helpers.ts` 为 FakeAgent 增加 `inbox.nextStep`、`inject()` 与队列观测能力，保持现有 `ctx` 模拟契约
 
 **Checkpoint**: 现有测试在纯测试设施变更后继续通过。
 
