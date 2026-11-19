@@ -55,6 +55,13 @@
 - [x] T018 按 `specs/020-simplify-mcp-panel/quickstart.md` 在实机 GUI 验证并记录结果到 `specs/020-simplify-mcp-panel/real-device-report.md`
 - [x] T019 按 restart 入口约定修正 `src/client/index.tsx` 与 `src/client/ui.tsx` 的紧凑 entry、rail 标记和 36×36 触发区，并在 `tests/client.test.ts` 覆盖宽窄栏
 
+## Phase 7: 验收修正
+
+- [x] T020 在 `src/client/ui.tsx` 将弹窗标题设为弹性占位，让关闭图标保持最右侧，并在 `tests/client.test.ts` 覆盖样式
+- [x] T021 在 `src/client/ui.tsx` 让客户端备选项向上展开，避免增加表单弹窗整体滚动范围，并在实机验证前后滚动尺寸
+- [x] T022 在 `src/client/index.tsx` 使用宿主插件导航打开本插件详情，并在 `plugins.bundle.config` 注册同一面板；更新 `tests/client.test.ts`
+- [x] T023 更新 `README.md`、`specs/020-simplify-mcp-panel/quickstart.md` 与实机报告，运行完整检查并复验三项修正
+
 ## Dependencies & Execution Order
 
 - Setup → Foundational → US1 → US2 → US3 → Polish。

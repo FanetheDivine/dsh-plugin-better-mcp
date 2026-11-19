@@ -492,6 +492,7 @@ export const CLIENT_STYLES = String.raw`
   padding: 20px 16px 12px 24px;
 }
 .better-mcp-dialog-title {
+  flex: 1;
   min-width: 0;
   margin: 0;
   color: var(--dsw-alias-label-primary);
@@ -835,7 +836,7 @@ export const CLIENT_STYLES = String.raw`
 }
 .better-mcp-autocomplete-options {
   position: absolute;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 4px);
   right: 0;
   left: 0;
   z-index: 10;

@@ -11,14 +11,13 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 // Type-only：拉取 sidebar.footer.action 槽位声明。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useState } from 'react';
 
 import { en, NS, zh } from './locales.ts';
 import { McpPanel } from './panel.tsx';
 import { ClientStyles, McpIcon } from './ui.tsx';
 
 /** 需要宿主注入的客户端服务。 */
-export const inject = ['slots', 'locale'];
+export const inject = ['slots', 'locale', 'pluginNavigation'];
 
 /** 插件包名，用于拼接配置页的槽位键。 */
 export const PACKAGE_NAME = 'dsh-plugin-better-mcp';
@@ -29,26 +28,34 @@ export const ROW_ID = 'better-mcp';
 /** 配置页的槽位键。 */
 export const ROW_KEY = `${PACKAGE_NAME}#${ROW_ID}`;
 
+/** 打开本插件的配置页。 */
+export function openPluginConfig(ctx: Context): void {
+  ctx.pluginNavigation.openBundle(PACKAGE_NAME);
+}
+
 /** 侧栏触发按钮。 */
-function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }): JSX.Element {
-  const [open, setOpen] = useState(false);
+function SidebarAction({
+  t,
+  wide,
+  onOpen,
+}: {
+  t: TranslateNS<typeof NS>;
+  wide: boolean;
+  onOpen: () => void;
+}): JSX.Element {
   return (
-    <>
-      <div className="better-mcp-entry" data-dsh-part="entry" data-rail={wide ? undefined : 'rail'}>
-        <ClientStyles />
-        <button
-          type="button"
-          className="better-mcp-sidebar-action"
-          title={t('title')}
-          aria-label={t('title')}
-          aria-haspopup="dialog"
-          onClick={() => setOpen(true)}
-        >
-          <McpIcon />
-        </button>
-      </div>
-      {open ? <McpPanel t={t} variant="modal" onClose={() => setOpen(false)} /> : null}
-    </>
+    <div className="better-mcp-entry" data-dsh-part="entry" data-rail={wide ? undefined : 'rail'}>
+      <ClientStyles />
+      <button
+        type="button"
+        className="better-mcp-sidebar-action"
+        title={t('title')}
+        aria-label={t('title')}
+        onClick={onOpen}
+      >
+        <McpIcon />
+      </button>
+    </div>
   );
 }
 
@@ -77,10 +84,16 @@ export function apply(ctx: Context): void {
   ctx.slots.inject('sidebar.footer.action', () =>
     ctx.slots.register(
       { name: 'sidebar.footer.action', id: ROW_ID, order: 52, locale: NS },
-      SidebarAction,
+      (props) => <SidebarAction {...props} onOpen={() => openPluginConfig(ctx)} />,
     ),
   );
   ctx.slots.inject('plugins.row.config', () =>
     ctx.slots.register({ name: 'plugins.row.config', key: ROW_KEY, locale: NS }, ConfigPage),
+  );
+  ctx.slots.inject('plugins.bundle.config', () =>
+    ctx.slots.register(
+      { name: 'plugins.bundle.config', key: PACKAGE_NAME, locale: NS },
+      ConfigPage,
+    ),
   );
 }

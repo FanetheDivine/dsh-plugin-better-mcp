@@ -38,4 +38,10 @@
 - Rationale: 宿主与插件没有固定 DSH 客户端标识，当前 DSH 行为就是动态注册；Codex 标识已在宿主依赖的 `openai-codex` 实现中核实。
 - Alternatives considered: 原生 `datalist` 无法可靠展示空值选项与说明；新增组件库依赖不符合现有控件结构。
 
-控件在聚焦时显示两个备选项，支持过滤、键盘选择、Escape 关闭与自由输入。问号说明在悬停和键盘聚焦时显示，以 Figma 为例说明动态注册可能被拒绝。
+控件在聚焦或点击时始终显示两个备选项，支持键盘选择、Escape 关闭与自由输入。备选项向上展开，避免增加表单弹窗的滚动范围。问号说明在悬停和键盘聚焦时显示，以 Figma 为例说明动态注册可能被拒绝。
+
+## 配置页导航
+
+- Decision: 客户端声明 `pluginNavigation` 注入，侧栏调用 `openBundle` 打开插件详情，并同时注册 `plugins.bundle.config` 与 `plugins.row.config`。
+- Rationale: 使用宿主导航可以直接显示配置面板，无需模拟点击行配置按钮。
+- Alternatives considered: 打开 MCP 弹窗不符合要求；仅注册行配置仍需第二次点击。

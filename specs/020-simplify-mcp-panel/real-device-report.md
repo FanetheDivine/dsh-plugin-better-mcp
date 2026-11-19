@@ -20,24 +20,29 @@
 
 | 流程 | 结果 | 截图 |
 | --- | --- | --- |
-| 侧栏与面板 | PASS | 图标无文字；标题为「已配置的 MCP」；无刷新、行图标和来源标签 |
+| 侧栏与配置页 | PASS | 点击图标打开插件详情中的配置面板，不出现 MCP 弹窗，截图 `020-config-page.png` |
+| 面板内容 | PASS | 标题为「已配置的 MCP」；无刷新、行图标和来源标签 |
 | stdio 新增表单 | PASS | 默认 stdio 且位于首位，显示命令字段，截图 `020-stdio.png` |
-| OAuth 客户端备选项 | PASS | 聚焦显示 DSH 与 Codex，截图 `020-presets.png` |
+| 表单关闭图标 | PASS | 关闭图标距弹窗右侧 16px，截图 `020-form-close.png` |
+| OAuth 客户端备选项 | PASS | 聚焦显示 DSH 与 Codex，向上展开，截图 `020-options-up.png` |
+| 备选项滚动 | PASS | 打开前后滚动高度均为 572px，未出现整体滚动条 |
 | 鼠标与键盘选择 | PASS | 点击重开、自由输入、Escape、方向键与 Enter 均符合预期 |
 | 问号说明 | PASS | 悬停或聚焦显示 Figma 示例，截图 `020-help.png` |
-| 配置自动同步 | PASS | 新增后无需刷新即出现在面板，截图 `020-panel.png` |
+| 配置自动同步 | PASS | 新增后无需刷新即出现在配置页 |
 | 宽栏入口 | PASS | 36×36 紧凑 entry，截图 `020-sidebar-wide.png` |
 | 窄栏入口 | PASS | `data-rail="rail"`，footer 纵向居中，截图 `020-sidebar-rail.png` |
 
-合计 28 项实机断言通过。结果文件：本报告。截图位于测试 profile 的 `shots` 目录。
+最终完整回归合计 35 项实机断言通过。结果文件：本报告。截图位于测试 profile 的 `shots` 目录。
 
 ## 发现的问题
 
 - 首次实机运行发现选择 Codex 后点击输入框不能重开备选项。已补 `onClick` 打开逻辑并复测通过。
 - 用户指出侧栏按钮放置不符合 restart 入口约定。已补紧凑 entry、rail 标记与折叠栏布局并复测通过。
+- 首次导航复验缺少 `pluginNavigation` 注入，点击被宿主拒绝。已补注入并复测通过。
+- 用户指出关闭图标位置与备选项滚动条问题。已调整标题弹性布局与备选项展开方向并复测通过。
 
 ## 产物
 
 - `dist/index.mjs` 与 `dist/client.js`
 - 本报告
-- 测试 profile 的 `shots` 目录：`020-stdio.png`、`020-presets.png`、`020-help.png`、`020-panel.png`、`020-sidebar-wide.png`、`020-sidebar-rail.png`
+- 测试 profile 的 `shots` 目录：`020-stdio.png`、`020-presets.png`、`020-help.png`、`020-config-page.png`、`020-form-close.png`、`020-options-up.png`、`020-sidebar-wide.png`、`020-sidebar-rail.png`

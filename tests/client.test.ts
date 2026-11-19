@@ -11,7 +11,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PanelSnapshot } from '../src/client/api.ts';
-import { apply, inject, PACKAGE_NAME, ROW_ID, ROW_KEY } from '../src/client/index.tsx';
+import {
+  apply,
+  inject,
+  openPluginConfig,
+  PACKAGE_NAME,
+  ROW_ID,
+  ROW_KEY,
+} from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
 import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
 import {
@@ -60,7 +67,7 @@ function renderConfigPage(view: 'summary' | 'page', dict: Record<string, string>
 
 describe('前端入口', () => {
   it('声明客户端服务与插件行键', () => {
-    expect(inject).toEqual(['slots', 'locale']);
+    expect(inject).toEqual(['slots', 'locale', 'pluginNavigation']);
     expect(PACKAGE_NAME).toBe('dsh-plugin-better-mcp');
     expect(ROW_ID).toBe('better-mcp');
     expect(ROW_KEY).toBe('dsh-plugin-better-mcp#better-mcp');
@@ -77,7 +84,11 @@ describe('前端入口', () => {
     expect(dictionary?.dicts.zh).toBe(zh);
     expect(dictionary?.dicts.en).toBe(en);
 
-    expect(ctx._slotInjections).toEqual(['sidebar.footer.action', 'plugins.row.config']);
+    expect(ctx._slotInjections).toEqual([
+      'sidebar.footer.action',
+      'plugins.row.config',
+      'plugins.bundle.config',
+    ]);
 
     expect(ctx._slotRegistrations[0]?.options).toEqual({
       name: 'sidebar.footer.action',
@@ -88,6 +99,11 @@ describe('前端入口', () => {
     expect(ctx._slotRegistrations[1]?.options).toEqual({
       name: 'plugins.row.config',
       key: ROW_KEY,
+      locale: NS,
+    });
+    expect(ctx._slotRegistrations[2]?.options).toEqual({
+      name: 'plugins.bundle.config',
+      key: PACKAGE_NAME,
       locale: NS,
     });
 
@@ -105,6 +121,12 @@ describe('前端入口', () => {
       createElement(sidebar as never, { t: translate(zh), wide: false } as never),
     );
     expect(narrow).toContain('data-rail="rail"');
+  });
+
+  it('通过宿主导航打开本插件配置页', () => {
+    const openBundle = vi.fn();
+    openPluginConfig({ pluginNavigation: { openBundle } } as never);
+    expect(openBundle).toHaveBeenCalledWith(PACKAGE_NAME);
   });
 });
 
@@ -501,6 +523,10 @@ describe('主题样式', () => {
       expect(CLIENT_STYLES).toContain(token);
     }
     expect(CLIENT_STYLES).not.toMatch(/#[\da-f]{3,8}\b/i);
+    expect(CLIENT_STYLES).toMatch(/\.better-mcp-dialog-title\s*\{[^}]*flex:\s*1;/);
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-autocomplete-options\s*\{[^}]*bottom:\s*calc\(100% \+ 4px\)/,
+    );
   });
 });
 
