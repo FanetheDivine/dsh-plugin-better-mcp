@@ -123,8 +123,6 @@ export function ServerItem(props: {
   if (row.auth === 'oauth') flags.push(row.authorized ? t('authorized') : t('needsAuth'));
   const parts = statusParts(t, row);
   const metadata = parts.slice(1);
-  const hasExtra =
-    metadata.length > 0 || row.url !== undefined || row.error !== undefined || row.managed;
   return (
     <li
       className="better-mcp-server"
@@ -132,30 +130,9 @@ export function ServerItem(props: {
       aria-busy={working || undefined}
     >
       <div className="better-mcp-server-line">
-        <span className="better-mcp-server-icon" aria-hidden="true">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <title>MCP</title>
-            <path d="M7.5 9.5 4 12l3.5 2.5M16.5 9.5 20 12l-3.5 2.5" />
-            <rect x="8.5" y="9.5" width="7" height="5" rx="1.2" />
-            <circle cx="12" cy="5" r="1.6" />
-            <circle cx="12" cy="19" r="1.6" />
-            <path d="M12 6.6v2.9M12 14.5v2.9" />
-          </svg>
-        </span>
         <div className="better-mcp-server-main">
           <div className="better-mcp-server-title">
             <span className="better-mcp-server-name">{row.name}</span>
-            <span className="better-mcp-badge">{row.managed ? t('managed') : t('external')}</span>
             {flags.map((flag) => (
               <span key={flag} className="better-mcp-badge">
                 {flag}
@@ -171,58 +148,52 @@ export function ServerItem(props: {
             <span className="better-mcp-state-dot" data-state={row.state} aria-hidden="true" />
             {parts[0]}
           </span>
-          {row.managed ? (
-            <span className="better-mcp-lazy" title={t('lazyHint')}>
-              <Switch
-                checked={row.lazy}
-                disabled={working}
-                onChange={props.onLazy}
-                label={t('lazyFor', { name: row.name })}
-                describedBy="better-mcp-lazy-note"
-                title={t('lazyHint')}
-              />
-              <span>{t('lazy')}</span>
-            </span>
-          ) : null}
+          <span className="better-mcp-lazy" title={t('lazyHint')}>
+            <Switch
+              checked={row.lazy}
+              disabled={working}
+              onChange={props.onLazy}
+              label={t('lazyFor', { name: row.name })}
+              describedBy="better-mcp-lazy-note"
+              title={t('lazyHint')}
+            />
+            <span>{t('lazy')}</span>
+          </span>
         </div>
       </div>
-      {hasExtra ? (
-        <div className="better-mcp-server-extra">
-          {metadata.length > 0 ? (
-            <p className="better-mcp-server-meta">{metadata.join(' · ')}</p>
+      <div className="better-mcp-server-extra">
+        {metadata.length > 0 ? (
+          <p className="better-mcp-server-meta">{metadata.join(' · ')}</p>
+        ) : null}
+        {row.url !== undefined ? <p className="better-mcp-server-url">{row.url}</p> : null}
+        {row.error !== undefined && row.error !== '' ? (
+          <details className="better-mcp-diagnostics">
+            <summary>{t('errorDetails')}</summary>
+            <p>{row.error}</p>
+          </details>
+        ) : null}
+        <div className="better-mcp-actions">
+          <Button busy={working} onClick={props.onRestart}>
+            {working ? t('working') : t('restart')}
+          </Button>
+          {row.auth === 'oauth' ? (
+            <Button disabled={working} onClick={props.onAuth}>
+              {row.authorized ? t('reauthorize') : t('authorize')}
+            </Button>
           ) : null}
-          {row.url !== undefined ? <p className="better-mcp-server-url">{row.url}</p> : null}
-          {row.error !== undefined && row.error !== '' ? (
-            <details className="better-mcp-diagnostics">
-              <summary>{t('errorDetails')}</summary>
-              <p>{row.error}</p>
-            </details>
+          {row.auth === 'oauth' && row.authorized ? (
+            <Button disabled={working} onClick={props.onSignOut}>
+              {t('signout')}
+            </Button>
           ) : null}
-          {row.managed ? (
-            <div className="better-mcp-actions">
-              <Button busy={working} onClick={props.onRestart}>
-                {working ? t('working') : t('restart')}
-              </Button>
-              {row.auth === 'oauth' ? (
-                <Button disabled={working} onClick={props.onAuth}>
-                  {row.authorized ? t('reauthorize') : t('authorize')}
-                </Button>
-              ) : null}
-              {row.auth === 'oauth' && row.authorized ? (
-                <Button disabled={working} onClick={props.onSignOut}>
-                  {t('signout')}
-                </Button>
-              ) : null}
-              <Button disabled={working} onClick={props.onEdit}>
-                {t('edit')}
-              </Button>
-              <Button variant="danger" disabled={working} onClick={props.onDelete}>
-                {t('delete')}
-              </Button>
-            </div>
-          ) : null}
+          <Button disabled={working} onClick={props.onEdit}>
+            {t('edit')}
+          </Button>
+          <Button variant="danger" disabled={working} onClick={props.onDelete}>
+            {t('delete')}
+          </Button>
         </div>
-      ) : null}
+      </div>
     </li>
   );
 }
@@ -370,21 +341,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
       {t('add')}
     </Button>
   );
-  const refreshButton = (
-    <Button
-      size="md"
-      busy={busy === 'reload'}
-      onClick={() =>
-        void run('reload', async () => {
-          await load();
-          return undefined;
-        })
-      }
-    >
-      {t('refresh')}
-    </Button>
-  );
-
   const body = (
     <div className="better-mcp-panel-body">
       {loadError !== undefined ? (
@@ -451,7 +407,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
           ))}
         </ul>
       ) : null}
-      {snapshot?.servers.some((row) => row.managed) ? (
+      {snapshot !== undefined && snapshot.servers.length > 0 ? (
         <p className="better-mcp-lazy-note" id="better-mcp-lazy-note">
           {t('lazyHint')}
         </p>
@@ -537,9 +493,8 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
         <ClientStyles />
         <section className="better-mcp-section">
           <div className="better-mcp-toolbar">
-            <h4 className="better-mcp-section-title">{t('title')}</h4>
+            <h4 className="better-mcp-section-title">{t('panelTitle')}</h4>
             {addButton}
-            {refreshButton}
           </div>
           {body}
         </section>
@@ -553,14 +508,9 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
       <Modal
         open
         onClose={onClose ?? (() => undefined)}
-        title={t('title')}
+        title={t('panelTitle')}
         closeLabel={t('close')}
-        actions={
-          <>
-            {addButton}
-            {refreshButton}
-          </>
-        }
+        actions={addButton}
       >
         {body}
       </Modal>

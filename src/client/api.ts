@@ -3,7 +3,6 @@
 /** 一台服务器的面板数据。 */
 export interface ServerRow {
   name: string;
-  managed: boolean;
   description?: string;
   transport?: string;
   url?: string;

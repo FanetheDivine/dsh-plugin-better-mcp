@@ -588,17 +588,6 @@ export const CLIENT_STYLES = String.raw`
   gap: 16px;
   min-width: 0;
 }
-.better-mcp-server-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
-  border-radius: var(--dsw-radius-md);
-  color: var(--dsw-alias-label-secondary);
-}
 .better-mcp-server-main {
   display: flex;
   flex: 1;
@@ -678,7 +667,7 @@ export const CLIENT_STYLES = String.raw`
   white-space: nowrap;
 }
 .better-mcp-lazy-note {
-  margin: 0 0 0 56px;
+  margin: 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
   line-height: 18px;
@@ -696,7 +685,7 @@ export const CLIENT_STYLES = String.raw`
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  margin: 10px 0 0 56px;
+  margin: 10px 0 0;
 }
 .better-mcp-server-meta,
 .better-mcp-server-url {
@@ -891,12 +880,12 @@ select.better-mcp-input {
     gap: 12px;
   }
   .better-mcp-server-main {
-    min-width: calc(100% - 52px);
+    min-width: 0;
   }
   .better-mcp-server-side {
     width: 100%;
     justify-content: space-between;
-    margin-left: 52px;
+    margin-left: 0;
   }
   .better-mcp-server-extra,
   .better-mcp-lazy-note {

@@ -21,8 +21,6 @@ import { isRecord } from './utils.ts';
 export interface ServerRow extends StatusView {
   /** 服务器名。 */
   name: string;
-  /** 是否由本插件配置。 */
-  managed: boolean;
   /** 本插件服务器的简介。 */
   description?: string;
   /** 传输方式。 */
@@ -223,28 +221,21 @@ export class ServerManager {
   async snapshot(): Promise<PanelSnapshot> {
     const settings = this.getSettings();
     const managed = new Map(this.ctx.mcpManager.list().map((view) => [view.name, view]));
-    const names = new Set([...Object.keys(settings.servers), ...managed.keys()]);
     const rows: ServerRow[] = [];
-    for (const serverName of [...names].sort()) {
+    for (const serverName of Object.keys(settings.servers).sort()) {
       const definition = settings.servers[serverName];
-      const mine = definition !== undefined;
+      if (definition === undefined) continue;
       const view = managed.get(serverName);
-      const grant = mine ? await readGrant(this.ctx, serverName) : undefined;
-      const lazy = mine ? definition.lazy !== false : false;
+      const grant = await readGrant(this.ctx, serverName);
       const status = view === undefined ? { state: 'idle' } : statusOf(view.status);
       rows.push({
         name: serverName,
-        managed: mine,
-        ...(definition === undefined ? {} : { description: definition.description }),
-        ...(definition === undefined ? {} : { definition: publicDefinition(definition) }),
-        ...(typeof definition?.transport === 'string' ? { transport: definition.transport } : {}),
-        ...(typeof definition?.url === 'string' ? { url: definition.url } : {}),
-        ...(typeof definition?.auth === 'string'
-          ? { auth: definition.auth }
-          : mine
-            ? { auth: 'oauth' }
-            : {}),
-        lazy,
+        description: definition.description,
+        definition: publicDefinition(definition),
+        transport: definition.transport,
+        ...(typeof definition.url === 'string' ? { url: definition.url } : {}),
+        auth: definition.auth ?? 'oauth',
+        lazy: definition.lazy !== false,
         authorized: grant !== undefined,
         mounted: this.mounts.has(serverName),
         ...status,

@@ -113,7 +113,7 @@ describe('status 与懒加载', () => {
     const { status, json } = await call(ctx, '/api/better-mcp/status');
     expect(status).toBe(200);
     const servers = json.servers as Array<Record<string, unknown>>;
-    expect(servers[0]).toMatchObject({ name: 'one', managed: true, lazy: true, auth: 'none' });
+    expect(servers[0]).toMatchObject({ name: 'one', lazy: true, auth: 'none' });
     expect(Object.keys(json)).toEqual(['servers']);
   });
 

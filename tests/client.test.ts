@@ -88,13 +88,24 @@ describe('前端入口', () => {
       key: ROW_KEY,
       locale: NS,
     });
+
+    const sidebar = ctx._slotRegistrations[0]?.component;
+    const html = renderToStaticMarkup(
+      createElement(sidebar as never, { t: translate(zh), wide: true } as never),
+    );
+    expect(html).toContain('title="MCP 服务器"');
+    expect(html).toContain('aria-label="MCP 服务器"');
+    expect(html).toContain('viewBox="0 0 16 16"');
+    expect(html).not.toContain('<span>MCP 服务器</span>');
   });
 });
 
 describe('字典', () => {
   it('中英文键集一致且覆盖面板与表单文案', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort());
-    expect(Object.keys(zh)).toEqual(expect.arrayContaining(['title', 'add', 'delete', 'save']));
+    expect(Object.keys(zh)).toEqual(
+      expect.arrayContaining(['title', 'panelTitle', 'add', 'delete', 'save']),
+    );
   });
 
   it('每个键都被前端源码引用', () => {
@@ -107,7 +118,7 @@ describe('字典', () => {
   });
 
   it('英文徽标与开关使用 sentence case', () => {
-    for (const key of ['lazy', 'managed', 'external', 'authorized', 'needsAuth'] as const) {
+    for (const key of ['lazy', 'authorized', 'needsAuth'] as const) {
       expect(en[key].charAt(0)).toBe(en[key].charAt(0).toUpperCase());
     }
   });
@@ -308,7 +319,6 @@ describe('McpPanel', () => {
       servers: [
         {
           name: 'alpha',
-          managed: true,
           transport: 'streamable-http',
           url: 'https://example.com/mcp',
           auth: 'oauth',
@@ -335,6 +345,9 @@ describe('McpPanel', () => {
     expect(html).toContain('data-testid="better-mcp-panel"');
     expect(html).toContain('Loading…');
     expect(html).toContain('role="status"');
+    expect(html).toContain(en.panelTitle);
+    expect(html).toContain(en.add);
+    expect(html).not.toContain('>Refresh<');
     // 静态渲染不执行 useEffect，因此不会发起状态请求。
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -350,7 +363,6 @@ function renderRow(row: Record<string, unknown>, dict: Record<string, string> = 
         t: translate(dict),
         row: {
           name: 'alpha',
-          managed: true,
           lazy: true,
           authorized: false,
           mounted: true,
@@ -374,7 +386,6 @@ describe('服务器行', () => {
     expect(
       statusParts(translate(zh), {
         name: 'a',
-        managed: true,
         lazy: true,
         authorized: false,
         mounted: true,
@@ -385,7 +396,6 @@ describe('服务器行', () => {
     expect(
       statusParts(translate(en), {
         name: 'a',
-        managed: true,
         lazy: true,
         authorized: false,
         mounted: true,
@@ -416,10 +426,13 @@ describe('服务器行', () => {
     expect(html).toContain('HTTP 502');
   });
 
-  it('其他来源的服务器只显示状态', () => {
-    const html = renderRow({ managed: false });
-    expect(html).toContain(zh.external);
-    expect(html).not.toContain('<button');
+  it('名称区域不显示行图标与来源标签', () => {
+    const html = renderRow({});
+    expect(html).not.toContain('better-mcp-server-icon');
+    expect(html).not.toContain('本插件');
+    expect(html).not.toContain('其他来源');
+    expect(html).toContain(zh.edit);
+    expect(html).toContain(zh.delete);
   });
 });
 

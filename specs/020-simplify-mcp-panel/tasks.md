@@ -21,12 +21,12 @@
 
 **Independent Test**: 同时提供配置内与外来源服务器，快照只返回配置内项；静态渲染不含刷新、行图标和来源标签。
 
-- [ ] T004 [P] [US1] 在 `tests/servers.test.ts` 更新快照测试，断言外部服务器被排除且配置内状态仍保留
-- [ ] T005 [P] [US1] 在 `tests/client.test.ts` 更新面板、服务器行、侧栏与字典测试
-- [ ] T006 [US1] 在 `src/servers.ts` 与 `src/client/api.ts` 收窄快照并移除恒定的 `managed` 字段
-- [ ] T007 [US1] 在 `src/client/panel.tsx` 删除刷新、行图标与来源标签，标题使用「已配置的 MCP」，新增按钮使用「新增 MCP」
-- [ ] T008 [US1] 在 `src/client/index.tsx` 使用共享 MCP 图标并移除侧栏文字，保留「MCP 服务器」提示与无障碍名称
-- [ ] T009 [US1] 在 `src/client/ui.tsx` 清理行图标等失效样式并运行本阶段测试
+- [x] T004 [P] [US1] 在 `tests/servers.test.ts` 更新快照测试，断言外部服务器被排除且配置内状态仍保留
+- [x] T005 [P] [US1] 在 `tests/client.test.ts` 更新面板、服务器行、侧栏与字典测试
+- [x] T006 [US1] 在 `src/servers.ts` 与 `src/client/api.ts` 收窄快照并移除恒定的 `managed` 字段
+- [x] T007 [US1] 在 `src/client/panel.tsx` 删除刷新、行图标与来源标签，标题使用「已配置的 MCP」，新增按钮使用「新增 MCP」
+- [x] T008 [US1] 在 `src/client/index.tsx` 使用共享 MCP 图标并移除侧栏文字，保留「MCP 服务器」提示与无障碍名称
+- [x] T009 [US1] 在 `src/client/ui.tsx` 清理行图标等失效样式并运行本阶段测试
 
 ## Phase 4: User Story 2 - 用精简表单新增服务器 (P2)
 

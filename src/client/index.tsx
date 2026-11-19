@@ -15,7 +15,7 @@ import { useState } from 'react';
 
 import { en, NS, zh } from './locales.ts';
 import { McpPanel } from './panel.tsx';
-import { ClientStyles } from './ui.tsx';
+import { ClientStyles, McpIcon } from './ui.tsx';
 
 /** 需要宿主注入的客户端服务。 */
 export const inject = ['slots', 'locale'];
@@ -43,26 +43,7 @@ function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }
         aria-label={t('title')}
         onClick={() => setOpen(true)}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <title>{t('title')}</title>
-          <path d="M7.5 9.5 4 12l3.5 2.5" />
-          <path d="M16.5 9.5 20 12l-3.5 2.5" />
-          <rect x="8.5" y="9.5" width="7" height="5" rx="1.2" />
-          <circle cx="12" cy="5" r="1.6" />
-          <circle cx="12" cy="19" r="1.6" />
-          <path d="M12 6.6v2.9M12 14.5v2.9" />
-        </svg>
-        {wide ? <span>{t('title')}</span> : null}
+        <McpIcon />
       </button>
       {open ? <McpPanel t={t} variant="modal" onClose={() => setOpen(false)} /> : null}
     </>

@@ -97,9 +97,10 @@ describe('unmount', () => {
 });
 
 describe('snapshot', () => {
-  it('合并配置与管理器，按名称排序', async () => {
+  it('只列出配置内服务器并保留其管理器状态', async () => {
     const ctx = makeCtx({ external: ['external-one'] });
     ctx._setStatus('external-one', { state: 'connected', toolCount: 1, connectedAt: 0 });
+    ctx._setStatus('figma', { state: 'connected', toolCount: 2, connectedAt: 0 });
     await ctx.credentials.modifyRecord(recordKey(grantId('figma')), async () => ({
       kind: 'grant',
       payload: { accessToken: 't' },
@@ -115,14 +116,15 @@ describe('snapshot', () => {
     });
     const manager = makeManager(ctx, config);
     const snapshot = await manager.snapshot();
-    expect(snapshot.servers.map((row) => row.name)).toEqual(['external-one', 'figma']);
-    expect(snapshot.servers[0]).toMatchObject({ managed: false, lazy: false, mounted: false });
-    expect(snapshot.servers[1]).toMatchObject({
-      managed: true,
+    expect(snapshot.servers.map((row) => row.name)).toEqual(['figma']);
+    expect(snapshot.servers[0]).toMatchObject({
       lazy: true,
       authorized: true,
       auth: 'oauth',
+      state: 'connected',
+      toolCount: 2,
     });
+    expect(snapshot.servers[0]).not.toHaveProperty('managed');
   });
 
   it('快照包含脱敏定义', async () => {
