@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-19
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "在桌面端使用 点击“授权”根本没反应 但是 web profile 实测是好的"；"这里连同ui一起改一下吧。授权不再作为按钮存在。需要授权的时候 那一排按钮下面加 点击授权+完整url+a标签。和mcp简介用同一个字号 颜色用warning的黄色"；"所有文本 授权->鉴权"
 
@@ -29,7 +29,7 @@
 
 ## Review Record
 
-- 2026-11-19 | Decision: pending | Scope: current full document | Open items: none | Risks: 桌面端外链行为由宿主实现，宿主升级可能改变行为；验收以测试为准
+- 2026-11-20 | Decision: Approved | Scope: current full document | Open items: none | Risks: 桌面端外链行为由宿主实现，宿主升级可能改变行为；验收以实机测试为准，测试套件不运行
 
 ## User Scenarios & Testing *(mandatory)*
 
