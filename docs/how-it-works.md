@@ -130,7 +130,7 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 
 1. 探测端点 `initialize`，要求返回 `401`，读 `resource_metadata`。
 2. 读受保护资源元数据与授权服务器元数据，失败时尝试 `openid-configuration`。
-3. 有 `registration_endpoint` 时动态注册 `client_secret_post` 客户端。Figma 官方 MCP 使用注册名 `Codex` 与固定回调 `http://127.0.0.1:19876/callback`，OpenAI 登录固定标识在该场景由动态注册替代。
+3. 有 `registration_endpoint` 时动态注册 `client_secret_post` 客户端。Figma 官方 MCP 使用注册名 `Codex`；插件监听 `127.0.0.1:0/callback`，由操作系统分配端口。OpenAI 登录固定标识在该场景由动态注册替代。
 4. 生成 PKCE S256 verifier 与 state，拼授权 URL（带 `resource`）。
 5. 回调换码，写授权记录，卸载旧实例并重新挂载，随后执行 `VisibilityRuntime.syncAll()` 与 `notifyAll()`。
 6. 距过期 30 秒内用刷新令牌换新；刷新失败沿用旧令牌并告警。
@@ -141,7 +141,7 @@ deny 列表不变时跳过，插件自身的 `restrict` 引起的 `tools/change`
 
 令牌端点的客户端认证按注册结果选择 `client_secret_post` 或 `client_secret_basic`，注册时没给出结果时优先 `client_secret_post`。授权服务器元数据列出的方式未必都被实现。
 
-固定回调地址时，插件在指定回环端口临时监听；10 分钟无回调自动关闭。
+Figma 默认回调与显式 `oauth.redirectUri` 都使用临时回环监听；10 分钟无回调自动关闭。注册、授权与换码使用同一个实际回调地址。
 
 ### 秘密存放
 

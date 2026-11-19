@@ -2,12 +2,13 @@
 
 ## R1 Figma 客户端身份
 
-**Decision**: Figma 官方 MCP 使用动态客户端注册，注册名为 `Codex`，默认回调为 `http://127.0.0.1:19876/callback`。配置中的 `app_EMoamEEZ73f0CkXaXp7hrann` 对 Figma 视为无效固定客户端，授权启动时改用上述注册流程。表单移除该固定客户端备选项。
+**Decision**: Figma 官方 MCP 使用动态客户端注册，注册名为 `Codex`。默认监听 `http://127.0.0.1:0/callback`，由操作系统分配空闲端口，注册、授权与换码使用实际回调地址。配置中的 `app_EMoamEEZ73f0CkXaXp7hrann` 对 Figma 视为无效固定客户端，授权启动时改用上述注册流程。表单移除该固定客户端备选项。
 
 **Rationale**:
 
 - Figma 元数据声明授权端点 `https://www.figma.com/oauth/mcp` 与注册端点 `https://api.figma.com/v1/oauth/mcp/register`。
-- 真实注册验证表明 `Codex` 还需要固定回调 `http://127.0.0.1:19876/callback`；同源动态端口返回 `invalid_redirect_uri`。
+- 回调矩阵实测：`127.0.0.1:4322/callback`、`127.0.0.1:54321/callback` 与无端口 `/callback` 均注册成功；`127.0.0.1:19876/better-mcp/oauth/callback` 返回 `invalid_redirect_uri`。Figma 接受动态回环端口。
+- Codex 当前实现默认监听端口 `0` 并使用 `/callback`；RFC 8252 要求授权服务器接受回环 IP 回调的请求时端口。
 - Figma 只允许 MCP catalog 中的客户端。OpenAI 当前 Codex 实现通过动态注册并发送 `client_name: "Codex"` 连接 MCP。
 - Hermes 的公开验证记录显示精确名称 `Codex` 可完成注册，自定义客户端名返回 `403`。
 - `app_EMoamEEZ73f0CkXaXp7hrann` 属于 OpenAI 登录场景，作为 Figma `client_id` 会触发客户端不存在错误。
@@ -24,6 +25,8 @@
 - [Figma authorization metadata](https://api.figma.com/.well-known/oauth-authorization-server)
 - [Figma protected-resource metadata](https://mcp.figma.com/.well-known/oauth-protected-resource)
 - [OpenAI Codex OAuth registration](https://raw.githubusercontent.com/openai/codex/main/codex-rs/rmcp-client/src/oauth_client_registration.rs)
+- [OpenAI Codex callback listener](https://raw.githubusercontent.com/openai/codex/main/codex-rs/rmcp-client/src/perform_oauth_login.rs)
+- [RFC 8252 loopback redirection](https://www.rfc-editor.org/rfc/rfc8252#section-7.3)
 - [Hermes Figma 注册验证记录](https://github.com/NousResearch/hermes-agent/pull/73141)
 - [同类 DSH 插件的 Figma 注册记录](https://github.com/lcf2212dev/dsh-figma-mcp-oauth#figma-policy-why-clientname-claude-code-dsh)
 

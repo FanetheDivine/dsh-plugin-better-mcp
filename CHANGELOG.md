@@ -13,4 +13,4 @@
 
 ### Fixed
 
-- Figma 官方 MCP 使用 `Codex` 动态注册与固定回环回调，避免把 OpenAI 登录固定标识发送到 Figma
+- Figma 官方 MCP 使用 `Codex` 动态注册与系统分配端口的 `/callback`，避免把 OpenAI 登录固定标识发送到 Figma

@@ -7,7 +7,7 @@
 | 检查 | 结果 |
 | --- | --- |
 | `pnpm format` | 通过 |
-| `pnpm check` | 13 个测试文件，210 项测试通过 |
+| `pnpm check` | 13 个测试文件，211 项测试通过 |
 | `pnpm build` | 构建成功，5 项产物测试通过 |
 | UI/UX 子代理评审 | 无阻塞问题；2 项可访问性建议已修复并回归 |
 
@@ -42,10 +42,19 @@
 | R3 高亮原生授权链接 | `href`、`target="_blank"`、primary 样式通过 |
 | R4 侧栏待授权高亮与呼吸 | `data-attention=true`，`better-mcp-auth-breath` 生效 |
 | R5 减少动态效果 | `animation-name: none`，静态提示保留 |
-| R6 Figma 授权重定向 | 302 到 `https://www.figma.com/oauth/mcp`，使用动态 client_id 与 `http://127.0.0.1:19876/callback` |
+| R6 Figma 授权重定向 | 302 到 `https://www.figma.com/oauth/mcp`，使用动态 client_id 与 `http://127.0.0.1:<系统分配端口>/callback` |
 | R7 控制台 | 0 个错误 |
 
-首次实测使用同源动态回调时，Figma 返回 `invalid_redirect_uri`。固定为 `127.0.0.1:19876/callback` 后，R6 通过。
+动态回调矩阵实测：
+
+| redirect_uri | DCR 结果 |
+| --- | --- |
+| `http://127.0.0.1:4322/callback` | 201 |
+| `http://127.0.0.1:54321/callback` | 201 |
+| `http://127.0.0.1/callback` | 201 |
+| `http://127.0.0.1:19876/better-mcp/oauth/callback` | 400 `invalid_redirect_uri` |
+
+最终实现对 `127.0.0.1:0/callback` 监听，由操作系统分配端口。真实 socket 测试验证注册、授权地址和换码上下文使用同一个实际地址。
 
 ## 会话目录
 
@@ -61,5 +70,5 @@
 
 以下步骤需要用户账号和当前 Desktop 配置，未自动执行：
 
-1. 在 Figma 授权页点击允许，完成回调并确认工具连接。
+1. 在新建 Web profile `rdt-figma-dynamic-022` 中点击 Figma 授权，完成账号授权回调并确认工具连接。
 2. 在当前 Desktop 安装构建产物后，确认默认浏览器打开行为与完整授权流程。

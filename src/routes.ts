@@ -33,8 +33,8 @@ const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or
 /** OpenAI 登录客户端标识，不能作为 Figma MCP 的固定客户端。 */
 const OPENAI_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 
-/** Figma 接受的 Codex 回环回调。 */
-const FIGMA_REDIRECT_URI = 'http://127.0.0.1:19876/callback';
+/** Figma 回环回调；端口 0 由操作系统分配空闲端口。 */
+const FIGMA_CALLBACK_URL = 'http://127.0.0.1:0/callback';
 
 /** 判断是否为 Figma 官方远程 MCP 地址。 */
 function isFigmaMcpEndpoint(endpoint: string): boolean {
@@ -69,8 +69,14 @@ interface AuthorizationStartResult {
 
 /** 待完成授权上下文。 */
 interface PendingContext extends PendingAuthorization {
-  /** 固定回环监听器。 */
+  /** 固定或动态回环监听器。 */
   listener?: Server | undefined;
+}
+
+/** 已监听的回环服务器及实际回调地址。 */
+interface LoopbackListener {
+  server: Server;
+  redirectUri: string;
 }
 
 /** 结果页标题与正文。 */
@@ -378,52 +384,69 @@ export class PluginRoutes {
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
       const figma = isFigmaMcpEndpoint(endpoint);
-      const redirectUri =
-        oauthDefinition.redirectUri ?? (figma ? FIGMA_REDIRECT_URI : `${origin}${CALLBACK_PATH}`);
-      let clientId =
-        figma && oauthDefinition.clientId === OPENAI_CODEX_CLIENT_ID
-          ? undefined
-          : oauthDefinition.clientId;
-      let clientSecret =
-        oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
-      if (clientId === undefined) {
-        const registered = await registerClient(discovery, {
-          clientName: figma ? 'Codex' : 'DeepSeek Harness (better-mcp)',
-          redirectUri,
-          scopes,
-        });
-        clientId = registered.clientId;
-        clientSecret = registered.clientSecret;
-      }
-      const flow = authorizationUrl(discovery, {
-        clientId,
-        redirectUri,
-        scopes,
-        resource: discovery.resource,
-      });
-      const context: PendingContext = {
-        serverName,
-        verifier: flow.verifier,
-        redirectUri,
-        clientId,
-        ...(clientSecret === undefined ? {} : { clientSecret }),
-        resource: discovery.resource,
-        authorization: discovery.authorization,
-        createdAt: Date.now(),
-      };
-      this.pending.set(flow.state, context);
-      if (figma || oauthDefinition.redirectUri !== undefined) {
+      let earlyListener: LoopbackListener | undefined;
+      let redirectUri = oauthDefinition.redirectUri ?? `${origin}${CALLBACK_PATH}`;
+      if (figma && oauthDefinition.redirectUri === undefined) {
         try {
-          context.listener = await this.startLoopbackListener(redirectUri);
+          earlyListener = await this.startLoopbackListener(FIGMA_CALLBACK_URL);
+          redirectUri = earlyListener.redirectUri;
         } catch (error) {
-          this.pending.delete(flow.state);
           throw new AuthorizationStartError(
-            `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}`,
+            `Could not bind the loopback callback: ${messageOf(error)}`,
             502,
           );
         }
       }
-      return { url: flow.url, scopes, redirectUri };
+      try {
+        let clientId =
+          figma && oauthDefinition.clientId === OPENAI_CODEX_CLIENT_ID
+            ? undefined
+            : oauthDefinition.clientId;
+        let clientSecret =
+          oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
+        if (clientId === undefined) {
+          const registered = await registerClient(discovery, {
+            clientName: figma ? 'Codex' : 'DeepSeek Harness (better-mcp)',
+            redirectUri,
+            scopes,
+          });
+          clientId = registered.clientId;
+          clientSecret = registered.clientSecret;
+        }
+        const flow = authorizationUrl(discovery, {
+          clientId,
+          redirectUri,
+          scopes,
+          resource: discovery.resource,
+        });
+        const context: PendingContext = {
+          serverName,
+          verifier: flow.verifier,
+          redirectUri,
+          clientId,
+          ...(clientSecret === undefined ? {} : { clientSecret }),
+          resource: discovery.resource,
+          authorization: discovery.authorization,
+          createdAt: Date.now(),
+          ...(earlyListener === undefined ? {} : { listener: earlyListener.server }),
+        };
+        earlyListener = undefined;
+        this.pending.set(flow.state, context);
+        if (oauthDefinition.redirectUri !== undefined) {
+          try {
+            context.listener = (await this.startLoopbackListener(redirectUri)).server;
+          } catch (error) {
+            this.pending.delete(flow.state);
+            throw new AuthorizationStartError(
+              `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}`,
+              502,
+            );
+          }
+        }
+        return { url: flow.url, scopes, redirectUri };
+      } finally {
+        earlyListener?.server.close();
+      }
     } catch (error) {
       if (error instanceof AuthorizationStartError) throw error;
       throw new AuthorizationStartError(messageOf(error), 502);
@@ -524,8 +547,8 @@ export class PluginRoutes {
     return `${protocol}//${host}`;
   }
 
-  /** 在固定回环端口监听一次回调。 */
-  private async startLoopbackListener(redirectUri: string): Promise<Server> {
+  /** 在固定端口或操作系统分配的端口监听一次回调。 */
+  private async startLoopbackListener(redirectUri: string): Promise<LoopbackListener> {
     if (!isLoopbackHttpUrl(redirectUri)) throw new Error(LOOPBACK_REDIRECT_ERROR);
     const redirect = new URL(redirectUri);
     const server = createServer(async (req, res) => {
@@ -559,7 +582,14 @@ export class PluginRoutes {
       clearTimeout(timer);
       this.listeners.delete(server);
     });
-    return server;
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      server.close();
+      throw new Error('Could not resolve the loopback listener address');
+    }
+    const actualRedirect = new URL(redirectUri);
+    actualRedirect.port = String(address.port);
+    return { server, redirectUri: actualRedirect.toString() };
   }
 }
 

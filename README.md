@@ -134,7 +134,7 @@ dsh plugin add dsh-plugin-better-mcp
 
 - 服务器钉死回调地址时，插件在 `127.0.0.1` 或 `localhost` 的指定端口临时监听，10 分钟无回调自动关闭。
 - 客户端标识留空时使用动态注册，也可输入服务器要求的固定标识；客户端密钥在编辑表单里单独填写。
-- Figma 官方 MCP 自动使用 `Codex` 动态注册与 `http://127.0.0.1:19876/callback`，无需配置 `oauth.clientId`。
+- Figma 官方 MCP 自动使用 `Codex` 动态注册与 `http://127.0.0.1:<系统分配端口>/callback`，无需配置 `oauth.clientId`。
 - 授权启动失败时，默认浏览器中的错误页显示具体原因，配置面板保留重试链接。
 - 表单使用同源回环回调；`oauth.redirectUri` 仍供 YAML 高级配置使用。
 - 访问令牌与刷新令牌存凭据库的 `grant` 记录。

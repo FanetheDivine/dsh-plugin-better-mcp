@@ -130,9 +130,13 @@ async function callWeb(
   return read();
 }
 
-/** 替换固定回环监听，避免单元测试占用真实端口。 */
+/** 替换回环监听，避免单元测试占用真实端口。 */
 function stubFixedListener(routes: PluginRoutes) {
-  const listener = vi.fn(async (_redirectUri: string) => undefined);
+  const listener = vi.fn(async (redirectUri: string) => {
+    const actual = new URL(redirectUri);
+    if (actual.port === '0') actual.port = '54321';
+    return { server: { close: vi.fn() }, redirectUri: actual.toString() };
+  });
   Object.assign(routes, { startLoopbackListener: listener });
   return listener;
 }
@@ -406,12 +410,40 @@ describe('OAuth 路由', () => {
     expect(response.status).toBe(200);
     expect(registration).toHaveLength(1);
     expect(registration[0]?.client_name).toBe('Codex');
-    expect(registration[0]?.redirect_uris).toEqual(['http://127.0.0.1:19876/callback']);
-    expect(listener).toHaveBeenCalledWith('http://127.0.0.1:19876/callback');
+    expect(registration[0]?.redirect_uris).toEqual(['http://127.0.0.1:54321/callback']);
+    expect(listener).toHaveBeenCalledWith('http://127.0.0.1:0/callback');
     const target = new URL(String(response.json.url));
     expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
     expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
     expect(target.searchParams.get('scope')).toBe('mcp:connect');
+  });
+
+  it('Figma 使用操作系统分配的回环端口与 /callback', async () => {
+    const { ctx, routes } = harness({
+      figma: {
+        description: 'Figma',
+        transport: 'streamable-http',
+        url: 'https://mcp.figma.com/mcp',
+        auth: 'oauth',
+        lazy: true,
+      },
+    });
+    const registration: Array<Record<string, unknown>> = [];
+    stubFigmaOAuth(registration);
+    try {
+      const response = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+      expect(response.status).toBe(200);
+      const redirect = new URL(String(response.json.redirectUri));
+      expect(redirect.hostname).toBe('127.0.0.1');
+      expect(Number(redirect.port)).toBeGreaterThan(0);
+      expect(redirect.pathname).toBe('/callback');
+      expect(registration[0]?.redirect_uris).toEqual([redirect.toString()]);
+      expect(new URL(String(response.json.url)).searchParams.get('redirect_uri')).toBe(
+        redirect.toString(),
+      );
+    } finally {
+      routes.dispose();
+    }
   });
 
   it('Figma 保留其他显式客户端标识', async () => {
@@ -462,7 +494,7 @@ describe('OAuth 路由', () => {
     const target = new URL(response.headers.location ?? '');
     expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
     expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
-    expect(target.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:19876/callback');
+    expect(target.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:54321/callback');
   });
 
   it('授权启动 Web 路由返回 400 与 502 HTML 错误页', async () => {

@@ -115,6 +115,13 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ---
 
+## Phase 8: Dynamic Loopback Callback
+
+- [X] T019 在 `src/routes.ts` 与 `tests/routes.test.ts` 使用 `127.0.0.1:0/callback`，验证系统分配端口及注册、授权、换码地址一致
+- [X] T020 新建预置 Figma 的 Web profile 并更新 `specs/022-oauth-authorization-ui/validation.md`，交由用户完成账号授权验收
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

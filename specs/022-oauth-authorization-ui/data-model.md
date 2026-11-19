@@ -50,7 +50,7 @@
 | 场景 | 规则 |
 | --- | --- |
 | 用户未指定客户端 | 动态注册 `client_name: Codex` |
-| 默认回调 | `http://127.0.0.1:19876/callback`，启动一次性回环监听 |
+| 默认回调 | `http://127.0.0.1:<系统分配端口>/callback`，启动一次性回环监听 |
 | 配置为 `app_EMoamEEZ73f0CkXaXp7hrann` | 忽略该 OpenAI 固定标识，动态注册 `client_name: Codex` |
 | 用户指定其他客户端 | 保留显式配置；被 Figma 拒绝时显示服务端错误 |
 
