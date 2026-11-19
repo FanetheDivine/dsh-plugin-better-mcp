@@ -52,9 +52,9 @@
 
 **Goal**: 高级用户找到配置参考，文档整体通过质量门禁。
 
-- [ ] T010 [US5] 在 `README.md` 新增「更多文档」：用公网 GitHub 地址链接 `docs/configuration.md`、`docs/known-risks.md` 与开发者文档
-- [ ] T011 在 `CHANGELOG.md` 的 Unreleased 加入本次文档条目
-- [ ] T012 按 `specs/021-user-facing-readme/quickstart.md` 逐项检查，运行 `pnpm format && pnpm check`
+- [x] T010 [US5] 在 `README.md` 新增「更多文档」：用公网 GitHub 地址链接 `docs/configuration.md`、`docs/known-risks.md` 与开发者文档
+- [x] T011 在 `CHANGELOG.md` 的 Unreleased 加入本次文档条目
+- [x] T012 按 `specs/021-user-facing-readme/quickstart.md` 逐项检查，运行 `pnpm format && pnpm check`
 
 ## Dependencies & Execution Order
 

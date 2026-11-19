@@ -69,6 +69,7 @@ stdio 服务器跳过这一步。
 - 每轮对话结束后，全部服务器自动收起。下一轮模型会按需重新打开。
 - 打开与收起只作用于当前会话。其他会话与子代理各自独立。
 - 收起期间服务器保持连接，重新打开时工具立即可用。
+- 懒加载只作用于本插件配置的服务器。
 - 当前 DSH 缺少会话级工具控制时，全部工具始终可见，模型也没有 `mcp_manage`。
 
 ## 管理服务器
@@ -129,3 +130,10 @@ Figma 只接受其目录内的客户端。
 
 1. 运行 `dsh --profile <profile> --dump-config` 查看最终配置。
 2. 对照[配置参考](https://github.com/FanetheDivine/dsh-plugin-better-mcp/blob/main/docs/configuration.md)修正 `better-mcp` 行。
+
+## 更多文档
+
+- [配置参考](https://github.com/FanetheDivine/dsh-plugin-better-mcp/blob/main/docs/configuration.md)：用 YAML 配置环境变量、工作目录、固定回调地址等高级字段。
+- [已知风险](https://github.com/FanetheDivine/dsh-plugin-better-mcp/blob/main/docs/known-risks.md)：授权、会话可见性与面板的已知限制。
+- [工作机制](https://github.com/FanetheDivine/dsh-plugin-better-mcp/blob/main/docs/how-it-works.md)：插件的构造方式与运行流程。
+- [开发说明](https://github.com/FanetheDivine/dsh-plugin-better-mcp/blob/main/docs/development.md)：本地开发与测试。
