@@ -152,6 +152,77 @@ describe('mcp_manage', () => {
   });
 });
 
+describe('Turn 结束自动停用', () => {
+  it('重置默认 active 与手动 active 的服务器，且不注入唤醒消息', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    expect(agent._deny()).toEqual([]);
+    await step(ctx, agent);
+
+    ctx._endTurn(agent);
+
+    expect(agent._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+    expect(agent.inbox.nextStep).toHaveLength(0);
+    expect(agent.inbox.nextTurn).toHaveLength(0);
+  });
+
+  it.each(['completed', 'error', 'aborted'] as const)('%s 的 Turn 也重置可见性', async (kind) => {
+    const agent = makeAgent();
+    const { ctx } = await setup([agent]);
+
+    ctx._endTurn(agent, kind);
+
+    expect(agent._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+  });
+
+  it('后续 Turn 可以重新启用服务器', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    ctx._endTurn(agent);
+
+    await manage(agent, { server: 'lazy', command: 'active' });
+    expect(agent._deny()).toEqual(['mcp__eager__run']);
+    await manage(agent, { server: 'eager', command: 'active' });
+    expect(agent._deny()).toEqual([]);
+
+    ctx._endTurn(agent);
+    expect(agent._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+  });
+
+  it('下一步记录目录更新，后续步骤不重复提醒', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    await step(ctx, agent);
+
+    ctx._endTurn(agent);
+
+    expect(agent.inbox.nextStep).toHaveLength(0);
+    const text = await step(ctx, agent);
+    expect(text).toContain('Now inactive: `eager`');
+    expect(text).toContain('Now inactive: `lazy`');
+    expect(text).toContain('- `eager` (inactive): Eager tools');
+    expect(text).toContain('- `lazy` (inactive): Lazy tools');
+    expect(await step(ctx, agent)).toBeUndefined();
+  });
+
+  it('已经全部 inactive 时不写重复目录', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'eager', command: 'inactive' });
+    await step(ctx, agent);
+
+    ctx._endTurn(agent);
+
+    expect(agent.inbox.nextStep).toHaveLength(0);
+    expect(await step(ctx, agent)).toBeUndefined();
+  });
+});
+
 describe('工具与配置变化', () => {
   it('tools/change 后为新工具补齐限制，限制不变时不替换', async () => {
     const agent = makeAgent();

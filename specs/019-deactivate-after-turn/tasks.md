@@ -41,12 +41,12 @@ description: "Turn 结束后自动停用 MCP 的实施任务"
 
 ### Tests for User Story 1
 
-- [ ] T006 [US1] 在 `tests/visibility.test.ts` 添加默认 active、手动 active、完成/失败/取消、重新启用、无唤醒消息与幂等提醒测试，并确认接线前测试失败
+- [x] T006 [US1] 在 `tests/visibility.test.ts` 添加默认 active、手动 active、完成/失败/取消、重新启用、无唤醒消息与幂等提醒测试，并确认接线前测试失败
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] 在 `src/index.ts` 监听 `session/event` 的 `turn/end`，只调用目标 Agent 的结束重置方法
-- [ ] T008 [US1] 运行 `pnpm test:code tests/visibility.test.ts` 验证 US1 并提交 `src/index.ts` 与 `tests/visibility.test.ts`
+- [x] T007 [US1] 在 `src/index.ts` 监听 `session/event` 的 `turn/end`，只调用目标 Agent 的结束重置方法
+- [x] T008 [US1] 运行 `pnpm test:code tests/visibility.test.ts` 验证 US1 并提交 `src/index.ts` 与 `tests/visibility.test.ts`
 
 **Checkpoint**: US1 可独立交付，所有 active 服务器在下一模型步骤前隐藏
 
