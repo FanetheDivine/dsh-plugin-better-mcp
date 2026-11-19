@@ -9,6 +9,7 @@ export const NS = 'dsh-plugin-better-mcp';
 /** 中文字典。 */
 export const zh = {
   title: 'MCP 服务器',
+  panelTitle: '已配置的 MCP',
   empty: '还没有 MCP 服务器。',
   lazy: '懒加载',
   lazyHint: '新会话默认隐藏这台服务器的工具，模型用 mcp_manage 按需打开',
@@ -48,6 +49,14 @@ export const zh = {
   authOAuth: 'OAuth',
   authNone: '无',
   oauthClient: 'OAuth 客户端标识',
+  oauthClientPlaceholder: '默认使用 DSH 动态注册',
+  oauthClientDsh: 'DSH（动态注册）',
+  oauthClientDshDetail: '由授权服务器注册一个客户端',
+  oauthClientCodex: 'Codex',
+  oauthClientCodexDetail: '使用 Codex 公开客户端标识',
+  oauthClientHelp: '为什么需要设置客户端标识',
+  oauthClientHelpText:
+    '例如 Figma 不接受 DSH 动态注册的客户端，可选择 Codex 后重试授权。也可输入其他客户端标识。',
   clientSecret: '客户端密钥',
   redirectUri: '回调地址',
   scopes: '授权范围',
@@ -82,6 +91,7 @@ export const zh = {
 /** 英文字典，键集与中文一致。 */
 export const en: Record<McpKey, string> = {
   title: 'MCP servers',
+  panelTitle: 'Configured MCP',
   empty: 'No MCP servers yet.',
   lazy: 'Lazy',
   lazyHint: "New sessions hide this server's tools until the model enables it with mcp_manage",
@@ -121,6 +131,14 @@ export const en: Record<McpKey, string> = {
   authOAuth: 'OAuth',
   authNone: 'None',
   oauthClient: 'OAuth client ID',
+  oauthClientPlaceholder: 'Default: DSH dynamic registration',
+  oauthClientDsh: 'DSH (dynamic registration)',
+  oauthClientDshDetail: 'Register a client with the authorization server',
+  oauthClientCodex: 'Codex',
+  oauthClientCodexDetail: 'Use the Codex public client ID',
+  oauthClientHelp: 'Why set a client ID',
+  oauthClientHelpText:
+    'For example, Figma rejects dynamically registered DSH clients. Select Codex and try authorization again, or enter another client ID.',
   clientSecret: 'Client secret',
   redirectUri: 'Redirect URI',
   scopes: 'Scopes',

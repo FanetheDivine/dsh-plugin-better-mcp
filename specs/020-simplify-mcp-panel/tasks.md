@@ -12,8 +12,8 @@
 
 ## Phase 2: Foundational
 
-- [ ] T002 [P] 在 `src/client/ui.tsx` 增加共享 VS Code MCP 图标组件，并在 `icon.svg` 使用同一图形与来源声明
-- [ ] T003 在 `src/client/locales.ts` 增删本次面板、表单、备选项与问号说明的中英文键，保持键集一致
+- [x] T002 [P] 在 `src/client/ui.tsx` 增加共享 VS Code MCP 图标组件，并在 `icon.svg` 使用同一图形与来源声明
+- [x] T003 在 `src/client/locales.ts` 增加本次面板、备选项与问号说明的中英文键，保持键集一致
 
 ## Phase 3: User Story 1 - 集中查看本插件配置 (P1) 🎯 MVP
 
