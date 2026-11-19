@@ -167,6 +167,7 @@ export class VisibilityRuntime {
     private readonly ctx: Context,
     private readonly getSettings: SettingsReader,
     private readonly logger: PluginLogger,
+    private readonly isAuthorized: (serverName: string) => boolean = () => false,
   ) {}
 
   /** 注册目录投影。 */
@@ -219,6 +220,10 @@ export class VisibilityRuntime {
     const overrides = this.overridesOf(agent);
     return Object.keys(servers)
       .sort()
+      .filter((name) => {
+        const definition = servers[name];
+        return definition?.auth !== 'oauth' || this.isAuthorized(name);
+      })
       .map((name) => {
         const definition = servers[name];
         return {
@@ -291,8 +296,14 @@ export class VisibilityRuntime {
     if (state.seq === null && entries.length === 0) return undefined;
     if (!visible && entries.length === 0) return undefined;
     const overrides = this.overridesOf(agent);
+    const previous = state.entries.filter((entry) => {
+      const definition = this.getSettings().servers[entry.name];
+      return (
+        definition === undefined || definition.auth !== 'oauth' || this.isAuthorized(entry.name)
+      );
+    });
     return visible
-      ? catalogMessage(renderCatalogUpdate(state.entries, entries), entries, overrides, true)
+      ? catalogMessage(renderCatalogUpdate(previous, entries), entries, overrides, true)
       : catalogMessage(renderCatalog(entries), entries, overrides, false);
   }
 

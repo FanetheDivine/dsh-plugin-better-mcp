@@ -76,11 +76,11 @@ description: "OAuth 授权与待授权提示实施任务"
 
 ### Tests for User Story 3
 
-- [ ] T011 [P] [US3] 在 `tests/visibility.test.ts` 覆盖未授权过滤、授权后目录出现、退出后移除、stdio 保持与多 Agent 即时提醒；在 `tests/routes.test.ts` 覆盖授权完成触发目录通知
+- [X] T011 [P] [US3] 在 `tests/visibility.test.ts` 覆盖未授权过滤、授权后目录出现、退出后移除、stdio 保持与多 Agent 即时提醒；在 `tests/routes.test.ts` 覆盖授权完成触发目录通知
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] 在 `src/servers.ts` 维护授权状态内存快照，在 `src/visibility.ts` 按快照过滤目录，并在 `src/index.ts` 与 `src/routes.ts` 授权完成时同步和 `notifyAll()`
+- [X] T012 [US3] 在 `src/servers.ts` 维护授权状态内存快照，在 `src/visibility.ts` 按快照过滤目录，并在 `src/index.ts` 与 `src/routes.ts` 授权完成时同步和 `notifyAll()`
 
 **Checkpoint**: 未授权服务器不进入任何新目录提醒，授权成功后在线 Agent 立即收到一条新提醒
 

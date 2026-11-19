@@ -69,6 +69,8 @@ export class ServerManager {
   private readonly mounts = new Map<string, () => void>();
   /** 每台服务器的挂载/卸载串行链。 */
   private readonly chains = new Map<string, Promise<unknown>>();
+  /** 最近从凭据库确认的授权状态。 */
+  private readonly authorized = new Map<string, boolean>();
 
   constructor(
     private readonly ctx: Context,
@@ -87,9 +89,30 @@ export class ServerManager {
     return next;
   }
 
+  /** 读取同步目录使用的授权状态。 */
+  isAuthorized(serverName: string): boolean {
+    return this.authorized.get(serverName) === true;
+  }
+
+  /** 从凭据库刷新一台服务器的授权状态。 */
+  async refreshAuthorization(serverName: string): Promise<void> {
+    const grant = await readGrant(this.ctx, serverName);
+    this.authorized.set(serverName, grant !== undefined);
+  }
+
+  /** 从凭据库刷新全部配置并清理已删除服务器的状态。 */
+  async refreshAuthorizationAll(): Promise<void> {
+    const names = Object.keys(this.getSettings().servers);
+    await Promise.all(names.map((name) => this.refreshAuthorization(name)));
+    for (const name of this.authorized.keys()) {
+      if (!names.includes(name)) this.authorized.delete(name);
+    }
+  }
+
   /** 读取可用访问令牌，临近过期时刷新。 */
   async accessTokenOf(serverName: string): Promise<string | undefined> {
     const grant = await readGrant(this.ctx, serverName);
+    this.authorized.set(serverName, grant !== undefined);
     if (grant === undefined) return undefined;
     const expiresAt = typeof grant.expiresAt === 'number' ? grant.expiresAt : undefined;
     if (expiresAt === undefined || expiresAt > Date.now() + 30_000) return grant.accessToken;
@@ -226,7 +249,7 @@ export class ServerManager {
       const definition = settings.servers[serverName];
       if (definition === undefined) continue;
       const view = managed.get(serverName);
-      const grant = await readGrant(this.ctx, serverName);
+      await this.refreshAuthorization(serverName);
       const status = view === undefined ? { state: 'idle' } : statusOf(view.status);
       rows.push({
         name: serverName,
@@ -236,7 +259,7 @@ export class ServerManager {
         ...(typeof definition.url === 'string' ? { url: definition.url } : {}),
         auth: definition.auth ?? 'oauth',
         lazy: definition.lazy !== false,
-        authorized: grant !== undefined,
+        authorized: this.isAuthorized(serverName),
         mounted: this.mounts.has(serverName),
         ...status,
       });
@@ -260,6 +283,7 @@ export class ServerManager {
       if (before !== undefined) await this.unmount(serverName);
       await this.tryMount(serverName, 'after a config change');
     }
+    await this.refreshAuthorizationAll();
   }
 
   /** 释放全部挂载。 */
@@ -273,6 +297,7 @@ export class ServerManager {
     }
     this.mounts.clear();
     this.chains.clear();
+    this.authorized.clear();
   }
 }
 

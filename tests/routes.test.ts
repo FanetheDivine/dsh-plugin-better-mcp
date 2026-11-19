@@ -25,7 +25,10 @@ interface Harness {
 }
 
 /** 组装路由。 */
-function harness(initialServers: Record<string, unknown> = {}): Harness {
+function harness(
+  initialServers: Record<string, unknown> = {},
+  onAuthorizationChange: () => void = () => undefined,
+): Harness {
   const refs = { servers: volatile(initialServers) };
   const ctx = makeCtx({ config: refs });
   let current = readConfig(refs);
@@ -35,7 +38,7 @@ function harness(initialServers: Record<string, unknown> = {}): Harness {
   ctx._configStore = structuredClone(current) as unknown as Record<string, unknown>;
   const logger = { info: vi.fn(), warn: vi.fn() };
   const manager = new ServerManager(ctx, () => current, logger);
-  const routes = new PluginRoutes(ctx, () => current, manager);
+  const routes = new PluginRoutes(ctx, () => current, manager, async () => undefined, onAuthorizationChange);
   routes.registerApi();
   routes.registerWeb();
   return { ctx, routes, manager, current: () => current, refs };
@@ -157,6 +160,14 @@ function stubFigmaOAuth(registration: Array<Record<string, unknown>>): void {
           { client_id: 'figma-dynamic-client', client_secret: 'figma-secret' },
           { status: 201 },
         );
+      }
+      if (target === 'https://api.figma.com/v1/oauth/token') {
+        return Response.json({
+          access_token: 'figma-access-token',
+          refresh_token: 'figma-refresh-token',
+          expires_in: 3600,
+          token_type: 'Bearer',
+        });
       }
       return new Response('unexpected', { status: 500 });
     }),
@@ -519,6 +530,38 @@ describe('OAuth 回调', () => {
       '/better-mcp/oauth/start',
       '/better-mcp/oauth/callback',
     ]);
+  });
+
+  it('成功回调写入授权并触发一次会话目录更新', async () => {
+    const onAuthorizationChange = vi.fn();
+    const { ctx } = harness(
+      {
+        figma: {
+          description: 'Figma',
+          transport: 'streamable-http',
+          url: 'https://mcp.figma.com/mcp',
+          auth: 'oauth',
+          lazy: true,
+        },
+      },
+      onAuthorizationChange,
+    );
+    stubFigmaOAuth([]);
+    const started = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
+    const state = new URL(String(started.json.url)).searchParams.get('state');
+
+    const callback = await callWeb(
+      ctx,
+      '/better-mcp/oauth/callback',
+      `/better-mcp/oauth/callback?code=code-1&state=${encodeURIComponent(state ?? '')}`,
+    );
+    expect(callback.status).toBe(200);
+    expect(callback.body).toContain('Authorization complete');
+    expect(await readGrant(ctx as never, 'figma')).toMatchObject({
+      accessToken: 'figma-access-token',
+      clientId: 'figma-dynamic-client',
+    });
+    expect(onAuthorizationChange).toHaveBeenCalledTimes(1);
   });
 
   it('回调未知 state 返回失败页', async () => {

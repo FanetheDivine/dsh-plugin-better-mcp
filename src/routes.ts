@@ -89,6 +89,7 @@ export class PluginRoutes {
     private readonly getSettings: SettingsReader,
     private readonly manager: ServerManager,
     private readonly waitIdle: () => Promise<void> = async () => undefined,
+    private readonly onAuthorizationChange: () => void = () => undefined,
   ) {}
 
   /** 注册全部同源 JSON 路由。 */
@@ -431,7 +432,9 @@ export class PluginRoutes {
     const serverName = asString(body.server);
     if (serverName === undefined) return jsonResponse({ error: 'server is required' }, 400);
     await deleteGrant(this.ctx, serverName);
+    await this.manager.refreshAuthorization(serverName);
     await this.manager.unmount(serverName);
+    this.onAuthorizationChange();
     return jsonResponse(await this.currentSnapshot());
   }
 
@@ -492,6 +495,7 @@ export class PluginRoutes {
         authorizedAt: Date.now(),
       });
       await this.manager.restart(context.serverName);
+      this.onAuthorizationChange();
       return { ok: true, detail: `Signed in for '${context.serverName}'. You can close this tab.` };
     } catch (error) {
       return { ok: false, detail: messageOf(error) };

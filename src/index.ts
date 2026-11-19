@@ -37,11 +37,14 @@ export function apply(ctx: Context, config?: unknown): void {
 
   const manager = new ServerManager(ctx, () => settings, logger);
   let reconciliation: Promise<void> = Promise.resolve();
+  /** 配置或授权对账完成后的回调，由会话可见性接入。 */
+  let afterReconcile: (() => void) | undefined;
   const routes = new PluginRoutes(
     ctx,
     () => settings,
     manager,
     () => reconciliation,
+    () => afterReconcile?.(),
   );
 
   routes.registerApi();
@@ -70,12 +73,15 @@ export function apply(ctx: Context, config?: unknown): void {
     };
   }, 'better-mcp: configured servers');
 
-  /** 配置对账完成后的回调，由会话可见性接入。 */
-  let afterReconcile: (() => void) | undefined;
-
   ctx.inject(['agents', 'sessionProjections'], async (scoped: Context) => {
-    const visibility = new VisibilityRuntime(scoped, () => settings, logger);
+    const visibility = new VisibilityRuntime(
+      scoped,
+      () => settings,
+      logger,
+      (serverName) => manager.isAuthorized(serverName),
+    );
     await visibility.start();
+    await manager.refreshAuthorizationAll();
     scoped.effect(() => {
       afterReconcile = () => {
         visibility.syncAll();
