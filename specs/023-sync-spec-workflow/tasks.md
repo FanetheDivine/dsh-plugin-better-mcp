@@ -68,8 +68,8 @@ description: "Task list for syncing the Spec Kit interview and review workflow"
 
 **Independent Test**: 未批准、部分认可、实质修改或无豁免时，plan 停在规格门禁。
 
-- [ ] T006 [US1] 审查 `.dsh/skills/speckit-clarify/SKILL.md`，确认访谈写回后请求完整规格审查，并维护审查记录、豁免风险与批准失效
-- [ ] T007 [P] [US1] 将 `.dsh/skills/speckit-plan/SKILL.md` 同步到模板提交 `03c8e9e`，在 setup 前执行规格门禁
+- [x] T006 [US1] 审查 `.dsh/skills/speckit-clarify/SKILL.md`，确认访谈写回后请求完整规格审查，并维护审查记录、豁免风险与批准失效
+- [x] T007 [P] [US1] 将 `.dsh/skills/speckit-plan/SKILL.md` 同步到模板提交 `03c8e9e`，在 setup 前执行规格门禁
 
 **Checkpoint**: 规格审查通过前 plan 不创建设计产物。
 
