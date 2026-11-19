@@ -221,6 +221,75 @@ describe('Turn 结束自动停用', () => {
     expect(agent.inbox.nextStep).toHaveLength(0);
     expect(await step(ctx, agent)).toBeUndefined();
   });
+
+  it('只重置结束 Turn 的 Agent', async () => {
+    const first = makeAgent('one');
+    const second = makeAgent('two');
+    const { ctx, manage } = await setup([first, second]);
+    await manage(first, { server: 'lazy', command: 'active' });
+    await manage(second, { server: 'lazy', command: 'active' });
+
+    ctx._endTurn(first);
+
+    expect(first._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+    expect(second._deny()).toEqual([]);
+
+    ctx._endTurn(second);
+    expect(second._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+  });
+
+  it('子代理 Turn 结束保留父代理可见性', async () => {
+    const parent = makeAgent('parent');
+    const child = makeAgent('child');
+    const { ctx, manage } = await setup([parent, child]);
+    await manage(parent, { server: 'lazy', command: 'active' });
+    await manage(child, { server: 'lazy', command: 'active' });
+
+    ctx._endTurn(child);
+
+    expect(child._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+    expect(parent._deny()).toEqual([]);
+  });
+
+  it('下一目录消息前恢复会话仍保持全部 inactive', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    await step(ctx, agent);
+    ctx._endTurn(agent);
+
+    const restored = makeAgent('restored');
+    restored.session.events.push(...agent.session.events);
+    restored.session.surface.nodes.push(...agent.session.surface.nodes);
+    ctx._agents.push(restored);
+    ctx._emit('agent/created', { agent: restored, source: 'resume' });
+
+    expect(restored._deny()).toEqual(['mcp__eager__run', 'mcp__lazy__fetch', 'mcp__lazy__search']);
+    const text = await step(ctx, restored);
+    expect(text).toContain('Now inactive: `eager`');
+    expect(text).toContain('Now inactive: `lazy`');
+  });
+
+  it('新 Turn 的目录晚于上次结束边界时恢复其显式选择', async () => {
+    const agent = makeAgent();
+    const { ctx, manage } = await setup([agent]);
+    await step(ctx, agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    await step(ctx, agent);
+    ctx._endTurn(agent);
+    await manage(agent, { server: 'lazy', command: 'active' });
+    await step(ctx, agent);
+
+    const restored = makeAgent('restored');
+    restored.session.events.push(...agent.session.events);
+    restored.session.surface.nodes.push(...agent.session.surface.nodes);
+    ctx._agents.push(restored);
+    ctx._emit('agent/created', { agent: restored, source: 'resume' });
+
+    expect(restored._deny()).toEqual(['mcp__eager__run']);
+    expect(await step(ctx, restored)).toBeUndefined();
+  });
 });
 
 describe('工具与配置变化', () => {

@@ -60,8 +60,8 @@ description: "Turn 结束后自动停用 MCP 的实施任务"
 
 ### Tests for User Story 2
 
-- [ ] T009 [US2] 在 `tests/visibility.test.ts` 添加双 Agent、子代理隔离与下一目录前恢复的测试，必要时修正 `src/visibility.ts` 的边界计算
-- [ ] T010 [US2] 运行 `pnpm test:code tests/visibility.test.ts` 验证 US2 并提交本阶段变更
+- [x] T009 [US2] 在 `tests/visibility.test.ts` 添加双 Agent、子代理隔离与下一目录前恢复的测试，必要时修正 `src/visibility.ts` 的边界计算
+- [x] T010 [US2] 运行 `pnpm test:code tests/visibility.test.ts` 验证 US2 并提交本阶段变更
 
 **Checkpoint**: 会话隔离与恢复行为均有回归测试
 
