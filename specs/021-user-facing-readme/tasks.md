@@ -16,9 +16,9 @@
 
 **Purpose**: 先给 README 移出的内容找好归属，README 重写时只需链接。
 
-- [ ] T002 [P] 新建 `docs/configuration.md`：从 README 迁入 YAML 示例、字段表、服务器名规则、透传字段与保存即生效说明
-- [ ] T003 [P] 在 `docs/how-it-works.md` 目录消息一节补充会话提醒的写入时机表与连续变化合并规则
-- [ ] T004 [P] 在 `AGENTS.md` 文档索引与 `docs/development.md` 文件地图加入 `docs/configuration.md`
+- [x] T002 [P] 新建 `docs/configuration.md`：从 README 迁入 YAML 示例、字段表、服务器名规则、透传字段与保存即生效说明
+- [x] T003 [P] 在 `docs/how-it-works.md` 目录消息一节补充会话提醒的写入时机表与连续变化合并规则
+- [x] T004 [P] 在 `AGENTS.md` 文档索引与 `docs/development.md` 文件地图加入 `docs/configuration.md`
 
 **Checkpoint**: research.md R3 去向表的每一项都能在目标文档中找到。
 
