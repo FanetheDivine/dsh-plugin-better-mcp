@@ -106,6 +106,23 @@ describe('mcp_manage', () => {
     expect(second._deny()).toEqual(['mcp__lazy__fetch', 'mcp__lazy__search']);
   });
 
+  it('可见性变化立即注入调用方，重复选择保持原队列', async () => {
+    const first = makeAgent('one');
+    const second = makeAgent('two');
+    const { ctx, manage } = await setup([first, second]);
+    await step(ctx, first);
+    await step(ctx, second);
+    await manage(first, { server: 'lazy', command: 'active' });
+
+    expect(first.inbox.nextStep).toHaveLength(1);
+    expect(JSON.stringify(first.inbox.nextStep[0]?.content)).toContain('<system-reminder>');
+    expect(JSON.stringify(first.inbox.nextStep[0]?.content)).toContain('Now active: `lazy`');
+    expect(second.inbox.nextStep).toHaveLength(0);
+
+    await manage(first, { server: 'lazy', command: 'active' });
+    expect(first.inbox.nextStep).toHaveLength(1);
+  });
+
   it('拒绝未知服务器与非法 command，并列出可用服务器', async () => {
     const agent = makeAgent();
     const { manage } = await setup([agent]);
@@ -163,15 +180,16 @@ describe('工具与配置变化', () => {
   });
 });
 
-/** 执行一次 pre-step，提交写入的目录消息并返回它的正文。 */
+/** 执行一次 pre-step，准入待处理消息，提交最终目录并返回正文。 */
 async function step(
   ctx: Awaited<ReturnType<typeof setup>>['ctx'],
   agent: FakeAgent,
 ): Promise<string | undefined> {
+  const pending = agent._claim();
   const decision = (await ctx._waterfall(
     'agent/pre-step',
-    { agent, messages: [] },
-    { kind: 'enter', messages: [] },
+    { agent, messages: pending },
+    { kind: 'enter', messages: pending },
   )) as { messages: Array<{ source: unknown; content: Array<{ text: string }> }> };
   const catalog = decision.messages.find(
     (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
@@ -244,6 +262,74 @@ describe('目录消息', () => {
     await vi.waitFor(async () =>
       expect(await step(ctx, agent)).toContain('The MCP server list changed.'),
     );
+  });
+
+  it('配置对账后立即向全部在线会话注入目录', async () => {
+    const first = makeAgent('one');
+    const second = makeAgent('two');
+    const { ctx, config } = await setup([first, second]);
+    config.servers.set({ ...SERVERS, eager: { ...SERVERS.eager, description: 'Renamed' } });
+    ctx._emit('loader/volatile-update', [['servers']]);
+
+    await vi.waitFor(() => {
+      expect(first.inbox.nextStep).toHaveLength(1);
+      expect(second.inbox.nextStep).toHaveLength(1);
+    });
+    expect(JSON.stringify(first.inbox.nextStep[0]?.content)).toContain('Renamed');
+    expect(JSON.stringify(second.inbox.nextStep[0]?.content)).toContain('Renamed');
+  });
+
+  it('配置内容不变时不注入重复目录', async () => {
+    const agent = makeAgent();
+    const { ctx, config } = await setup([agent]);
+    await step(ctx, agent);
+    config.servers.set({ ...SERVERS });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(agent.inbox.nextStep).toHaveLength(0);
+  });
+
+  it('连续配置变化在下一步只提交最新目录', async () => {
+    const agent = makeAgent();
+    const { ctx, config } = await setup([agent]);
+    await step(ctx, agent);
+    config.servers.set({ ...SERVERS, eager: { ...SERVERS.eager, description: 'Renamed' } });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(() => expect(agent.inbox.nextStep).toHaveLength(1));
+
+    config.servers.set({ ...SERVERS, eager: { ...SERVERS.eager, description: 'Latest' } });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(() => expect(agent.inbox.nextStep).toHaveLength(2));
+
+    const text = await step(ctx, agent);
+    expect(text).toContain('Latest');
+    expect(text).not.toContain('Renamed');
+    const catalogs = agent.session.events.filter(
+      (event) =>
+        (event.data.source as { kind?: unknown } | undefined)?.kind === 'better-mcp-catalog',
+    );
+    expect(catalogs).toHaveLength(2);
+  });
+
+  it('配置恢复后在下一步移除过期待处理目录', async () => {
+    const agent = makeAgent();
+    const { ctx, config } = await setup([agent]);
+    await step(ctx, agent);
+    config.servers.set({ ...SERVERS, eager: { ...SERVERS.eager, description: 'Renamed' } });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await vi.waitFor(() => expect(agent.inbox.nextStep).toHaveLength(1));
+
+    config.servers.set({ ...SERVERS });
+    ctx._emit('loader/volatile-update', [['servers']]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(await step(ctx, agent)).toBeUndefined();
+    const catalogs = agent.session.events.filter(
+      (event) =>
+        (event.data.source as { kind?: unknown } | undefined)?.kind === 'better-mcp-catalog',
+    );
+    expect(catalogs).toHaveLength(1);
   });
 
   it('没有服务器且从未发布时不写；删光服务器后写空目录', async () => {

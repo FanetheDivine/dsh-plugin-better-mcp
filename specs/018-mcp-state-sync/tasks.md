@@ -63,13 +63,13 @@ description: "MCP 状态与会话同步实施任务"
 
 ### Tests for User Story 2
 
-- [ ] T006 [US2] 在 `tests/visibility.test.ts` 增加配置变化广播、可见性隔离、立即注入、无变化去重、空目录与连续变化合并测试，并更新 `step()` 模拟队列准入，确认新增测试失败
+- [X] T006 [US2] 在 `tests/visibility.test.ts` 增加配置变化广播、可见性隔离、立即注入、无变化去重、空目录与连续变化合并测试，并更新 `step()` 模拟队列准入，确认新增测试失败
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] 在 `src/visibility.ts` 实现单会话与全体会话目录注入、待处理目录去重和无操作变化短路，复用现有目录消息
-- [ ] T008 [US2] 在 `src/index.ts` 于配置对账后触发全量注入，并在 `agent/pre-step` 合并旧目录为至多一条最新目录
-- [ ] T009 [US2] 运行 `tests/visibility.test.ts`、`tests/plugin.test.ts` 与 `tests/catalog.test.ts`，验证消息持久化时机和现有恢复行为
+- [X] T007 [US2] 在 `src/visibility.ts` 实现单会话与全体会话目录注入、待处理目录去重和无操作变化短路，复用现有目录消息
+- [X] T008 [US2] 在 `src/index.ts` 于配置对账后触发全量注入，并在 `agent/pre-step` 合并旧目录为至多一条最新目录
+- [X] T009 [US2] 运行 `tests/visibility.test.ts`、`tests/plugin.test.ts` 与 `tests/catalog.test.ts`，验证消息持久化时机和现有恢复行为
 
 **Checkpoint**: 在线会话在变化后持有最新目录，后续步骤只提交一条最新目录。
 

@@ -214,12 +214,14 @@ export class VisibilityRuntime {
       });
   }
 
-  /** 记录一次显式选择并立即更新工具限制。 */
+  /** 记录一次显式选择，立即更新工具限制并注入最新目录。 */
   setActive(agent: Agent, serverName: string, active: boolean): void {
+    if (this.isActive(agent, serverName) === active) return;
     const pending = this.pending.get(agent) ?? {};
     pending[serverName] = active;
     this.pending.set(agent, pending);
     this.sync(agent);
+    this.notify(agent);
   }
 
   /** 按当前可见性重算一个 Agent 的工具限制。 */
@@ -271,6 +273,34 @@ export class VisibilityRuntime {
     return visible
       ? catalogMessage(renderCatalogUpdate(state.entries, entries), entries, overrides, true)
       : catalogMessage(renderCatalog(entries), entries, overrides, false);
+  }
+
+  /** 向一个在线 Agent 注入最新目录；相同目录已在队列时跳过。 */
+  notify(agent: Agent): void {
+    if (this.disposed) return;
+    const catalog = this.catalogFor(agent);
+    if (catalog === undefined) return;
+    const entries = (catalog.source as CatalogSource).entries;
+    const queued = agent.inbox.nextStep.findLast((message) => {
+      const source = message.source as Partial<CatalogSource>;
+      if (source.kind !== CATALOG_SOURCE) return false;
+      const queuedEntries = readEntries(source.entries);
+      return queuedEntries !== undefined && sameEntries(queuedEntries, entries);
+    });
+    if (queued !== undefined) return;
+    try {
+      agent.inject(catalog);
+    } catch (error) {
+      this.logger.warn(
+        `better-mcp: could not inject the MCP catalog into '${agent.id}': ${String(error)}`,
+      );
+    }
+  }
+
+  /** 向全部在线 Agent 注入最新目录。 */
+  notifyAll(): void {
+    if (this.disposed) return;
+    for (const agent of this.ctx.agents.list()) this.notify(agent);
   }
 
   /** 重算全部在线 Agent 的工具限制。 */
