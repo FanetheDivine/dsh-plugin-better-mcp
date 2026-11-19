@@ -98,7 +98,13 @@ describe('前端入口', () => {
     expect(html).toContain('title="MCP 服务器"');
     expect(html).toContain('aria-label="MCP 服务器"');
     expect(html).toContain('viewBox="0 0 16 16"');
+    expect(html).toContain('data-dsh-part="entry"');
+    expect(html).not.toContain('data-rail="rail"');
     expect(html).not.toContain('<span>MCP 服务器</span>');
+    const narrow = renderToStaticMarkup(
+      createElement(sidebar as never, { t: translate(zh), wide: false } as never),
+    );
+    expect(narrow).toContain('data-rail="rail"');
   });
 });
 

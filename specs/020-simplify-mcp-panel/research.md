@@ -20,6 +20,12 @@
 
 来源：[microsoft/vscode-codicons](https://github.com/microsoft/vscode-codicons)，MIT。
 
+## 侧栏入口布局
+
+- Decision: 侧栏使用 `data-dsh-part="entry"` 外层，窄栏增加 `data-rail="rail"`，按钮固定 36×36；折叠栏按 entry 纵向排列。
+- Rationale: 与现有 restart 入口的宿主约定一致，避免全宽按钮破坏图标列。
+- Alternatives considered: 只修改图标边距无法向宿主声明紧凑入口语义。
+
 ## OAuth 字段
 
 - Decision: HTTP 表单固定 `auth: oauth`，stdio 固定 `auth: none`；删除认证选择器与回调地址字段，保留 scopes 与客户端密钥。

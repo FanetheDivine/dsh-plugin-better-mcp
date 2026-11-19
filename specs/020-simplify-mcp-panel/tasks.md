@@ -50,9 +50,10 @@
 
 ## Phase 6: Polish & Cross-cutting
 
-- [ ] T016 更新 `README.md` 的面板范围、默认传输、OAuth 字段与客户端备选项说明
-- [ ] T017 运行 `pnpm format && pnpm check && pnpm build`，修复全部失败
-- [ ] T018 按 `specs/020-simplify-mcp-panel/quickstart.md` 在实机 GUI 验证并记录结果到 `specs/020-simplify-mcp-panel/real-device-report.md`
+- [x] T016 更新 `README.md` 的面板范围、默认传输、OAuth 字段与客户端备选项说明
+- [x] T017 运行 `pnpm format && pnpm check && pnpm build`，修复全部失败
+- [x] T018 按 `specs/020-simplify-mcp-panel/quickstart.md` 在实机 GUI 验证并记录结果到 `specs/020-simplify-mcp-panel/real-device-report.md`
+- [x] T019 按 restart 入口约定修正 `src/client/index.tsx` 与 `src/client/ui.tsx` 的紧凑 entry、rail 标记和 36×36 触发区，并在 `tests/client.test.ts` 覆盖宽窄栏
 
 ## Dependencies & Execution Order
 

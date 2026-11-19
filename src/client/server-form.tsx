@@ -260,6 +260,7 @@ function OAuthClientInput({
         aria-invalid={invalid}
         aria-describedby={describedBy}
         onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onBlur={() => {
           setOpen(false);
           setActive(-1);

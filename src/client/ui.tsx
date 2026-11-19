@@ -301,27 +301,31 @@ export const CLIENT_STYLES = String.raw`
 .better-mcp-dialog * {
   box-sizing: border-box;
 }
-.better-mcp-sidebar-action {
+.better-mcp-entry {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
-  width: 100%;
+  min-width: 0;
+}
+.better-mcp-sidebar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
-  border-radius: var(--dsw-radius-md);
+  border-radius: 50%;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
   font-size: 12px;
-  line-height: 18px;
-  text-align: left;
+  line-height: 1;
 }
-.better-mcp-sidebar-action[data-wide='true'] {
-  justify-content: flex-start;
-  padding: 6px 8px;
-}
-.better-mcp-sidebar-action[data-wide='false'] {
-  justify-content: center;
-  padding: 6px;
+[data-sidebar-collapsed] [class*="footerActions"]:has(.better-mcp-entry[data-rail='rail']) {
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 .better-mcp-summary {
   color: var(--dsw-alias-label-secondary);

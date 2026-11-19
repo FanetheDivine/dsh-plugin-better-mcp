@@ -34,17 +34,19 @@ function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }
   const [open, setOpen] = useState(false);
   return (
     <>
-      <ClientStyles />
-      <button
-        type="button"
-        className="better-mcp-sidebar-action"
-        data-wide={wide}
-        title={t('title')}
-        aria-label={t('title')}
-        onClick={() => setOpen(true)}
-      >
-        <McpIcon />
-      </button>
+      <div className="better-mcp-entry" data-dsh-part="entry" data-rail={wide ? undefined : 'rail'}>
+        <ClientStyles />
+        <button
+          type="button"
+          className="better-mcp-sidebar-action"
+          title={t('title')}
+          aria-label={t('title')}
+          aria-haspopup="dialog"
+          onClick={() => setOpen(true)}
+        >
+          <McpIcon />
+        </button>
+      </div>
       {open ? <McpPanel t={t} variant="modal" onClose={() => setOpen(false)} /> : null}
     </>
   );
