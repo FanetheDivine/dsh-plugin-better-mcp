@@ -67,6 +67,16 @@
 - [x] T024 在 `src/client/index.tsx` 移除包详情面板注册，通过插件页导航 store 直接选择 `better-mcp` 行，并在 `tests/client.test.ts` 覆盖目标页面
 - [x] T025 更新 `README.md` 与规格文档，运行检查并实机确认进入行配置页且包详情无重复面板
 
+## Phase 9: 收尾修正
+
+- [x] T026 在 `src/client/panel.tsx` 与 `src/client/ui.tsx` 删除列表底部懒加载说明及其关联样式，保留开关悬停提示并更新 `tests/client.test.ts`
+- [x] T027 更新 `specs/020-simplify-mcp-panel/quickstart.md` 与实机报告，运行检查并确认说明不再显示
+
+
+- [x] T028 在 `src/client/panel.tsx` 与 `src/client/ui.tsx` 为待授权徽标增加警告色、边框与字重，并在 `tests/client.test.ts` 覆盖待授权和已授权
+- [x] T029 更新 `specs/020-simplify-mcp-panel/quickstart.md` 与实机报告，运行检查并实机核对警告色徽标
+- [x] T030 在 `src/client/ui.tsx` 增大「已配置的 MCP」标题与 MCP 名称的字号和字重，确保标题字号更大，并更新测试与文档
+
 ## Dependencies & Execution Order
 
 - Setup → Foundational → US1 → US2 → US3 → Polish。

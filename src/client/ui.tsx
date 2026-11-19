@@ -559,9 +559,9 @@ export const CLIENT_STYLES = String.raw`
   min-width: 120px;
   margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
 }
 .better-mcp-panel-body {
   display: flex;
@@ -609,9 +609,9 @@ export const CLIENT_STYLES = String.raw`
 }
 .better-mcp-server-name {
   color: var(--dsw-alias-label-primary);
-  font-size: 13.5px;
-  line-height: 20px;
-  font-weight: 500;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 .better-mcp-badge {
@@ -624,6 +624,12 @@ export const CLIENT_STYLES = String.raw`
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 17px;
+}
+.better-mcp-badge[data-attention='true'] {
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 16%, transparent);
+  box-shadow: inset 0 0 0 var(--dsh-hairline-width) color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, transparent);
+  color: var(--dsw-alias-state-warn-primary);
+  font-weight: 600;
 }
 .better-mcp-server-side {
   display: flex;
@@ -670,13 +676,6 @@ export const CLIENT_STYLES = String.raw`
   font-size: 12px;
   line-height: 18px;
   white-space: nowrap;
-}
-.better-mcp-lazy-note {
-  margin: 0;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
 }
 .better-mcp-description {
   margin: 0;
@@ -992,8 +991,7 @@ select.better-mcp-input {
     justify-content: space-between;
     margin-left: 0;
   }
-  .better-mcp-server-extra,
-  .better-mcp-lazy-note {
+  .better-mcp-server-extra {
     margin-left: 0;
   }
   .better-mcp-form-grid {

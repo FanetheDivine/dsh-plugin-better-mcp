@@ -119,6 +119,7 @@ export function ServerItem(props: {
 }): JSX.Element {
   const { t, row } = props;
   const working = props.busy === row.name;
+  const needsAuth = row.auth === 'oauth' && !row.authorized;
   const flags: string[] = [];
   if (row.auth === 'oauth') flags.push(row.authorized ? t('authorized') : t('needsAuth'));
   const parts = statusParts(t, row);
@@ -134,7 +135,7 @@ export function ServerItem(props: {
           <div className="better-mcp-server-title">
             <span className="better-mcp-server-name">{row.name}</span>
             {flags.map((flag) => (
-              <span key={flag} className="better-mcp-badge">
+              <span key={flag} className="better-mcp-badge" data-attention={needsAuth || undefined}>
                 {flag}
               </span>
             ))}
@@ -154,7 +155,6 @@ export function ServerItem(props: {
               disabled={working}
               onChange={props.onLazy}
               label={t('lazyFor', { name: row.name })}
-              describedBy="better-mcp-lazy-note"
               title={t('lazyHint')}
             />
             <span>{t('lazy')}</span>
@@ -401,11 +401,6 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
             />
           ))}
         </ul>
-      ) : null}
-      {snapshot !== undefined && snapshot.servers.length > 0 ? (
-        <p className="better-mcp-lazy-note" id="better-mcp-lazy-note">
-          {t('lazyHint')}
-        </p>
       ) : null}
     </div>
   );

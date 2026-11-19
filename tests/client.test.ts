@@ -496,7 +496,16 @@ describe('服务器行', () => {
     expect(html).toContain('role="switch"');
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('aria-label="为 alpha 启用懒加载"');
-    expect(html).toContain('aria-describedby="better-mcp-lazy-note"');
+    expect(html).not.toContain('aria-describedby="better-mcp-lazy-note"');
+  });
+
+  it('待授权徽标使用醒目的警告样式，已授权不使用', () => {
+    const pending = renderRow({ auth: 'oauth', authorized: false });
+    expect(pending).toContain('待授权');
+    expect(pending).toContain('data-attention="true"');
+    const authorized = renderRow({ auth: 'oauth', authorized: true });
+    expect(authorized).toContain('已授权');
+    expect(authorized).not.toContain('data-attention="true"');
   });
 
   it('连接诊断使用可展开区域', () => {
@@ -530,6 +539,12 @@ describe('主题样式', () => {
     expect(CLIENT_STYLES).toMatch(/\.better-mcp-dialog-title\s*\{[^}]*flex:\s*1;/);
     expect(CLIENT_STYLES).toMatch(
       /\.better-mcp-autocomplete-options\s*\{[^}]*bottom:\s*calc\(100% \+ 4px\)/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-section-title\s*\{[^}]*font-size:\s*18px;[^}]*font-weight:\s*600;/,
+    );
+    expect(CLIENT_STYLES).toMatch(
+      /\.better-mcp-server-name\s*\{[^}]*font-size:\s*16px;[^}]*font-weight:\s*600;/,
     );
   });
 });
