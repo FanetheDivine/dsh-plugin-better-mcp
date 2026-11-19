@@ -71,10 +71,10 @@ description: "Turn 结束后自动停用 MCP 的实施任务"
 
 **Purpose**: 同步文档并完成全部质量门禁
 
-- [ ] T011 [P] 在 `README.md` 说明每个 Turn 结束后全部服务器自动 inactive、可重新启用且连接保持
-- [ ] T012 [P] 在 `docs/how-it-works.md` 记录 `turn/end` 投影边界、限制重算与下一步目录提醒机制
-- [ ] T013 按 `specs/019-deactivate-after-turn/quickstart.md` 运行 `pnpm format && pnpm check` 与 `pnpm build`
-- [ ] T014 审查 `git diff` 和全部测试结果，提交 `README.md`、`docs/how-it-works.md` 与剩余格式化变更
+- [x] T011 [P] 在 `README.md`、`src/tools.ts` 与 `src/catalog.ts` 说明每个 Turn 结束后全部服务器自动 inactive、可重新启用且连接保持
+- [x] T012 [P] 在 `docs/how-it-works.md` 记录 `turn/end` 投影边界、限制重算与下一步目录提醒机制
+- [x] T013 按 `specs/019-deactivate-after-turn/quickstart.md` 运行 `pnpm format && pnpm check` 与 `pnpm build`
+- [x] T014 审查 `git diff` 和全部测试结果，提交 `README.md`、`docs/how-it-works.md` 与剩余格式化变更
 
 ---
 
