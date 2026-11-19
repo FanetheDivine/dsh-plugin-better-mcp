@@ -30,6 +30,23 @@ import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from 
 /** 固定回调地址不合法时的错误文本。 */
 const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
 
+/** 授权启动失败及其 HTTP 状态。 */
+class AuthorizationStartError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 502,
+  ) {
+    super(message);
+  }
+}
+
+/** 授权启动结果。 */
+interface AuthorizationStartResult {
+  url: string;
+  scopes: string[];
+  redirectUri: string;
+}
+
 /** 待完成授权上下文。 */
 interface PendingContext extends PendingAuthorization {
   /** 固定回环监听器。 */
@@ -281,24 +298,41 @@ export class PluginRoutes {
     return jsonResponse(await this.currentSnapshot());
   }
 
-  /** 发起 OAuth。 */
+  /** 发起 OAuth 并返回 JSON，供现有同源 API 使用。 */
   private async startOAuth(request: Request): Promise<Response> {
     const url = new URL(request.url, 'http://127.0.0.1');
     const serverName = url.searchParams.get('server') ?? '';
+    try {
+      const result = await this.prepareAuthorization(
+        serverName,
+        this.originOf(request.headers.get('host')),
+      );
+      return jsonResponse(result);
+    } catch (error) {
+      const status = error instanceof AuthorizationStartError ? error.status : 502;
+      return jsonResponse({ error: messageOf(error) }, status);
+    }
+  }
+
+  /** 发现授权服务器、准备客户端并登记待完成授权。 */
+  private async prepareAuthorization(
+    serverName: string,
+    origin: string,
+  ): Promise<AuthorizationStartResult> {
     const definition = this.getSettings().servers[serverName];
-    if (definition === undefined)
-      return jsonResponse({ error: `Unknown server '${serverName}'` }, 400);
+    if (definition === undefined) {
+      throw new AuthorizationStartError(`Unknown server '${serverName}'`, 400);
+    }
     const endpoint = asString(definition.url);
     if (endpoint === undefined) {
-      return jsonResponse({ error: 'Only streamable-http servers can use OAuth.' }, 400);
+      throw new AuthorizationStartError('Only streamable-http servers can use OAuth.', 400);
     }
     try {
       const oauthDefinition: OAuthClientConfig = definition.oauth ?? { scopes: [] };
       const discovery = await discover(endpoint);
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
-      const redirectUri =
-        oauthDefinition.redirectUri ?? `${this.originOf(request)}${CALLBACK_PATH}`;
+      const redirectUri = oauthDefinition.redirectUri ?? `${origin}${CALLBACK_PATH}`;
       let clientId = oauthDefinition.clientId;
       let clientSecret =
         oauthDefinition.clientSecret ?? (await readClientSecret(this.ctx, serverName));
@@ -333,15 +367,16 @@ export class PluginRoutes {
           context.listener = await this.startLoopbackListener(redirectUri);
         } catch (error) {
           this.pending.delete(flow.state);
-          return jsonResponse(
-            { error: `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}` },
+          throw new AuthorizationStartError(
+            `Could not bind the fixed redirect ${redirectUri}: ${messageOf(error)}`,
             502,
           );
         }
       }
-      return jsonResponse({ url: flow.url, scopes, redirectUri });
+      return { url: flow.url, scopes, redirectUri };
     } catch (error) {
-      return jsonResponse({ error: messageOf(error) }, 502);
+      if (error instanceof AuthorizationStartError) throw error;
+      throw new AuthorizationStartError(messageOf(error), 502);
     }
   }
 
@@ -421,10 +456,10 @@ export class PluginRoutes {
   /**
    * 浏览器访问本服务的来源。
    * Web 载体把 fetch 路由的请求 URL 解析到占位来源，真实来源只在 `host` 头里。
-   * @param request - 面板发出的请求。
+   * @param host - 请求的 `host` 头。
    * @returns 协议与 `host` 头拼成的来源；缺少 `host` 头时回落到监听地址。
    */
-  private originOf(request: Request): string {
+  private originOf(host: string | null): string {
     let fallback = 'http://127.0.0.1';
     try {
       fallback = this.ctx.get('webServer')?.getOrigin?.() ?? fallback;
@@ -432,7 +467,6 @@ export class PluginRoutes {
       // 监听器尚未绑定端口，保持回环默认值。
     }
     const protocol = new URL(fallback).protocol;
-    const host = request.headers.get('host');
     if (host === null || host === '') return fallback;
     return `${protocol}//${host}`;
   }

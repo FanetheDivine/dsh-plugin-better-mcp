@@ -22,7 +22,7 @@ description: "OAuth 授权与待授权提示实施任务"
 
 **Purpose**: 建立 Figma 修复和直接链接共用的授权启动入口
 
-- [ ] T002 在 `src/constants.ts` 定义授权启动 Web 路径，并在 `src/routes.ts` 提取可按服务器名与来源启动 OAuth 的共用逻辑，保持现有 JSON 路由测试通过
+- [X] T002 在 `src/constants.ts` 定义授权启动 Web 路径，并在 `src/routes.ts` 提取可按服务器名与来源启动 OAuth 的共用逻辑，保持现有 JSON 路由测试通过
 
 **Checkpoint**: 共用授权启动逻辑可供 Figma 修复与 Web 重定向共同使用
 
