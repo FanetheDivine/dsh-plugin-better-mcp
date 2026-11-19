@@ -4,9 +4,9 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useRef, useState } from 'react';
+import { type KeyboardEvent, useRef, useState } from 'react';
 import type { ServerDefinition } from './api.ts';
-import type { NS } from './locales.ts';
+import type { McpKey, NS } from './locales.ts';
 
 /** 表单值。 */
 export interface ServerFormValues {
@@ -36,7 +36,11 @@ export interface ServerFormValues {
 
 /** 校验失败时返回的文案键。 */
 export type FormErrorKey =
-  'nameInvalid' | 'descriptionRequired' | 'urlInvalid' | 'commandRequired' | 'headersInvalid';
+  | 'nameInvalid'
+  | 'descriptionRequired'
+  | 'urlInvalid'
+  | 'commandRequired'
+  | 'headersInvalid';
 
 const FIELD_FOR_ERROR: Record<FormErrorKey, keyof ServerFormValues> = {
   nameInvalid: 'name',
@@ -169,6 +173,133 @@ export function definitionFromValues(values: ServerFormValues): ServerDefinition
 /** 判断值是否是普通对象。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** OAuth 客户端标识备选项。 */
+const OAUTH_CLIENT_PRESETS: readonly {
+  id: 'dsh' | 'codex';
+  value: string;
+  labelKey: McpKey;
+  detailKey: McpKey;
+}[] = [
+  { id: 'dsh', value: '', labelKey: 'oauthClientDsh', detailKey: 'oauthClientDshDetail' },
+  {
+    id: 'codex',
+    value: 'app_EMoamEEZ73f0CkXaXp7hrann',
+    labelKey: 'oauthClientCodex',
+    detailKey: 'oauthClientCodexDetail',
+  },
+];
+
+/** 可自由输入并始终提供 DSH 与 Codex 备选项的客户端标识控件。 */
+function OAuthClientInput({
+  t,
+  value,
+  invalid,
+  describedBy,
+  onChange,
+}: {
+  t: TranslateNS<typeof NS>;
+  value: string;
+  invalid: boolean;
+  describedBy: string | undefined;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+
+  /** 选择备选项并保留输入框焦点。 */
+  const select = (value: string): void => {
+    onChange(value);
+    setOpen(false);
+    setActive(-1);
+  };
+
+  /** 处理备选项导航、选择与仅关闭弹层的 Escape。 */
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'Escape' && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      setActive(-1);
+      return;
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+      const delta = event.key === 'ArrowDown' ? 1 : -1;
+      setActive((current) => {
+        if (current < 0) return delta === 1 ? 0 : OAUTH_CLIENT_PRESETS.length - 1;
+        return (current + delta + OAUTH_CLIENT_PRESETS.length) % OAUTH_CLIENT_PRESETS.length;
+      });
+      return;
+    }
+    if (event.key === 'Enter' && open && active >= 0) {
+      event.preventDefault();
+      const preset = OAUTH_CLIENT_PRESETS[active];
+      if (preset !== undefined) select(preset.value);
+    }
+  };
+
+  return (
+    <div className="better-mcp-autocomplete">
+      <input
+        id="better-mcp-clientId"
+        name="clientId"
+        className="better-mcp-input"
+        value={value}
+        role="combobox"
+        autoComplete="off"
+        placeholder={t('oauthClientPlaceholder')}
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls="better-mcp-client-id-options"
+        aria-activedescendant={
+          active >= 0 ? `better-mcp-client-option-${OAUTH_CLIENT_PRESETS[active]?.id}` : undefined
+        }
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          setOpen(false);
+          setActive(-1);
+        }}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(true);
+          setActive(-1);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      <div
+        id="better-mcp-client-id-options"
+        className="better-mcp-autocomplete-options"
+        role="listbox"
+        aria-label={t('oauthClient')}
+        hidden={!open}
+      >
+        {OAUTH_CLIENT_PRESETS.map((preset, index) => (
+          <button
+            key={preset.id}
+            id={`better-mcp-client-option-${preset.id}`}
+            type="button"
+            role="option"
+            tabIndex={-1}
+            className="better-mcp-autocomplete-option"
+            data-active={active === index || undefined}
+            aria-selected={value === preset.value}
+            onMouseDown={(event) => event.preventDefault()}
+            onMouseEnter={() => setActive(index)}
+            onClick={() => select(preset.value)}
+          >
+            <span className="better-mcp-autocomplete-label">{t(preset.labelKey)}</span>
+            <span className="better-mcp-autocomplete-detail">{t(preset.detailKey)}</span>
+            {preset.value !== '' ? <code>{preset.value}</code> : null}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /** 表单组件属性。 */
@@ -347,17 +478,34 @@ export function ServerForm({
               {fieldError('headersText')}
             </div>
             <div className="better-mcp-field">
-              <label className="better-mcp-label" htmlFor="better-mcp-clientId">
-                {t('oauthClient')}
-              </label>
-              <input
-                id="better-mcp-clientId"
-                name="clientId"
-                className="better-mcp-input"
+              <div className="better-mcp-label-row">
+                <label className="better-mcp-label" htmlFor="better-mcp-clientId">
+                  {t('oauthClient')}
+                </label>
+                <span className="better-mcp-help">
+                  <button
+                    type="button"
+                    className="better-mcp-help-trigger"
+                    aria-label={t('oauthClientHelp')}
+                    aria-describedby="better-mcp-oauth-client-help"
+                  >
+                    ?
+                  </button>
+                  <span
+                    id="better-mcp-oauth-client-help"
+                    className="better-mcp-help-tooltip"
+                    role="tooltip"
+                  >
+                    {t('oauthClientHelpText')}
+                  </span>
+                </span>
+              </div>
+              <OAuthClientInput
+                t={t}
                 value={values.clientId}
-                aria-invalid={invalidField === 'clientId'}
-                aria-describedby={describedBy('clientId')}
-                onChange={(event) => update('clientId', event.target.value)}
+                invalid={invalidField === 'clientId'}
+                describedBy={describedBy('clientId')}
+                onChange={(value) => update('clientId', value)}
               />
             </div>
             <div className="better-mcp-field">

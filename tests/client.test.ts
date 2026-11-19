@@ -196,6 +196,16 @@ describe('服务器表单辅助函数', () => {
     expect(oauth).not.toHaveProperty('clientSecret');
   });
 
+  it('DSH 备选项保持动态注册，Codex 备选项保存公开客户端标识', () => {
+    const dsh = definitionFromValues(values({ clientId: '', scopesText: '' }));
+    expect(dsh.auth).toBe('oauth');
+    expect(dsh).not.toHaveProperty('oauth');
+    const codex = definitionFromValues(
+      values({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann', scopesText: '' }),
+    );
+    expect(codex.oauth).toEqual({ clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' });
+  });
+
   it('stdio 定义固定 auth 为 none 并收集命令与参数', () => {
     const definition = definitionFromValues(
       values({
@@ -264,6 +274,13 @@ describe('ServerForm', () => {
     expect(html).toContain('name="clientSecret"');
     expect(html).toContain('autoComplete="new-password"');
     expect(html).toContain('name="scopesText"');
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-controls="better-mcp-client-id-options"');
+    expect(html).toContain(zh.oauthClientDsh);
+    expect(html).toContain(zh.oauthClientCodex);
+    expect(html).toContain('app_EMoamEEZ73f0CkXaXp7hrann');
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain(zh.oauthClientHelpText);
     expect(html).not.toContain('name="auth"');
     expect(html).not.toContain('name="redirectUri"');
     expect(html).toContain('aria-busy="false"');

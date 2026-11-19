@@ -776,6 +776,106 @@ export const CLIENT_STYLES = String.raw`
   line-height: 20px;
   font-weight: 500;
 }
+.better-mcp-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+}
+.better-mcp-help {
+  position: relative;
+  display: inline-flex;
+}
+.better-mcp-help-trigger {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l4);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: help;
+  font-size: 11px;
+  line-height: 14px;
+}
+.better-mcp-help-trigger:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+.better-mcp-help-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: -8px;
+  z-index: 20;
+  display: none;
+  width: 280px;
+  max-width: 80vw;
+  padding: 8px 10px;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.better-mcp-help:hover .better-mcp-help-tooltip,
+.better-mcp-help:focus-within .better-mcp-help-tooltip {
+  display: block;
+}
+.better-mcp-autocomplete {
+  position: relative;
+  min-width: 0;
+}
+.better-mcp-autocomplete-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  padding: 4px;
+  overflow-y: auto;
+  border: var(--dsh-hairline-width) solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-elevation-prominent);
+}
+.better-mcp-autocomplete-options[hidden] {
+  display: none;
+}
+.better-mcp-autocomplete-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.better-mcp-autocomplete-option[data-active] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.better-mcp-autocomplete-label {
+  font-size: 13px;
+  line-height: 18px;
+}
+.better-mcp-autocomplete-detail,
+.better-mcp-autocomplete-option code {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}
 .better-mcp-required {
   color: var(--dsw-alias-state-error-primary);
 }

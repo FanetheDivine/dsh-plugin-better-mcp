@@ -44,9 +44,9 @@
 
 **Independent Test**: 聚焦输入框即可选择两项；DSH 保存空标识，Codex 保存 `app_EMoamEEZ73f0CkXaXp7hrann`；问号在悬停和聚焦时显示说明。
 
-- [ ] T013 [US3] 在 `tests/client.test.ts` 增加备选项、空标识动态注册、固定标识与问号说明测试
-- [ ] T014 [US3] 在 `src/client/server-form.tsx` 实现自动完成控件与问号说明，支持过滤、键盘、Escape 和自由输入
-- [ ] T015 [P] [US3] 在 `src/client/ui.tsx` 增加自动完成弹层与问号说明的主题样式
+- [x] T013 [US3] 在 `tests/client.test.ts` 增加备选项、空标识动态注册、固定标识与问号说明测试
+- [x] T014 [US3] 在 `src/client/server-form.tsx` 实现自动完成控件与问号说明，支持键盘、Escape 和自由输入
+- [x] T015 [P] [US3] 在 `src/client/ui.tsx` 增加自动完成弹层与问号说明的主题样式
 
 ## Phase 6: Polish & Cross-cutting
 
