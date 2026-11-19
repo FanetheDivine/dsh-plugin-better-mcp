@@ -11,10 +11,11 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client';
 // Type-only：拉取 sidebar.footer.action 槽位声明。
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client';
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { en, NS, zh } from './locales.ts';
 import { McpPanel } from './panel.tsx';
+import { ClientStyles } from './ui.tsx';
 
 /** 需要宿主注入的客户端服务。 */
 export const inject = ['slots', 'locale'];
@@ -31,35 +32,16 @@ export const ROW_KEY = `${PACKAGE_NAME}#${ROW_ID}`;
 /** 侧栏触发按钮。 */
 function SidebarAction({ t, wide }: { t: TranslateNS<typeof NS>; wide: boolean }): JSX.Element {
   const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
   return (
     <>
+      <ClientStyles />
       <button
         type="button"
+        className="better-mcp-sidebar-action"
+        data-wide={wide}
         title={t('title')}
         aria-label={t('title')}
         onClick={() => setOpen(true)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: wide ? 'flex-start' : 'center',
-          gap: 6,
-          width: '100%',
-          padding: wide ? '6px 8px' : '6px',
-          border: 'none',
-          borderRadius: 8,
-          background: 'transparent',
-          color: 'inherit',
-          cursor: 'pointer',
-          fontSize: 12,
-        }}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -96,7 +78,12 @@ function ConfigPage({
   view: 'summary' | 'page';
 }): JSX.Element {
   if (view === 'summary') {
-    return <div style={{ fontSize: 12, opacity: 0.75 }}>{t('summary')}</div>;
+    return (
+      <>
+        <ClientStyles />
+        <div className="better-mcp-summary">{t('summary')}</div>
+      </>
+    );
   }
   return <McpPanel t={t} variant="page" />;
 }

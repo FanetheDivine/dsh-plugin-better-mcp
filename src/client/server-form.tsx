@@ -4,7 +4,7 @@
  */
 
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ServerDefinition } from './api.ts';
 import type { NS } from './locales.ts';
 
@@ -46,6 +46,20 @@ export type FormErrorKey =
   | 'commandRequired'
   | 'headersInvalid'
   | 'redirectInvalid';
+
+const FIELD_FOR_ERROR: Record<FormErrorKey, keyof ServerFormValues> = {
+  nameInvalid: 'name',
+  descriptionRequired: 'description',
+  urlInvalid: 'url',
+  headersInvalid: 'headersText',
+  commandRequired: 'command',
+  redirectInvalid: 'redirectUri',
+};
+
+/** 把校验错误映射到对应的表单字段。 */
+export function fieldForError(error: FormErrorKey): keyof ServerFormValues {
+  return FIELD_FOR_ERROR[error];
+}
 
 /** 空表单。 */
 export function emptyForm(): ServerFormValues {
@@ -201,8 +215,6 @@ export interface ServerFormProps {
   error?: string | undefined;
   /** 提交。 */
   onSubmit: (values: ServerFormValues) => void;
-  /** 取消。 */
-  onCancel: () => void;
 }
 
 /** 表单组件。 */
@@ -213,221 +225,297 @@ export function ServerForm({
   busy,
   error,
   onSubmit,
-  onCancel,
-}: ServerFormProps) {
+}: ServerFormProps): JSX.Element {
+  const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<ServerFormValues>(initial);
   const [invalid, setInvalid] = useState<FormErrorKey | undefined>(undefined);
+  const invalidField = invalid === undefined ? undefined : fieldForError(invalid);
 
   const update = <K extends keyof ServerFormValues>(key: K, value: ServerFormValues[K]): void => {
     setValues((current) => ({ ...current, [key]: value }));
     setInvalid(undefined);
   };
 
+  const errorId = (key: keyof ServerFormValues): string => `better-mcp-${key}-error`;
+  const describedBy = (key: keyof ServerFormValues): string | undefined => {
+    const ids = key === 'name' ? ['better-mcp-name-hint'] : [];
+    if (invalidField === key) ids.push(errorId(key));
+    return ids.length === 0 ? undefined : ids.join(' ');
+  };
+  const fieldError = (key: keyof ServerFormValues): JSX.Element | null => {
+    if (invalid === undefined || invalidField !== key) return null;
+    return (
+      <p className="better-mcp-field-error" id={errorId(key)}>
+        {t(invalid)}
+      </p>
+    );
+  };
+
   const save = (): void => {
     const failure = validateValues(values);
     if (failure !== undefined) {
       setInvalid(failure);
+      formRef.current?.querySelector<HTMLElement>(`[name="${fieldForError(failure)}"]`)?.focus();
       return;
     }
     onSubmit(values);
   };
 
   return (
-    <div style={styles.form} data-testid="better-mcp-form">
-      <div style={styles.formTitle}>{isEdit ? t('editTitle') : t('createTitle')}</div>
-      <label style={styles.field}>
-        <span style={styles.label}>{t('name')}</span>
-        <input
-          style={styles.input}
-          value={values.name}
-          disabled={isEdit}
-          onChange={(event) => update('name', event.target.value)}
-        />
-      </label>
-      <label style={styles.field}>
-        <span style={styles.label}>{t('description')}</span>
-        <textarea
-          style={styles.textarea}
-          value={values.description}
-          placeholder={t('descriptionPlaceholder')}
-          onChange={(event) => update('description', event.target.value)}
-        />
-      </label>
-      <label style={styles.field}>
-        <span style={styles.label}>{t('transport')}</span>
-        <select
-          style={styles.input}
-          value={values.transport}
-          onChange={(event) =>
-            update('transport', event.target.value === 'stdio' ? 'stdio' : 'streamable-http')
-          }
-        >
-          <option value="streamable-http">{t('transportHttp')}</option>
-          <option value="stdio">{t('transportStdio')}</option>
-        </select>
-      </label>
-      {values.transport === 'streamable-http' ? (
-        <>
-          <label style={styles.field}>
-            <span style={styles.label}>{t('address')}</span>
+    <form
+      ref={formRef}
+      id="better-mcp-server-form"
+      className="better-mcp-form"
+      data-testid="better-mcp-form"
+      aria-busy={busy}
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        save();
+      }}
+    >
+      <fieldset className="better-mcp-form-grid" disabled={busy}>
+        <div className="better-mcp-field">
+          <label className="better-mcp-label" htmlFor="better-mcp-name">
+            {t('name')}
+            <span className="better-mcp-required" aria-hidden="true">
+              {' *'}
+            </span>
+          </label>
+          <input
+            id="better-mcp-name"
+            name="name"
+            className="better-mcp-input"
+            value={values.name}
+            required
+            disabled={isEdit}
+            data-modal-autofocus={!isEdit ? true : undefined}
+            aria-invalid={invalidField === 'name'}
+            aria-describedby={describedBy('name')}
+            onChange={(event) => update('name', event.target.value)}
+          />
+          <p className="better-mcp-field-hint" id="better-mcp-name-hint">
+            {t('nameHint')}
+          </p>
+          {fieldError('name')}
+        </div>
+        <div className="better-mcp-field">
+          <label className="better-mcp-label" htmlFor="better-mcp-transport">
+            {t('transport')}
+          </label>
+          <select
+            id="better-mcp-transport"
+            name="transport"
+            className="better-mcp-input"
+            value={values.transport}
+            aria-invalid={invalidField === 'transport'}
+            aria-describedby={describedBy('transport')}
+            onChange={(event) =>
+              update('transport', event.target.value === 'stdio' ? 'stdio' : 'streamable-http')
+            }
+          >
+            <option value="streamable-http">{t('transportHttp')}</option>
+            <option value="stdio">{t('transportStdio')}</option>
+          </select>
+        </div>
+        <div className="better-mcp-field better-mcp-field-full">
+          <label className="better-mcp-label" htmlFor="better-mcp-description">
+            {t('description')}
+            <span className="better-mcp-required" aria-hidden="true">
+              {' *'}
+            </span>
+          </label>
+          <textarea
+            id="better-mcp-description"
+            name="description"
+            className="better-mcp-input better-mcp-textarea"
+            value={values.description}
+            required
+            placeholder={t('descriptionPlaceholder')}
+            data-modal-autofocus={isEdit ? true : undefined}
+            aria-invalid={invalidField === 'description'}
+            aria-describedby={describedBy('description')}
+            onChange={(event) => update('description', event.target.value)}
+          />
+          {fieldError('description')}
+        </div>
+        {values.transport === 'streamable-http' ? (
+          <>
+            <div className="better-mcp-field better-mcp-field-full">
+              <label className="better-mcp-label" htmlFor="better-mcp-url">
+                {t('address')}
+                <span className="better-mcp-required" aria-hidden="true">
+                  {' *'}
+                </span>
+              </label>
+              <input
+                id="better-mcp-url"
+                name="url"
+                className="better-mcp-input"
+                value={values.url}
+                required
+                aria-invalid={invalidField === 'url'}
+                aria-describedby={describedBy('url')}
+                onChange={(event) => update('url', event.target.value)}
+              />
+              {fieldError('url')}
+            </div>
+            <div className="better-mcp-field better-mcp-field-full">
+              <label className="better-mcp-label" htmlFor="better-mcp-headersText">
+                {t('headers')}
+              </label>
+              <textarea
+                id="better-mcp-headersText"
+                name="headersText"
+                className="better-mcp-input better-mcp-textarea better-mcp-code"
+                value={values.headersText}
+                placeholder="Authorization: Bearer …"
+                aria-invalid={invalidField === 'headersText'}
+                aria-describedby={describedBy('headersText')}
+                onChange={(event) => update('headersText', event.target.value)}
+              />
+              {fieldError('headersText')}
+            </div>
+            <div className="better-mcp-field">
+              <label className="better-mcp-label" htmlFor="better-mcp-auth">
+                {t('auth')}
+              </label>
+              <select
+                id="better-mcp-auth"
+                name="auth"
+                className="better-mcp-input"
+                value={values.auth}
+                aria-invalid={invalidField === 'auth'}
+                aria-describedby={describedBy('auth')}
+                onChange={(event) =>
+                  update('auth', event.target.value === 'none' ? 'none' : 'oauth')
+                }
+              >
+                <option value="oauth">{t('authOAuth')}</option>
+                <option value="none">{t('authNone')}</option>
+              </select>
+            </div>
+            {values.auth === 'oauth' ? (
+              <>
+                <div className="better-mcp-field">
+                  <label className="better-mcp-label" htmlFor="better-mcp-clientId">
+                    {t('oauthClient')}
+                  </label>
+                  <input
+                    id="better-mcp-clientId"
+                    name="clientId"
+                    className="better-mcp-input"
+                    value={values.clientId}
+                    aria-invalid={invalidField === 'clientId'}
+                    aria-describedby={describedBy('clientId')}
+                    onChange={(event) => update('clientId', event.target.value)}
+                  />
+                </div>
+                <div className="better-mcp-field">
+                  <label className="better-mcp-label" htmlFor="better-mcp-clientSecret">
+                    {t('clientSecret')}
+                  </label>
+                  <input
+                    id="better-mcp-clientSecret"
+                    name="clientSecret"
+                    className="better-mcp-input"
+                    type="password"
+                    autoComplete="new-password"
+                    value={values.clientSecret}
+                    placeholder={isEdit ? t('secretPlaceholder') : ''}
+                    aria-invalid={invalidField === 'clientSecret'}
+                    aria-describedby={describedBy('clientSecret')}
+                    onChange={(event) => update('clientSecret', event.target.value)}
+                  />
+                </div>
+                <div className="better-mcp-field better-mcp-field-full">
+                  <label className="better-mcp-label" htmlFor="better-mcp-redirectUri">
+                    {t('redirectUri')}
+                  </label>
+                  <input
+                    id="better-mcp-redirectUri"
+                    name="redirectUri"
+                    className="better-mcp-input"
+                    value={values.redirectUri}
+                    placeholder="http://127.0.0.1:19876/callback"
+                    aria-invalid={invalidField === 'redirectUri'}
+                    aria-describedby={describedBy('redirectUri')}
+                    onChange={(event) => update('redirectUri', event.target.value)}
+                  />
+                  {fieldError('redirectUri')}
+                </div>
+                <div className="better-mcp-field better-mcp-field-full">
+                  <label className="better-mcp-label" htmlFor="better-mcp-scopesText">
+                    {t('scopes')}
+                  </label>
+                  <input
+                    id="better-mcp-scopesText"
+                    name="scopesText"
+                    className="better-mcp-input"
+                    value={values.scopesText}
+                    aria-invalid={invalidField === 'scopesText'}
+                    aria-describedby={describedBy('scopesText')}
+                    onChange={(event) => update('scopesText', event.target.value)}
+                  />
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <div className="better-mcp-field">
+              <label className="better-mcp-label" htmlFor="better-mcp-command">
+                {t('command')}
+                <span className="better-mcp-required" aria-hidden="true">
+                  {' *'}
+                </span>
+              </label>
+              <input
+                id="better-mcp-command"
+                name="command"
+                className="better-mcp-input better-mcp-code"
+                value={values.command}
+                required
+                aria-invalid={invalidField === 'command'}
+                aria-describedby={describedBy('command')}
+                onChange={(event) => update('command', event.target.value)}
+              />
+              {fieldError('command')}
+            </div>
+            <div className="better-mcp-field better-mcp-field-full">
+              <label className="better-mcp-label" htmlFor="better-mcp-argsText">
+                {t('args')}
+              </label>
+              <textarea
+                id="better-mcp-argsText"
+                name="argsText"
+                className="better-mcp-input better-mcp-textarea better-mcp-code"
+                value={values.argsText}
+                aria-invalid={invalidField === 'argsText'}
+                aria-describedby={describedBy('argsText')}
+                onChange={(event) => update('argsText', event.target.value)}
+              />
+            </div>
+          </>
+        )}
+        <div className="better-mcp-field better-mcp-field-full">
+          <label className="better-mcp-checkbox" htmlFor="better-mcp-lazy">
             <input
-              style={styles.input}
-              value={values.url}
-              onChange={(event) => update('url', event.target.value)}
+              id="better-mcp-lazy"
+              name="lazy"
+              type="checkbox"
+              checked={values.lazy}
+              onChange={(event) => update('lazy', event.target.checked)}
             />
+            <span>{t('lazy')}</span>
           </label>
-          <label style={styles.field}>
-            <span style={styles.label}>{t('headers')}</span>
-            <textarea
-              style={styles.textarea}
-              value={values.headersText}
-              placeholder={'Authorization: Bearer …'}
-              onChange={(event) => update('headersText', event.target.value)}
-            />
-          </label>
-          <label style={styles.field}>
-            <span style={styles.label}>{t('auth')}</span>
-            <select
-              style={styles.input}
-              value={values.auth}
-              onChange={(event) => update('auth', event.target.value === 'none' ? 'none' : 'oauth')}
-            >
-              <option value="oauth">{t('authOAuth')}</option>
-              <option value="none">{t('authNone')}</option>
-            </select>
-          </label>
-          {values.auth === 'oauth' ? (
-            <>
-              <label style={styles.field}>
-                <span style={styles.label}>{t('oauthClient')}</span>
-                <input
-                  style={styles.input}
-                  value={values.clientId}
-                  onChange={(event) => update('clientId', event.target.value)}
-                />
-              </label>
-              <label style={styles.field}>
-                <span style={styles.label}>{t('clientSecret')}</span>
-                <input
-                  style={styles.input}
-                  type="password"
-                  value={values.clientSecret}
-                  placeholder={isEdit ? t('secretPlaceholder') : ''}
-                  onChange={(event) => update('clientSecret', event.target.value)}
-                />
-              </label>
-              <label style={styles.field}>
-                <span style={styles.label}>{t('redirectUri')}</span>
-                <input
-                  style={styles.input}
-                  value={values.redirectUri}
-                  placeholder="http://127.0.0.1:19876/callback"
-                  onChange={(event) => update('redirectUri', event.target.value)}
-                />
-              </label>
-              <label style={styles.field}>
-                <span style={styles.label}>{t('scopes')}</span>
-                <input
-                  style={styles.input}
-                  value={values.scopesText}
-                  onChange={(event) => update('scopesText', event.target.value)}
-                />
-              </label>
-            </>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <label style={styles.field}>
-            <span style={styles.label}>{t('command')}</span>
-            <input
-              style={styles.input}
-              value={values.command}
-              onChange={(event) => update('command', event.target.value)}
-            />
-          </label>
-          <label style={styles.field}>
-            <span style={styles.label}>{t('args')}</span>
-            <textarea
-              style={styles.textarea}
-              value={values.argsText}
-              onChange={(event) => update('argsText', event.target.value)}
-            />
-          </label>
-        </>
-      )}
-      <label style={styles.checkbox}>
-        <input
-          type="checkbox"
-          checked={values.lazy}
-          onChange={(event) => update('lazy', event.target.checked)}
-        />
-        <span>{t('lazy')}</span>
-      </label>
-      {invalid !== undefined ? <div style={styles.error}>{t(invalid)}</div> : null}
-      {error !== undefined ? <div style={styles.error}>{error}</div> : null}
-      <div style={styles.actions}>
-        <button type="button" style={styles.button} onClick={onCancel} disabled={busy}>
-          {t('cancel')}
-        </button>
-        <button type="button" style={styles.primary} onClick={save} disabled={busy}>
-          {t('save')}
-        </button>
-      </div>
-    </div>
+        </div>
+      </fieldset>
+      {error !== undefined ? (
+        <div className="better-mcp-form-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </form>
   );
 }
-
-const styles = {
-  form: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-    padding: 14,
-    border: '1px solid var(--dsh-border, #33353a)',
-    borderRadius: 10,
-    margin: '10px 0',
-  },
-  formTitle: { fontSize: 14, fontWeight: 600 },
-  field: { display: 'flex', flexDirection: 'column', gap: 4 },
-  label: { fontSize: 12, opacity: 0.7 },
-  input: {
-    padding: '6px 8px',
-    borderRadius: 6,
-    border: '1px solid var(--dsh-border, #33353a)',
-    background: 'var(--dsh-surface, transparent)',
-    color: 'inherit',
-    fontSize: 13,
-  },
-  textarea: {
-    padding: '6px 8px',
-    borderRadius: 6,
-    border: '1px solid var(--dsh-border, #33353a)',
-    background: 'var(--dsh-surface, transparent)',
-    color: 'inherit',
-    fontSize: 13,
-    minHeight: 64,
-    fontFamily: 'ui-monospace, monospace',
-  },
-  checkbox: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 },
-  error: { color: '#d9534f', fontSize: 12 },
-  actions: { display: 'flex', justifyContent: 'flex-end', gap: 8 },
-  button: {
-    padding: '5px 12px',
-    borderRadius: 6,
-    border: '1px solid var(--dsh-border, #33353a)',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-  primary: {
-    padding: '5px 12px',
-    borderRadius: 6,
-    border: '1px solid transparent',
-    background: '#4f7df3',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: 13,
-  },
-} as const;

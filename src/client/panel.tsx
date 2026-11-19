@@ -26,6 +26,7 @@ import {
   type ServerFormValues,
   valuesFromDefinition,
 } from './server-form.tsx';
+import { Button, ClientStyles, Modal, Switch } from './ui.tsx';
 
 /** 面板属性。 */
 export interface McpPanelProps {
@@ -47,22 +48,6 @@ interface EditingState {
   originalName?: string;
 }
 
-/** 状态点颜色。 */
-function stateColor(state: string): string {
-  switch (state) {
-    case 'connected':
-      return '#2e9e5b';
-    case 'connecting':
-    case 'reconnecting':
-    case 'waiting-credentials':
-      return '#d99b2b';
-    case 'failed':
-      return '#d9534f';
-    default:
-      return '#8a8f98';
-  }
-}
-
 /** 连接状态名到字典键。 */
 const STATE_KEYS: Record<string, McpKey> = {
   idle: 'stateIdle',
@@ -75,12 +60,7 @@ const STATE_KEYS: Record<string, McpKey> = {
   closed: 'stateClosed',
 };
 
-/**
- * 把服务器状态格式化为一行说明的各段。
- * @param t - 翻译函数。
- * @param row - 服务器行。
- * @returns 依次显示、以「 · 」连接的文本段。
- */
+/** 把服务器状态格式化为状态名与补充元数据。 */
 export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[] {
   const key = STATE_KEYS[row.state];
   const parts = [key === undefined ? row.state : t(key)];
@@ -99,7 +79,6 @@ export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[]
   }
   if (row.cleanup === 'failed') parts.push(t('cleanupFailed'));
   if (row.cleanup === 'unconfirmed') parts.push(t('cleanupUnconfirmed'));
-  if (row.error !== undefined && row.error !== '') parts.push(row.error);
   return parts;
 }
 
@@ -115,68 +94,113 @@ export function ServerItem(props: {
   onEdit: () => void;
   onDelete: () => void;
 }): JSX.Element {
-  const { t, row, busy } = props;
-  const working = busy === row.name;
+  const { t, row } = props;
+  const working = props.busy === row.name;
   const flags: string[] = [];
   if (row.auth === 'oauth') flags.push(row.authorized ? t('authorized') : t('needsAuth'));
+  const parts = statusParts(t, row);
+  const metadata = parts.slice(1);
+  const hasExtra =
+    metadata.length > 0 || row.url !== undefined || row.error !== undefined || row.managed;
   return (
-    <div style={styles.server} data-testid={`better-mcp-server-${row.name}`}>
-      <div style={styles.serverHead}>
-        <span style={{ ...styles.dot, background: stateColor(row.state) }} />
-        <span style={styles.serverName}>{row.name}</span>
-        <span style={styles.badge}>{row.managed ? t('managed') : t('external')}</span>
-        {flags.map((flag) => (
-          <span key={flag} style={styles.badge}>
-            {flag}
+    <li
+      className="better-mcp-server"
+      data-testid={`better-mcp-server-${row.name}`}
+      aria-busy={working || undefined}
+    >
+      <div className="better-mcp-server-line">
+        <span className="better-mcp-server-icon" aria-hidden="true">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <title>MCP</title>
+            <path d="M7.5 9.5 4 12l3.5 2.5M16.5 9.5 20 12l-3.5 2.5" />
+            <rect x="8.5" y="9.5" width="7" height="5" rx="1.2" />
+            <circle cx="12" cy="5" r="1.6" />
+            <circle cx="12" cy="19" r="1.6" />
+            <path d="M12 6.6v2.9M12 14.5v2.9" />
+          </svg>
+        </span>
+        <div className="better-mcp-server-main">
+          <div className="better-mcp-server-title">
+            <span className="better-mcp-server-name">{row.name}</span>
+            <span className="better-mcp-badge">{row.managed ? t('managed') : t('external')}</span>
+            {flags.map((flag) => (
+              <span key={flag} className="better-mcp-badge">
+                {flag}
+              </span>
+            ))}
+          </div>
+          {row.description !== undefined ? (
+            <p className="better-mcp-description">{row.description}</p>
+          ) : null}
+        </div>
+        <div className="better-mcp-server-side">
+          <span className="better-mcp-state" data-state={row.state}>
+            <span className="better-mcp-state-dot" data-state={row.state} aria-hidden="true" />
+            {parts[0]}
           </span>
-        ))}
-        <span style={styles.spacer} />
-        {row.managed ? (
-          <label style={styles.switch} title={t('lazyHint')}>
-            <input
-              type="checkbox"
-              checked={row.lazy}
-              disabled={working}
-              onChange={(event) => props.onLazy(event.target.checked)}
-            />
-            <span>{t('lazy')}</span>
-          </label>
-        ) : null}
+          {row.managed ? (
+            <span className="better-mcp-lazy" title={t('lazyHint')}>
+              <Switch
+                checked={row.lazy}
+                disabled={working}
+                onChange={props.onLazy}
+                label={t('lazyFor', { name: row.name })}
+                describedBy="better-mcp-lazy-note"
+                title={t('lazyHint')}
+              />
+              <span>{t('lazy')}</span>
+            </span>
+          ) : null}
+        </div>
       </div>
-      {row.description !== undefined ? (
-        <div style={styles.serverDescription}>{row.description}</div>
-      ) : null}
-      <div style={styles.serverDetail}>{statusParts(t, row).join(' · ')}</div>
-      {row.url !== undefined ? <div style={styles.serverUrl}>{row.url}</div> : null}
-      {row.managed ? (
-        <div style={styles.rowActions}>
-          <button type="button" style={styles.button} disabled={working} onClick={props.onRestart}>
-            {working ? t('working') : t('restart')}
-          </button>
-          {row.auth === 'oauth' ? (
-            <button type="button" style={styles.button} disabled={working} onClick={props.onAuth}>
-              {row.authorized ? t('reauthorize') : t('authorize')}
-            </button>
+      {hasExtra ? (
+        <div className="better-mcp-server-extra">
+          {metadata.length > 0 ? (
+            <p className="better-mcp-server-meta">{metadata.join(' · ')}</p>
           ) : null}
-          {row.auth === 'oauth' && row.authorized ? (
-            <button
-              type="button"
-              style={styles.button}
-              disabled={working}
-              onClick={props.onSignOut}
-            >
-              {t('signout')}
-            </button>
+          {row.url !== undefined ? <p className="better-mcp-server-url">{row.url}</p> : null}
+          {row.error !== undefined && row.error !== '' ? (
+            <details className="better-mcp-diagnostics">
+              <summary>{t('errorDetails')}</summary>
+              <p>{row.error}</p>
+            </details>
           ) : null}
-          <button type="button" style={styles.button} disabled={working} onClick={props.onEdit}>
-            {t('edit')}
-          </button>
-          <button type="button" style={styles.danger} disabled={working} onClick={props.onDelete}>
-            {t('delete')}
-          </button>
+          {row.managed ? (
+            <div className="better-mcp-actions">
+              <Button busy={working} onClick={props.onRestart}>
+                {working ? t('working') : t('restart')}
+              </Button>
+              {row.auth === 'oauth' ? (
+                <Button disabled={working} onClick={props.onAuth}>
+                  {row.authorized ? t('reauthorize') : t('authorize')}
+                </Button>
+              ) : null}
+              {row.auth === 'oauth' && row.authorized ? (
+                <Button disabled={working} onClick={props.onSignOut}>
+                  {t('signout')}
+                </Button>
+              ) : null}
+              <Button disabled={working} onClick={props.onEdit}>
+                {t('edit')}
+              </Button>
+              <Button variant="danger" disabled={working} onClick={props.onDelete}>
+                {t('delete')}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
-    </div>
+    </li>
   );
 }
 
@@ -187,6 +211,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<EditingState | undefined>(undefined);
+  const [deleting, setDeleting] = useState<ServerRow | undefined>(undefined);
   const [formError, setFormError] = useState<string | undefined>(undefined);
   const [authUrl, setAuthUrl] = useState<string | undefined>(undefined);
 
@@ -204,18 +229,20 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     void load();
   }, [load]);
 
-  /** 执行一个带忙态的操作。 */
+  /** 执行一个带忙态的操作并返回是否成功。 */
   const run = async (
     key: string,
     operation: () => Promise<PanelSnapshot | undefined>,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     setBusy(key);
     setActionError(undefined);
     try {
       const result = await operation();
       if (result !== undefined) setSnapshot(result);
+      return true;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       setBusy(undefined);
     }
@@ -267,256 +294,239 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
     }
   };
 
-  /** 删除服务器。 */
-  const deleteServer = (row: ServerRow): void => {
-    if (!window.confirm(t('deleteConfirm', { name: row.name }))) return;
-    void run(row.name, () => removeServer(row.name));
+  /** 关闭新增或编辑表单。 */
+  const closeForm = (): void => {
+    if (busy === 'form') return;
+    setFormError(undefined);
+    setEditing(undefined);
   };
 
-  const body = (
-    <div style={styles.body}>
-      {loadError !== undefined ? (
-        <div style={styles.errorBox}>
-          <span>
-            {t('failedLoad')}: {loadError}
-          </span>
-          <button type="button" style={styles.button} onClick={() => void load()}>
-            {t('retry')}
-          </button>
-        </div>
-      ) : null}
-      {actionError !== undefined ? <div style={styles.errorBox}>{actionError}</div> : null}
-      {authUrl !== undefined ? (
-        <div style={styles.notice}>
-          <a href={authUrl} target="_blank" rel="noreferrer">
-            {authUrl}
-          </a>
-        </div>
-      ) : null}
-      {editing !== undefined ? (
-        <ServerForm
-          t={t}
-          initial={editing.values}
-          isEdit={editing.mode === 'edit'}
-          busy={busy === 'form'}
-          error={formError}
-          onSubmit={(values) => void submitForm(values)}
-          onCancel={() => setEditing(undefined)}
-        />
-      ) : null}
-      {snapshot === undefined && loadError === undefined ? (
-        <div style={styles.muted}>{t('loading')}</div>
-      ) : null}
-      {snapshot !== undefined && snapshot.servers.length === 0 ? (
-        <div style={styles.muted}>{t('empty')}</div>
-      ) : null}
-      {snapshot?.servers.map((row) => (
-        <ServerItem
-          key={row.name}
-          t={t}
-          row={row}
-          busy={busy}
-          onLazy={(lazy) => void run(row.name, () => setLazy(row.name, lazy))}
-          onRestart={() => void run(row.name, () => restart(row.name))}
-          onAuth={() => void authorize(row)}
-          onSignOut={() => void run(row.name, () => signOut(row.name))}
-          onEdit={() => {
-            setFormError(undefined);
-            setEditing({
-              mode: 'edit',
-              values: valuesFromDefinition(
-                row.name,
-                row.definition ?? {
-                  description: row.description ?? '',
-                  transport: row.transport ?? 'streamable-http',
-                  auth: row.auth,
-                  lazy: row.lazy,
-                  url: row.url,
-                },
-              ),
-              originalName: row.name,
-            });
-          }}
-          onDelete={() => deleteServer(row)}
-        />
-      ))}
-    </div>
-  );
+  /** 打开删除确认。 */
+  const deleteServer = (row: ServerRow): void => {
+    setActionError(undefined);
+    setDeleting(row);
+  };
+
+  /** 关闭删除确认。 */
+  const closeDelete = (): void => {
+    if (busy === deleting?.name) return;
+    setActionError(undefined);
+    setDeleting(undefined);
+  };
+
+  /** 确认删除服务器。 */
+  const confirmDelete = async (): Promise<void> => {
+    if (deleting === undefined) return;
+    if (await run(deleting.name, () => removeServer(deleting.name))) setDeleting(undefined);
+  };
 
   const addButton = (
-    <button
-      type="button"
-      style={styles.primary}
+    <Button
+      variant="primary"
+      size="md"
       onClick={() => {
         setFormError(undefined);
         setEditing({ mode: 'create', values: emptyForm() });
       }}
     >
       {t('add')}
-    </button>
+    </Button>
+  );
+  const refreshButton = (
+    <Button
+      size="md"
+      busy={busy === 'reload'}
+      onClick={() =>
+        void run('reload', async () => {
+          await load();
+          return undefined;
+        })
+      }
+    >
+      {t('refresh')}
+    </Button>
   );
 
-  const header = (
-    <div style={styles.header}>
-      <span style={styles.title}>{t('title')}</span>
-      <span style={styles.spacer} />
-      {addButton}
-      <button
-        type="button"
-        style={styles.button}
-        onClick={() => void load()}
-        disabled={busy === 'reload'}
-      >
-        {t('refresh')}
-      </button>
-      {variant === 'modal' && onClose !== undefined ? (
-        <button type="button" style={styles.iconButton} aria-label={t('close')} onClick={onClose}>
-          ×
-        </button>
+  const body = (
+    <div className="better-mcp-panel-body">
+      {loadError !== undefined ? (
+        <div className="better-mcp-feedback better-mcp-feedback-error" role="alert">
+          <span>
+            {t('failedLoad')}: {loadError}
+          </span>
+          <Button onClick={() => void load()}>{t('retry')}</Button>
+        </div>
+      ) : null}
+      {actionError !== undefined ? (
+        <div className="better-mcp-feedback better-mcp-feedback-error" role="alert">
+          {actionError}
+        </div>
+      ) : null}
+      {authUrl !== undefined ? (
+        <div className="better-mcp-feedback" role="status">
+          <a href={authUrl} target="_blank" rel="noreferrer">
+            {authUrl}
+          </a>
+        </div>
+      ) : null}
+      {snapshot === undefined && loadError === undefined ? (
+        <div className="better-mcp-feedback" role="status">
+          {t('loading')}
+        </div>
+      ) : null}
+      {snapshot !== undefined && snapshot.servers.length === 0 ? (
+        <div className="better-mcp-feedback" role="status">
+          {t('empty')}
+        </div>
+      ) : null}
+      {snapshot !== undefined && snapshot.servers.length > 0 ? (
+        <ul className="better-mcp-server-list">
+          {snapshot.servers.map((row) => (
+            <ServerItem
+              key={row.name}
+              t={t}
+              row={row}
+              busy={busy}
+              onLazy={(lazy) => void run(row.name, () => setLazy(row.name, lazy))}
+              onRestart={() => void run(row.name, () => restart(row.name))}
+              onAuth={() => void authorize(row)}
+              onSignOut={() => void run(row.name, () => signOut(row.name))}
+              onEdit={() => {
+                setFormError(undefined);
+                setEditing({
+                  mode: 'edit',
+                  values: valuesFromDefinition(
+                    row.name,
+                    row.definition ?? {
+                      description: row.description ?? '',
+                      transport: row.transport ?? 'streamable-http',
+                      auth: row.auth,
+                      lazy: row.lazy,
+                      url: row.url,
+                    },
+                  ),
+                  originalName: row.name,
+                });
+              }}
+              onDelete={() => deleteServer(row)}
+            />
+          ))}
+        </ul>
+      ) : null}
+      {snapshot?.servers.some((row) => row.managed) ? (
+        <p className="better-mcp-lazy-note" id="better-mcp-lazy-note">
+          {t('lazyHint')}
+        </p>
       ) : null}
     </div>
   );
 
+  const dialogs = (
+    <>
+      <Modal
+        open={editing !== undefined}
+        onClose={closeForm}
+        title={editing?.mode === 'edit' ? t('editTitle') : t('createTitle')}
+        closeLabel={t('close')}
+        className="better-mcp-dialog-form"
+        testId="better-mcp-form-modal"
+        footer={
+          <>
+            <Button size="lg" disabled={busy === 'form'} onClick={closeForm}>
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              type="submit"
+              form="better-mcp-server-form"
+              busy={busy === 'form'}
+            >
+              {t('save')}
+            </Button>
+          </>
+        }
+      >
+        {editing !== undefined ? (
+          <ServerForm
+            t={t}
+            initial={editing.values}
+            isEdit={editing.mode === 'edit'}
+            busy={busy === 'form'}
+            error={formError}
+            onSubmit={(values) => void submitForm(values)}
+          />
+        ) : null}
+      </Modal>
+      <Modal
+        open={deleting !== undefined}
+        onClose={closeDelete}
+        title={t('deleteTitle')}
+        closeLabel={t('close')}
+        description={
+          deleting === undefined ? undefined : t('deleteConfirm', { name: deleting.name })
+        }
+        className="better-mcp-dialog-confirm"
+        testId="better-mcp-delete-modal"
+        footer={
+          <>
+            <Button size="lg" disabled={busy === deleting?.name} onClick={closeDelete}>
+              {t('cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              busy={busy === deleting?.name}
+              onClick={() => void confirmDelete()}
+            >
+              {t('delete')}
+            </Button>
+          </>
+        }
+      >
+        {deleting !== undefined && actionError !== undefined ? (
+          <div className="better-mcp-feedback better-mcp-feedback-error" role="alert">
+            {actionError}
+          </div>
+        ) : null}
+      </Modal>
+    </>
+  );
+
   if (variant === 'page') {
     return (
-      <div style={styles.page} data-testid="better-mcp-panel">
-        {header}
-        {body}
+      <div className="better-mcp-page" data-testid="better-mcp-panel">
+        <ClientStyles />
+        <section className="better-mcp-section">
+          <div className="better-mcp-toolbar">
+            <h4 className="better-mcp-section-title">{t('title')}</h4>
+            {addButton}
+            {refreshButton}
+          </div>
+          {body}
+        </section>
+        {dialogs}
       </div>
     );
   }
   return (
-    <div style={styles.overlay} role="dialog" aria-modal="true" data-testid="better-mcp-modal">
-      <div style={styles.card}>
-        {header}
+    <>
+      <ClientStyles />
+      <Modal
+        open
+        onClose={onClose ?? (() => undefined)}
+        title={t('title')}
+        closeLabel={t('close')}
+        actions={
+          <>
+            {addButton}
+            {refreshButton}
+          </>
+        }
+      >
         {body}
-      </div>
-    </div>
+      </Modal>
+      {dialogs}
+    </>
   );
 }
-
-/** 面板样式。 */
-const styles = {
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 60,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(0, 0, 0, 0.45)',
-  },
-  card: {
-    width: 'min(640px, 94vw)',
-    maxHeight: '78vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    borderRadius: 12,
-    background: 'var(--dsh-surface, #1b1c1f)',
-    color: 'var(--dsh-text, inherit)',
-    border: '1px solid var(--dsh-border, #33353a)',
-    boxShadow: '0 18px 48px rgba(0, 0, 0, 0.35)',
-  },
-  page: {
-    display: 'flex',
-    flexDirection: 'column',
-    borderRadius: 10,
-    border: '1px solid var(--dsh-border, #33353a)',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '10px 14px',
-    borderBottom: '1px solid var(--dsh-border, #33353a)',
-  },
-  title: { fontSize: 13, fontWeight: 600 },
-  spacer: { flex: 1 },
-  body: {
-    padding: '10px 14px 14px',
-    overflowY: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  server: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    padding: '8px 10px',
-    borderRadius: 8,
-    border: '1px solid var(--dsh-border, #33353a)',
-  },
-  serverHead: { display: 'flex', alignItems: 'center', gap: 6 },
-  dot: { width: 8, height: 8, borderRadius: 999, flex: 'none' },
-  serverName: { fontWeight: 600, fontSize: 13 },
-  badge: {
-    fontSize: 11,
-    padding: '1px 6px',
-    borderRadius: 999,
-    border: '1px solid var(--dsh-border, #33353a)',
-    opacity: 0.8,
-  },
-  switch: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, opacity: 0.9 },
-  serverDetail: { fontSize: 12, opacity: 0.75 },
-  serverDescription: { fontSize: 12, opacity: 0.85 },
-  serverUrl: {
-    fontSize: 12,
-    fontFamily: 'ui-monospace, monospace',
-    opacity: 0.7,
-    wordBreak: 'break-all',
-  },
-  rowActions: { display: 'flex', gap: 6, marginTop: 2 },
-  muted: { fontSize: 12, opacity: 0.6 },
-  button: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: '1px solid var(--dsh-border, #33353a)',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  primary: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: '1px solid transparent',
-    background: '#4f7df3',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  danger: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: '1px solid #d9534f',
-    background: 'transparent',
-    color: '#d9534f',
-    cursor: 'pointer',
-    fontSize: 12,
-  },
-  iconButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    border: 'none',
-    background: 'transparent',
-    color: 'inherit',
-    cursor: 'pointer',
-    fontSize: 18,
-    lineHeight: 1,
-  },
-  errorBox: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 10px',
-    borderRadius: 6,
-    background: 'rgba(217, 83, 79, 0.12)',
-    color: '#d9534f',
-    fontSize: 12,
-  },
-  notice: { fontSize: 12, wordBreak: 'break-all' },
-  empty: { fontSize: 12, opacity: 0.6 },
-} as const;

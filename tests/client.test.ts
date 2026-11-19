@@ -17,12 +17,14 @@ import { McpPanel, ServerItem, statusParts } from '../src/client/panel.tsx';
 import {
   definitionFromValues,
   emptyForm,
+  fieldForError,
   parseArgs,
   parseHeaders,
   ServerForm,
   type ServerFormValues,
   validateValues,
 } from '../src/client/server-form.tsx';
+import { CLIENT_STYLES } from '../src/client/ui.tsx';
 import { makeClientCtx, translate } from './helpers.ts';
 
 /** 带合法名称与地址的表单值。 */
@@ -188,8 +190,19 @@ describe('服务器表单辅助函数', () => {
   });
 });
 
+describe('表单错误定位', () => {
+  it('把校验错误映射到对应字段', () => {
+    expect(fieldForError('nameInvalid')).toBe('name');
+    expect(fieldForError('descriptionRequired')).toBe('description');
+    expect(fieldForError('urlInvalid')).toBe('url');
+    expect(fieldForError('headersInvalid')).toBe('headersText');
+    expect(fieldForError('commandRequired')).toBe('command');
+    expect(fieldForError('redirectInvalid')).toBe('redirectUri');
+  });
+});
+
 describe('ServerForm', () => {
-  it('静态渲染创建标题与名称字段', () => {
+  it('静态渲染稳定字段关联与密钥自动完成语义', () => {
     const html = renderToStaticMarkup(
       createElement(
         ServerForm as never,
@@ -199,14 +212,37 @@ describe('ServerForm', () => {
           isEdit: false,
           busy: false,
           onSubmit: () => undefined,
-          onCancel: () => undefined,
         } as never,
       ),
     );
     expect(html).toContain('data-testid="better-mcp-form"');
-    expect(html).toContain(zh.createTitle);
-    expect(html).toContain(zh.name);
-    expect(html).toContain(zh.description);
+    expect(html).toContain('for="better-mcp-name"');
+    expect(html).toContain('id="better-mcp-name"');
+    expect(html).toContain('aria-describedby="better-mcp-name-hint"');
+    expect(html).toContain(zh.nameHint);
+    expect(html).toContain('<fieldset');
+    expect(html).toContain('required=""');
+    expect(html).toContain('name="clientSecret"');
+    expect(html).toContain('autoComplete="new-password"');
+    expect(html).toContain('aria-busy="false"');
+  });
+
+  it('保存期间禁用全部字段', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerForm as never,
+        {
+          t: translate(zh),
+          initial: emptyForm(),
+          isEdit: false,
+          busy: true,
+          onSubmit: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('<fieldset');
+    expect(html).toContain('disabled=""');
   });
 });
 
@@ -246,6 +282,7 @@ describe('McpPanel', () => {
     );
     expect(html).toContain('data-testid="better-mcp-panel"');
     expect(html).toContain('Loading…');
+    expect(html).toContain('role="status"');
     // 静态渲染不执行 useEffect，因此不会发起状态请求。
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -305,20 +342,46 @@ describe('服务器行', () => {
         maxAttempts: 5,
         error: 'HTTP 502',
       }),
-    ).toEqual(['Reconnecting', 'Reconnect 2 of 5', 'HTTP 502']);
+    ).toEqual(['Reconnecting', 'Reconnect 2 of 5']);
   });
 
-  it('本插件服务器显示简介与操作', () => {
+  it('本插件服务器使用管理列表语义与带名称的懒加载开关', () => {
     const html = renderRow({ description: 'Alpha tools' });
+    expect(html).toContain('<li');
     expect(html).toContain('Alpha tools');
     expect(html).toContain(zh.restart);
     expect(html).toContain(zh.edit);
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain('aria-label="为 alpha 启用懒加载"');
+    expect(html).toContain('aria-describedby="better-mcp-lazy-note"');
+  });
+
+  it('连接诊断使用可展开区域', () => {
+    const html = renderRow({ error: 'HTTP 502' });
+    expect(html).toContain('<details class="better-mcp-diagnostics"');
+    expect(html).toContain(zh.errorDetails);
+    expect(html).toContain('HTTP 502');
   });
 
   it('其他来源的服务器只显示状态', () => {
     const html = renderRow({ managed: false });
     expect(html).toContain(zh.external);
     expect(html).not.toContain('<button');
+  });
+});
+
+describe('主题样式', () => {
+  it('使用宿主主题变量描述表面、文本、状态与主按钮', () => {
+    for (const token of [
+      '--dsw-alias-bg-layer-2',
+      '--dsw-alias-label-primary',
+      '--dsw-alias-state-error-primary',
+      '--dsw-alias-button-primary-fill',
+    ]) {
+      expect(CLIENT_STYLES).toContain(token);
+    }
+    expect(CLIENT_STYLES).not.toMatch(/#[\da-f]{3,8}\b/i);
   });
 });
 
