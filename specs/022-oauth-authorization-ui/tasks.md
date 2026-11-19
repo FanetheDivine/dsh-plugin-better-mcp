@@ -108,10 +108,10 @@ description: "OAuth 授权与待授权提示实施任务"
 
 **Purpose**: 文档、质量门禁、UX 与真实宿主验收
 
-- [ ] T015 [P] 更新 `README.md`、`CHANGELOG.md`、`docs/how-it-works.md` 与 `docs/known-risks.md`，记录 Figma 动态注册、直接授权链接、目录过滤与待授权提示
-- [ ] T016 运行 `pnpm format && pnpm check && pnpm build`，修复全部失败并核对 `tests/package-pack.test.ts` 等发布回归
-- [ ] T017 按 `specs/022-oauth-authorization-ui/quickstart.md` 完成一次 UI/UX 子代理评审和真实 DSH Desktop 验证，将结果写入 `specs/022-oauth-authorization-ui/validation.md`
-- [ ] T018 审查 `git diff`、任务完成度与阶段提交，确认 `specs/022-oauth-authorization-ui/spec.md` 的全部验收场景都有验证结果
+- [X] T015 [P] 更新 `README.md`、`CHANGELOG.md`、`docs/how-it-works.md` 与 `docs/known-risks.md`，记录 Figma 动态注册、直接授权链接、目录过滤与待授权提示
+- [X] T016 运行 `pnpm format && pnpm check && pnpm build`，修复全部失败并核对 `tests/package-pack.test.ts` 等发布回归
+- [X] T017 按 `specs/022-oauth-authorization-ui/quickstart.md` 完成一次 UI/UX 子代理评审和真实 DSH Desktop 验证，将结果写入 `specs/022-oauth-authorization-ui/validation.md`
+- [X] T018 审查 `git diff`、任务完成度与阶段提交，确认 `specs/022-oauth-authorization-ui/spec.md` 的全部验收场景都有验证结果
 
 ---
 

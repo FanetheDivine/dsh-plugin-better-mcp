@@ -33,6 +33,9 @@ const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or
 /** OpenAI 登录客户端标识，不能作为 Figma MCP 的固定客户端。 */
 const OPENAI_CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 
+/** Figma 接受的 Codex 回环回调。 */
+const FIGMA_REDIRECT_URI = 'http://127.0.0.1:19876/callback';
+
 /** 判断是否为 Figma 官方远程 MCP 地址。 */
 function isFigmaMcpEndpoint(endpoint: string): boolean {
   try {
@@ -374,8 +377,9 @@ export class PluginRoutes {
       const discovery = await discover(endpoint);
       await applyAuthorizationOverrides(discovery, oauthDefinition);
       const scopes = oauthDefinition.scopes.length > 0 ? oauthDefinition.scopes : discovery.scopes;
-      const redirectUri = oauthDefinition.redirectUri ?? `${origin}${CALLBACK_PATH}`;
       const figma = isFigmaMcpEndpoint(endpoint);
+      const redirectUri =
+        oauthDefinition.redirectUri ?? (figma ? FIGMA_REDIRECT_URI : `${origin}${CALLBACK_PATH}`);
       let clientId =
         figma && oauthDefinition.clientId === OPENAI_CODEX_CLIENT_ID
           ? undefined
@@ -408,7 +412,7 @@ export class PluginRoutes {
         createdAt: Date.now(),
       };
       this.pending.set(flow.state, context);
-      if (oauthDefinition.redirectUri !== undefined) {
+      if (figma || oauthDefinition.redirectUri !== undefined) {
         try {
           context.listener = await this.startLoopbackListener(redirectUri);
         } catch (error) {

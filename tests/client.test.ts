@@ -159,14 +159,19 @@ describe('前端入口', () => {
 
     const render = (needsAuth: boolean) =>
       renderToStaticMarkup(
-        createElement(SidebarButton as never, {
-          t: translate(zh),
-          wide: true,
-          needsAuth,
-          onOpen: () => undefined,
-        } as never),
+        createElement(
+          SidebarButton as never,
+          {
+            t: translate(zh),
+            wide: true,
+            needsAuth,
+            onOpen: () => undefined,
+          } as never,
+        ),
       );
     expect(render(true)).toContain('data-attention="true"');
+    expect(render(true)).toContain('title="MCP 服务器：存在待授权 MCP"');
+    expect(render(true)).toContain('aria-label="MCP 服务器：存在待授权 MCP"');
     expect(render(false)).not.toContain('data-attention="true"');
   });
 });
@@ -551,10 +556,12 @@ describe('服务器行', () => {
     expect(pending).toContain('href="/better-mcp/oauth/start?server=alpha%20beta"');
     expect(pending).toContain('target="_blank"');
     expect(pending).toContain('rel="noreferrer"');
+    expect(pending).toContain('aria-label="授权 alpha beta"');
     expect(pending).toContain(`>${zh.authorize}</a>`);
 
     const authorized = renderRow({ auth: 'oauth', authorized: true });
     expect(authorized).toContain('better-mcp-button-outline');
+    expect(authorized).toContain('aria-label="重新授权 alpha"');
     expect(authorized).toContain(`>${zh.reauthorize}</a>`);
     expect(authorized).not.toContain('better-mcp-button-primary');
 

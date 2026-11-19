@@ -180,6 +180,11 @@ export function ServerItem(props: {
               href={oauthStartUrl(row.name)}
               target="_blank"
               rel="noreferrer"
+              aria-label={
+                row.authorized
+                  ? t('reauthorizeFor', { name: row.name })
+                  : t('authorizeFor', { name: row.name })
+              }
               variant={needsAuth ? 'primary' : 'outline'}
             >
               {row.authorized ? t('reauthorize') : t('authorize')}

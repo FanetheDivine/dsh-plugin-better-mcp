@@ -2,11 +2,12 @@
 
 ## R1 Figma 客户端身份
 
-**Decision**: Figma 官方 MCP 使用动态客户端注册，注册名为 `Codex`。配置中的 `app_EMoamEEZ73f0CkXaXp7hrann` 对 Figma 视为无效固定客户端，授权启动时改用上述注册流程。表单移除该固定客户端备选项。
+**Decision**: Figma 官方 MCP 使用动态客户端注册，注册名为 `Codex`，默认回调为 `http://127.0.0.1:19876/callback`。配置中的 `app_EMoamEEZ73f0CkXaXp7hrann` 对 Figma 视为无效固定客户端，授权启动时改用上述注册流程。表单移除该固定客户端备选项。
 
 **Rationale**:
 
 - Figma 元数据声明授权端点 `https://www.figma.com/oauth/mcp` 与注册端点 `https://api.figma.com/v1/oauth/mcp/register`。
+- 真实注册验证表明 `Codex` 还需要固定回调 `http://127.0.0.1:19876/callback`；同源动态端口返回 `invalid_redirect_uri`。
 - Figma 只允许 MCP catalog 中的客户端。OpenAI 当前 Codex 实现通过动态注册并发送 `client_name: "Codex"` 连接 MCP。
 - Hermes 的公开验证记录显示精确名称 `Codex` 可完成注册，自定义客户端名返回 `403`。
 - `app_EMoamEEZ73f0CkXaXp7hrann` 属于 OpenAI 登录场景，作为 Figma `client_id` 会触发客户端不存在错误。

@@ -38,7 +38,13 @@ function harness(
   ctx._configStore = structuredClone(current) as unknown as Record<string, unknown>;
   const logger = { info: vi.fn(), warn: vi.fn() };
   const manager = new ServerManager(ctx, () => current, logger);
-  const routes = new PluginRoutes(ctx, () => current, manager, async () => undefined, onAuthorizationChange);
+  const routes = new PluginRoutes(
+    ctx,
+    () => current,
+    manager,
+    async () => undefined,
+    onAuthorizationChange,
+  );
   routes.registerApi();
   routes.registerWeb();
   return { ctx, routes, manager, current: () => current, refs };
@@ -122,6 +128,13 @@ async function callWeb(
     res,
   );
   return read();
+}
+
+/** 替换固定回环监听，避免单元测试占用真实端口。 */
+function stubFixedListener(routes: PluginRoutes) {
+  const listener = vi.fn(async (_redirectUri: string) => undefined);
+  Object.assign(routes, { startLoopbackListener: listener });
+  return listener;
 }
 
 /** 模拟 Figma 官方 MCP 的授权发现与动态注册。 */
@@ -375,7 +388,7 @@ describe('OAuth 路由', () => {
   });
 
   it('Figma 忽略 OpenAI 固定标识并用 Codex 动态注册', async () => {
-    const { ctx } = harness({
+    const { ctx, routes } = harness({
       figma: {
         description: 'Figma',
         transport: 'streamable-http',
@@ -385,6 +398,7 @@ describe('OAuth 路由', () => {
         oauth: { scopes: [], clientId: 'app_EMoamEEZ73f0CkXaXp7hrann' },
       },
     });
+    const listener = stubFixedListener(routes);
     const registration: Array<Record<string, unknown>> = [];
     stubFigmaOAuth(registration);
 
@@ -392,6 +406,8 @@ describe('OAuth 路由', () => {
     expect(response.status).toBe(200);
     expect(registration).toHaveLength(1);
     expect(registration[0]?.client_name).toBe('Codex');
+    expect(registration[0]?.redirect_uris).toEqual(['http://127.0.0.1:19876/callback']);
+    expect(listener).toHaveBeenCalledWith('http://127.0.0.1:19876/callback');
     const target = new URL(String(response.json.url));
     expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
     expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
@@ -399,7 +415,7 @@ describe('OAuth 路由', () => {
   });
 
   it('Figma 保留其他显式客户端标识', async () => {
-    const { ctx } = harness({
+    const { ctx, routes } = harness({
       figma: {
         description: 'Figma',
         transport: 'streamable-http',
@@ -409,6 +425,7 @@ describe('OAuth 路由', () => {
         oauth: { scopes: ['mcp:connect'], clientId: 'custom-figma-client' },
       },
     });
+    stubFixedListener(routes);
     const registration: Array<Record<string, unknown>> = [];
     stubFigmaOAuth(registration);
 
@@ -421,7 +438,7 @@ describe('OAuth 路由', () => {
   });
 
   it('授权启动 Web 路由直接 302 到授权服务器', async () => {
-    const { ctx } = harness({
+    const { ctx, routes } = harness({
       figma: {
         description: 'Figma',
         transport: 'streamable-http',
@@ -432,6 +449,7 @@ describe('OAuth 路由', () => {
     });
     const registration: Array<Record<string, unknown>> = [];
     stubFigmaOAuth(registration);
+    stubFixedListener(routes);
 
     const response = await callWeb(
       ctx,
@@ -444,9 +462,7 @@ describe('OAuth 路由', () => {
     const target = new URL(response.headers.location ?? '');
     expect(target.origin + target.pathname).toBe('https://www.figma.com/oauth/mcp');
     expect(target.searchParams.get('client_id')).toBe('figma-dynamic-client');
-    expect(target.searchParams.get('redirect_uri')).toBe(
-      'http://127.0.0.1:3210/better-mcp/oauth/callback',
-    );
+    expect(target.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:19876/callback');
   });
 
   it('授权启动 Web 路由返回 400 与 502 HTML 错误页', async () => {
@@ -468,7 +484,10 @@ describe('OAuth 路由', () => {
     expect(missing.body).toContain('Authorization failed');
     expect(missing.body).toContain('Unknown server');
 
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('nope', { status: 500 })),
+    );
     const failed = await callWeb(
       ctx,
       '/better-mcp/oauth/start',
@@ -534,7 +553,7 @@ describe('OAuth 回调', () => {
 
   it('成功回调写入授权并触发一次会话目录更新', async () => {
     const onAuthorizationChange = vi.fn();
-    const { ctx } = harness(
+    const { ctx, routes } = harness(
       {
         figma: {
           description: 'Figma',
@@ -547,6 +566,7 @@ describe('OAuth 回调', () => {
       onAuthorizationChange,
     );
     stubFigmaOAuth([]);
+    stubFixedListener(routes);
     const started = await call(ctx, '/api/better-mcp/oauth/start?server=figma');
     const state = new URL(String(started.json.url)).searchParams.get('state');
 

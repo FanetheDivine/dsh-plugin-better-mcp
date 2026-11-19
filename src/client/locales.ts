@@ -9,6 +9,7 @@ export const NS = 'dsh-plugin-better-mcp';
 /** 中文字典。 */
 export const zh = {
   title: 'MCP 服务器',
+  sidebarNeedsAuth: 'MCP 服务器：存在待授权 MCP',
   panelTitle: '已配置的 MCP',
   empty: '还没有 MCP 服务器。',
   lazy: '懒加载',
@@ -16,7 +17,9 @@ export const zh = {
   lazyFor: '为 {name} 启用懒加载',
   restart: '重连',
   authorize: '授权',
+  authorizeFor: '授权 {name}',
   reauthorize: '重新授权',
+  reauthorizeFor: '重新授权 {name}',
   signout: '退出登录',
   close: '关闭',
   loading: '读取中…',
@@ -80,6 +83,7 @@ export const zh = {
 /** 英文字典，键集与中文一致。 */
 export const en: Record<McpKey, string> = {
   title: 'MCP servers',
+  sidebarNeedsAuth: 'MCP servers: sign-in required',
   panelTitle: 'Configured MCP',
   empty: 'No MCP servers yet.',
   lazy: 'Lazy',
@@ -87,7 +91,9 @@ export const en: Record<McpKey, string> = {
   lazyFor: 'Enable lazy loading for {name}',
   restart: 'Reconnect',
   authorize: 'Sign in',
+  authorizeFor: 'Sign in to {name}',
   reauthorize: 'Sign in again',
+  reauthorizeFor: 'Sign in to {name} again',
   signout: 'Sign out',
   close: 'Close',
   loading: 'Loading…',

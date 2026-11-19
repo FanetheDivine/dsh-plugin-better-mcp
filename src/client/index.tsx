@@ -66,8 +66,8 @@ export function SidebarButton({
       <button
         type="button"
         className="better-mcp-sidebar-action"
-        title={t('title')}
-        aria-label={t('title')}
+        title={needsAuth ? t('sidebarNeedsAuth') : t('title')}
+        aria-label={needsAuth ? t('sidebarNeedsAuth') : t('title')}
         data-attention={needsAuth || undefined}
         onClick={onOpen}
       >

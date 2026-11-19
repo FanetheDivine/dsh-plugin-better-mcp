@@ -181,9 +181,7 @@ const OAUTH_CLIENT_PRESETS: readonly {
   value: string;
   labelKey: McpKey;
   detailKey: McpKey;
-}[] = [
-  { id: 'dsh', value: '', labelKey: 'oauthClientDsh', detailKey: 'oauthClientDshDetail' },
-];
+}[] = [{ id: 'dsh', value: '', labelKey: 'oauthClientDsh', detailKey: 'oauthClientDshDetail' }];
 
 /** 可自由输入并提供 DSH 动态注册备选项的客户端标识控件。 */
 function OAuthClientInput({
