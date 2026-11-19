@@ -56,7 +56,7 @@ pnpm 的 minimum release age 策略会拒绝发布时间过短的包。
 配置中出现未知键或非法值时，插件加载失败。
 
 - 用户在 `cordis.patch.yml` 写错键名会导致插件停用。
-- 排查步骤见 [README](../README.md#插件被停用)。
+- 用 `dsh --profile <profile> --dump-config` 检查最终配置。
 
 ## 国际化
 

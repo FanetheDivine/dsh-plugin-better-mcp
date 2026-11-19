@@ -7,7 +7,7 @@ DSH 插件 `dsh-plugin-better-mcp`：可视化地管理 MCP 服务器与 OAuth �
 
 # 文档索引
 
-- [README.md](./README.md)：面向用户的功能介绍、快速开始、使用说明与常见问题。
+- [README.md](./README.md)：面向用户的插件简介与面板截图。
 - [configuration.md](./docs/configuration.md)：YAML 配置参考。
 - [how-it-works.md](./docs/how-it-works.md)：插件的构造方式与运行流程。
 - [known-risks.md](./docs/known-risks.md)：已知风险与宿主限制。

@@ -130,6 +130,7 @@ DSH 用户在插件市场或 npm 页面打开 README，读完开头就知道插�
 
 - Q: README 用什么语言？ → A: 中文。
 - Q: 完整 YAML 字段参考放在哪里？ → A: 移到 `docs/configuration.md`，README 链接过去。
+- 验收反馈：README 只保留标题、一句话用途与三项好处，再放一张面板截图。快速开始、使用说明、常见问题与文档链接全部删除。FR-002 至 FR-007 与 FR-010 按此失效。
 
 ## Assumptions
 

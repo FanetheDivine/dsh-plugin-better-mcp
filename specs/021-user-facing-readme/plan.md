@@ -73,3 +73,4 @@ CHANGELOG.md               # Unreleased 条目
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 | --- | --- | --- |
 | 配置字段参考放在 `docs/configuration.md`，偏离宪章 III 中 README 归属「配置」 | 用户要求 | 保留在 README 末尾被用户否决 |
+| README 只含简介与截图，偏离宪章 III 中 README 归属「安装、配置、工具」 | 用户要求 | 完整的用户指南被用户删除 |

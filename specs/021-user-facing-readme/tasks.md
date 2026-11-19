@@ -56,6 +56,11 @@
 - [x] T011 在 `CHANGELOG.md` 的 Unreleased 加入本次文档条目
 - [x] T012 按 `specs/021-user-facing-readme/quickstart.md` 逐项检查，运行 `pnpm format && pnpm check`
 
+## Phase 7: 验收反馈
+
+- [x] T013 精简 `README.md`：保留标题、用途与三项好处，删除其后全部内容，加入面板截图 `docs/assets/panel.jpg`，用 GitHub raw 地址引用
+- [x] T014 修复指向已删除 README 章节的链接：`docs/known-risks.md`、`docs/configuration.md`；同步 `AGENTS.md` 索引、`docs/development.md` 文件地图与 `CHANGELOG.md`
+
 ## Dependencies & Execution Order
 
 - Phase 2 完成后开始 Phase 3。
