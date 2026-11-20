@@ -10,4 +10,6 @@ DSH 插件 `dsh-plugin-better-mcp`：用一个面板管理 MCP 服务器，让�
 - **工作区级实例**：stdio MCP 可按工作区独立运行，同一工作区共享实例；active 等待连接成功后才开放工具，适合 Serena 等单项目服务器。
 - **连接管理**：按工作区分组查看连接情况，搜索路径，并重连单个或全部实例。
 
-![已配置的 MCP 面板](https://raw.githubusercontent.com/FanetheDivine/dsh-plugin-better-mcp/main/docs/assets/panel.jpg)
+每个 workspace 可以有独立的 MCP 实例，获得类似 Claude Code `.mcp.json` 的项目隔离体验。
+
+![已配置的 MCP 面板](https://raw.githubusercontent.com/FanetheDivine/dsh-plugin-better-mcp/main/docs/assets/panel.png)

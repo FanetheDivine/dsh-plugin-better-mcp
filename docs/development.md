@@ -223,7 +223,7 @@ tests/                      # vitest 单元测试
 │   ├── primitives.ts       # 平台组件包解析到源码
 │   └── dist-freshness.ts   # 产物新鲜度检查
 docs/                       # 开发者文档
-├── assets/panel.jpg        # README 中的面板截图
+├── assets/panel.png        # README 中的面板截图
 └── configuration.md        # YAML 配置参考
 specs/<NNN>-<name>/         # 每个需求的 spec、plan、tasks
 .dsh/skills/
