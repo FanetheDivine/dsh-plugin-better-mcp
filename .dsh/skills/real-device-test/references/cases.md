@@ -26,6 +26,19 @@
 - 新的模型行为：在 `mock-provider.mjs` 中加一个消息标记，例如 `XXX_CASE`。
 - 浏览器用例：在 `browser-test.mjs` 中加一个 `check`，并在 SKILL.md 阶段 3 的表格中加一行。
 
+## 热更新验证
+
+每次实机至少做一次，步骤固定：
+
+1. 记录 GUI 进程号，确认插件已加载。
+2. 临时改 `src/tools.ts` 中 `parseManageArgs` 的报错文案，例如前面加 `[hot]`。
+3. 运行 `pnpm build`，等待宿主替换完成。
+4. 在 GUI 里发送 `MCP_MANAGE:hot-check:inactive`，等待回复。
+5. 断言：回复带新文案；GUI 进程号不变；会话可继续。
+6. 还原 `src/tools.ts` 并再构建一次。
+
+报告里单列一节记录结论与截图。
+
 ## 常用断言依据
 
 | 依据 | 获取方式 |
@@ -52,8 +65,11 @@
 ## 浏览器流程
 | 流程 | 结果 | 截图 |
 
+## 热更新验证
+| 项目 | 结果 | 依据 |
+
 ## 发现的问题
 
 ## 产物
-- results.json、browser-results.json、requests.jsonl、会话目录、截图路径
+- 删除 profile 前取出 results.json 与 browser-results.json，留证截图复制到 .rdt-shots/
 ```
