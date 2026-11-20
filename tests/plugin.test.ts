@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { Config } from '../src/config.ts';
 import { apply, inject, name } from '../src/index.ts';
-import { makeCtx, volatile } from './helpers.ts';
+import { normalizeWorkspaceKey, workspaceInternalName } from '../src/workspace-names.ts';
+import { makeAgent, makeCtx, volatile } from './helpers.ts';
 
 /** 等待一轮微任务。 */
 async function flush(): Promise<void> {
@@ -82,6 +83,57 @@ describe('apply 接线', () => {
       expect(ctx._managerRegistered.get('kept')?.entry.command).toBe('npx');
       expect(ctx._managerRegistered.has('added')).toBe(true);
     });
+  });
+
+  it('工作区服务器 active 时才挂载并接入公开代理、资源与删除提醒', async () => {
+    const config = refs({
+      serena: {
+        description: 'project tools',
+        transport: 'stdio',
+        command: 'node',
+        workspace: true,
+        lazy: false,
+      },
+    });
+    const agent = makeAgent('workspace-agent', process.cwd());
+    const ctx = makeCtx({ config });
+    ctx._agents.push(agent);
+    const internalName = workspaceInternalName('serena', process.cwd());
+    const internalTool = `mcp__${internalName}__read`;
+    ctx._registeredTools.push({
+      name: internalTool,
+      description: 'read project',
+      parameters: {},
+      output: { schema: {}, render: () => [] },
+      execute: async () => 'ok',
+    });
+    apply(ctx, config);
+    await vi.waitFor(() =>
+      expect(ctx._registeredTools.some((tool) => tool.name === 'mcp_manage')).toBe(true),
+    );
+    expect(ctx._managerRegistered.size).toBe(0);
+
+    const manage = ctx._registeredTools.find((tool) => tool.name === 'mcp_manage');
+    const result = await manage?.execute({ server: 'serena', command: 'active' }, {
+      agent,
+      signal: new AbortController().signal,
+    } as never);
+    expect(result).toMatchObject({ server: 'serena', active: true, state: 'connected' });
+    expect(ctx._managerRegistered.get(internalName)?.entry.cwd).toBe(
+      normalizeWorkspaceKey(process.cwd()),
+    );
+    expect(agent.ctx.tools.get('mcp__serena__read')).toBeDefined();
+    expect(agent._deny()).toContain(internalTool);
+    expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(true);
+    expect(JSON.stringify(agent.inbox.nextStep)).toContain('before deleting the folder');
+
+    await manage?.execute({ server: 'serena', command: 'inactive' }, {
+      agent,
+      signal: new AbortController().signal,
+    } as never);
+    expect(agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
+    expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(false);
+    expect(ctx._managerRegistered.size).toBe(0);
   });
 
   it('未知配置键让加载失败', () => {

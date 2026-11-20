@@ -1,9 +1,16 @@
 // 会话可见性：默认值、mcp_manage 切换、会话隔离与工具限制。
 import { describe, expect, it, vi } from 'vitest';
 
+import type { PluginConfig } from '../src/config.ts';
 import { deleteGrant, writeGrant } from '../src/credentials.ts';
 import { apply } from '../src/index.ts';
-import { serverOfTool } from '../src/visibility.ts';
+import { ServerManager } from '../src/servers.ts';
+import { buildManageTool } from '../src/tools.ts';
+import type { Agent } from '../src/types.ts';
+import { serverOfTool, VisibilityRuntime } from '../src/visibility.ts';
+import { workspaceInternalName } from '../src/workspace-names.ts';
+import { WorkspacePool } from '../src/workspace-pool.ts';
+import { WorkspaceProxyRuntime } from '../src/workspace-proxy.ts';
 import { type FakeAgent, makeAgent, makeCtx, type RegisteredTool, volatile } from './helpers.ts';
 
 /** 两台服务器：lazy 默认不可见，eager 默认可见。 */
@@ -155,6 +162,174 @@ describe('mcp_manage', () => {
     expect(JSON.stringify(tool.output.render({}, value))).toContain('mcp__lazy__<tool>');
   });
 });
+
+describe('工作区实例可见性', () => {
+  it('active 使用当前 cwd，按服务器同步公开代理并始终 deny 内部工具', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const { ctx, agent, manage } = runtime;
+    expect(ctx._managerRegistered.size).toBe(0);
+
+    await expect(manage('serena', 'active')).resolves.toMatchObject({
+      active: true,
+      state: 'connected',
+    });
+    const serenaInternal = workspaceInternalName('serena', 'D:/Git/One');
+    expect(ctx._managerRegistered.get(serenaInternal)?.entry.cwd).toBe('D:/Git/One');
+    ctx._registeredTools.push(mcpTool(`mcp__${serenaInternal}__read`));
+    runtime.visibility.sync(agent);
+
+    await manage('project', 'active');
+    const projectInternal = workspaceInternalName('project', 'D:/Git/One');
+    ctx._registeredTools.push(mcpTool(`mcp__${projectInternal}__search`));
+    runtime.visibility.sync(agent);
+
+    expect(agent.ctx.tools.get('mcp__serena__read')).toBeDefined();
+    expect(agent.ctx.tools.get('mcp__project__search')).toBeDefined();
+    expect(agent._deny()).toEqual([
+      `mcp__${projectInternal}__search`,
+      `mcp__${serenaInternal}__read`,
+      'mcp__shared__lazy',
+    ]);
+    const activeNotice = agent.inbox.nextStep.find(
+      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-workspace',
+    );
+    expect(JSON.stringify(activeNotice)).toContain('<system-reminder>');
+    expect(JSON.stringify(activeNotice)).toMatch(/Windows.*cwd.*inactive.*other active Agents/is);
+
+    await expect(manage('serena', 'inactive')).resolves.toMatchObject({
+      active: false,
+      state: 'closed',
+    });
+    expect(agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
+    expect(agent.ctx.tools.get('mcp__project__search')).toBeDefined();
+    expect(ctx._managerRegistered.has(serenaInternal)).toBe(false);
+    expect(ctx._managerRegistered.has(projectInternal)).toBe(true);
+  });
+
+  it('状态只读取当前工作区，active 失败时保持 inactive', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const other = makeAgent('two', 'D:/Git/Two');
+    runtime.ctx._agents.push(other);
+    runtime.ctx.agents.list();
+    runtime.visibility.sync(other);
+    await runtime.manage('serena', 'active');
+    const firstInternal = workspaceInternalName('serena', 'D:/Git/One');
+    runtime.ctx._setStatus(firstInternal, { state: 'connecting', attempt: 0 });
+    await expect(runtime.manage('serena', 'active')).resolves.toMatchObject({
+      active: true,
+      state: 'connecting',
+    });
+    await expect(
+      runtime.tool.execute({ server: 'serena', command: 'active' }, {
+        agent: other,
+        signal: new AbortController().signal,
+      } as never),
+    ).resolves.toMatchObject({ active: true, state: 'connected' });
+    expect(runtime.ctx._managerRegistered.size).toBe(2);
+
+    runtime.exists = false;
+    await expect(runtime.manage('serena', 'active')).rejects.toThrow('does not exist');
+    expect(runtime.visibility.isActive(runtime.agent, 'serena')).toBe(false);
+    const fresh = makeAgent('three', 'D:/Git/Missing');
+    runtime.ctx._agents.push(fresh);
+    runtime.ctx.agents.list();
+    runtime.visibility.sync(fresh);
+    await expect(
+      runtime.tool.execute({ server: 'serena', command: 'active' }, {
+        agent: fresh,
+        signal: new AbortController().signal,
+      } as never),
+    ).rejects.toThrow('does not exist');
+    expect(runtime.visibility.isActive(fresh, 'serena')).toBe(false);
+    expect(runtime.ctx._managerRegistered.size).toBe(2);
+  });
+});
+
+/** 构造两台工作区服务器与一台共享 lazy 服务器的直接运行时。 */
+async function setupWorkspaceRuntime() {
+  const ctx = makeCtx();
+  const agent = makeAgent('one', 'D:/Git/One');
+  ctx._agents.push(agent);
+  ctx._registeredTools.push(mcpTool('mcp__shared__lazy'));
+  const config: PluginConfig = {
+    servers: {
+      serena: {
+        description: 'Serena',
+        transport: 'stdio',
+        command: 'node',
+        cwd: 'configured-cwd',
+        auth: 'none',
+        lazy: true,
+        workspace: true,
+      },
+      project: {
+        description: 'Project',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        lazy: true,
+        workspace: true,
+      },
+      shared: {
+        description: 'Shared',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        lazy: true,
+        workspace: false,
+      },
+    },
+  };
+  const logger = { info: vi.fn(), warn: vi.fn() };
+  const manager = new ServerManager(ctx, () => config, logger);
+  const state = { exists: true };
+  const pool = new WorkspacePool(ctx, manager, {
+    workspaceExists: () => state.exists,
+  });
+  const currentWorkspaceKey = (current: Agent) => ctx.workingDirectory.get(current.session);
+  let visibility: VisibilityRuntime;
+  const proxy = new WorkspaceProxyRuntime(ctx, {
+    currentWorkspaceKey,
+    isActive: (current, route) => visibility.isActive(current, route.serverName),
+    isGenerationCurrent: (route) =>
+      pool.isCurrent(route.serverName, route.workspaceKey, route.generation),
+    workspaceExists: () => state.exists,
+  });
+  visibility = new VisibilityRuntime(
+    ctx,
+    () => config,
+    logger,
+    () => false,
+    {
+      pool,
+      proxy,
+      currentWorkspaceKey,
+    },
+  );
+  await visibility.start();
+  ctx.agents.list();
+  visibility.syncAll();
+  const tool = buildManageTool(manager, visibility, () => config, {
+    pool,
+    currentWorkspaceKey,
+  });
+  return {
+    ctx,
+    agent,
+    pool,
+    proxy,
+    visibility,
+    tool,
+    get exists() {
+      return state.exists;
+    },
+    set exists(value: boolean) {
+      state.exists = value;
+    },
+    manage: (server: string, command: 'active' | 'inactive') =>
+      tool.execute({ server, command }, { agent, signal: new AbortController().signal } as never),
+  };
+}
 
 describe('Turn 结束自动停用', () => {
   it('重置默认 active 与手动 active 的服务器，且不注入唤醒消息', async () => {

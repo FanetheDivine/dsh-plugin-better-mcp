@@ -3,10 +3,11 @@
  * 导出 buildManageTool 与参数解析函数 parseManageArgs。
  */
 
-import type { ServerManager } from './servers.ts';
-import type { SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
+import type { ServerManager, StatusView } from './servers.ts';
+import type { Agent, SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
 import { isRecord } from './utils.ts';
 import type { VisibilityRuntime } from './visibility.ts';
+import type { WorkspacePool } from './workspace-pool.ts';
 
 /** 一次 `mcp_manage` 的已校验参数。 */
 export interface ManageArgs {
@@ -56,11 +57,20 @@ export function renderManageResult(result: ManageResult): string {
   return `${server} is now active, but it is ${result.state}${reason}. Its tools appear once it connects.`;
 }
 
+/** `mcp_manage` 的工作区依赖；仅工作区配置需要。 */
+export interface ManageWorkspaceOptions {
+  /** 当前工作区实例池。 */
+  readonly pool: WorkspacePool;
+  /** 从宿主读取 Agent 当前有效工作目录。 */
+  readonly currentWorkspaceKey: (agent: Agent) => string | undefined;
+}
+
 /** 构造 `mcp_manage` 工具。 */
 export function buildManageTool(
   manager: ServerManager,
   visibility: VisibilityRuntime,
   getSettings: SettingsReader,
+  workspace?: ManageWorkspaceOptions,
 ): ToolDefinition {
   return {
     name: 'mcp_manage',
@@ -90,8 +100,43 @@ export function buildManageTool(
       if (agent === undefined) throw new Error('mcp_manage needs an agent session.');
       const parsed = parseManageArgs(args, Object.keys(getSettings().servers).sort());
       const active = parsed.command === 'active';
-      visibility.setActive(agent, parsed.server, active);
-      const status = manager.statusOf(parsed.server);
+      const definition = getSettings().servers[parsed.server];
+      let status: StatusView;
+      if (definition?.workspace === true) {
+        if (workspace === undefined) {
+          throw new Error(`Workspace MCP server '${parsed.server}' needs a workspace pool.`);
+        }
+        const workspaceKey = workspace.currentWorkspaceKey(agent);
+        if (workspaceKey === undefined || workspaceKey === '') {
+          throw new Error(`Workspace MCP server '${parsed.server}' needs a current workspace.`);
+        }
+        if (active) {
+          try {
+            await workspace.pool.acquireActive(agent, parsed.server, workspaceKey);
+          } catch (error) {
+            visibility.setActive(agent, parsed.server, false);
+            throw error;
+          }
+          visibility.setActive(agent, parsed.server, true);
+          status = workspace.pool.status(parsed.server, workspaceKey);
+        } else {
+          visibility.setActive(agent, parsed.server, false);
+          const cleanup = await workspace.pool.releaseActive(agent, parsed.server, workspaceKey);
+          status =
+            cleanup.state === 'retained'
+              ? {
+                  ...workspace.pool.status(parsed.server, workspaceKey),
+                  error: 'Other active Agents still occupy this workspace.',
+                }
+              : {
+                  state: cleanup.state,
+                  ...(cleanup.error === undefined ? {} : { error: cleanup.error }),
+                };
+        }
+      } else {
+        visibility.setActive(agent, parsed.server, active);
+        status = manager.statusOf(parsed.server);
+      }
       const result: ManageResult = {
         server: parsed.server,
         active,

@@ -42,6 +42,8 @@ export interface WorkspaceCleanupResult {
 export interface WorkspacePoolOptions {
   /** 单次调用的关闭等待预算；超时后后台 watch 仍继续。 */
   cleanupTimeoutMs?: number;
+  /** active 前检查规范化工作区是否仍存在。 */
+  workspaceExists?: (workspaceKey: string) => boolean | Promise<boolean>;
 }
 
 /** 一个已注册实例的私有生命周期状态。 */
@@ -71,6 +73,7 @@ export class WorkspacePool {
   private readonly chains = new Map<string, Promise<void>>();
   private readonly generations = new Map<string, number>();
   private readonly cleanupTimeoutMs: number;
+  private readonly workspaceExists: WorkspacePoolOptions['workspaceExists'];
   private disposed = false;
 
   constructor(
@@ -79,6 +82,7 @@ export class WorkspacePool {
     options: WorkspacePoolOptions = {},
   ) {
     this.cleanupTimeoutMs = options.cleanupTimeoutMs ?? 10_000;
+    this.workspaceExists = options.workspaceExists;
   }
 
   /** 按实例键串行执行操作，并保留后续操作需要的拒绝恢复链。 */
@@ -202,18 +206,61 @@ export class WorkspacePool {
     serverName: string,
     workspace: string,
   ): Promise<WorkspaceInstance> {
-    const state = this.stateOf(serverName, workspace, true);
+    const workspaceKey = normalizeWorkspaceKey(workspace);
+    if (this.workspaceExists !== undefined && !(await this.workspaceExists(workspaceKey))) {
+      throw new Error(`Workspace '${workspaceKey}' does not exist.`);
+    }
+    const state = this.stateOf(serverName, workspaceKey, true);
     if (state === undefined) throw new Error('Workspace pool is disposed.');
     state.boundAgents.add(agent);
     state.activeAgents.add(agent);
     try {
-      return await this.serialized(state.key, () => this.acquireInChain(state));
+      return await this.serialized(state.key, async () => {
+        if (this.workspaceExists !== undefined && !(await this.workspaceExists(workspaceKey))) {
+          throw new Error(`Workspace '${workspaceKey}' does not exist.`);
+        }
+        return this.acquireInChain(state);
+      });
     } catch (error) {
       state.boundAgents.delete(agent);
       state.activeAgents.delete(agent);
       this.prune(state);
       throw error;
     }
+  }
+
+  /** 返回 Agent 当前 active 且可路由的实例；未激活或正在关闭时为 undefined。 */
+  activeInstance(
+    agent: Agent,
+    serverName: string,
+    workspace: string,
+  ): WorkspaceInstance | undefined {
+    const state = this.stateOf(serverName, workspace, false);
+    const instance = state?.instance;
+    if (
+      state === undefined ||
+      instance === undefined ||
+      instance.closing ||
+      instance.closeResult !== undefined ||
+      !state.activeAgents.has(agent) ||
+      instance.generation !== this.generationOf(state.key)
+    ) {
+      return undefined;
+    }
+    return this.publicInstance(state, instance);
+  }
+
+  /** 校验代理捕获的实例 generation 仍是当前有效注册。 */
+  isCurrent(serverName: string, workspace: string, generation: number): boolean {
+    const state = this.stateOf(serverName, workspace, false);
+    const instance = state?.instance;
+    return (
+      instance !== undefined &&
+      !instance.closing &&
+      instance.closeResult === undefined &&
+      instance.generation === generation &&
+      this.generationOf(state?.key ?? '') === generation
+    );
   }
 
   /** 只建立目录绑定，不启动实例。 */

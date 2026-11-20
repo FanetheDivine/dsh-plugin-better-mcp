@@ -174,6 +174,47 @@ describe('WorkspaceProxyRuntime 差异同步', () => {
     await expect(proxy?.execute({}, execution(agent))).resolves.toBe('new');
   });
 
+  it('不同 Agent 的同名公开代理分别执行当前工作区 target', async () => {
+    const ctx = makeCtx();
+    const first = makeAgent('agent-a', '/tmp/project-a');
+    const second = makeAgent('agent-b', '/tmp/project-b');
+    const otherInternal = 'bm_serena_0123456789abcdef';
+    const firstTarget = tool(TARGET_NAME, async () => 'project-a');
+    const secondTarget = tool(`mcp__${otherInternal}__read_file`, async () => 'project-b');
+    ctx._registeredTools.push(firstTarget, secondTarget);
+    const runtime = new WorkspaceProxyRuntime(ctx, {
+      currentWorkspaceKey: (current) => current.cwd,
+      isActive: () => true,
+      isGenerationCurrent: () => true,
+    });
+    const firstRoute: WorkspaceProxyRoute = {
+      serverName: 'serena',
+      internalName: INTERNAL,
+      workspaceKey: first.cwd,
+      generation: 1,
+    };
+    const secondRoute: WorkspaceProxyRoute = {
+      ...firstRoute,
+      internalName: otherInternal,
+      workspaceKey: second.cwd,
+    };
+
+    runtime.sync(first, firstRoute);
+    runtime.sync(second, secondRoute);
+    expect(first.ctx.tools.get(PUBLIC_NAME)).not.toBe(second.ctx.tools.get(PUBLIC_NAME));
+    await expect(first.ctx.tools.get(PUBLIC_NAME)?.execute({}, execution(first))).resolves.toBe(
+      'project-a',
+    );
+    await expect(second.ctx.tools.get(PUBLIC_NAME)?.execute({}, execution(second))).resolves.toBe(
+      'project-b',
+    );
+
+    second.cwd = first.cwd;
+    await expect(second.ctx.tools.get(PUBLIC_NAME)?.execute({}, execution(second))).rejects.toThrow(
+      /stale workspace tool/i,
+    );
+  });
+
   it('工作区或 generation 换代时替换代理，dispose 释放全部注册', () => {
     const { agent, route, runtime } = setup();
     runtime.sync(agent, route);

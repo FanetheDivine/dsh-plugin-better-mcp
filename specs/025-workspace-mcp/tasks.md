@@ -51,15 +51,15 @@ description: "Task list for workspace-scoped MCP instances"
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] 编写 active 前不连接、并发 active、cwd、状态路由和删除警告的失败测试，修改 `tests/workspace-pool.test.ts` 与 `tests/visibility.test.ts`
-- [ ] T009 [P] [US1] 编写同名公开代理、跨工作区工具/instructions/resources 隔离与图片投影的失败测试，修改 `tests/workspace-proxy.test.ts` 与新增 `tests/workspace-resources.test.ts`
+- [X] T008 [P] [US1] 编写 active 前不连接、并发 active、cwd、状态路由和删除警告的失败测试，修改 `tests/workspace-pool.test.ts` 与 `tests/visibility.test.ts`
+- [X] T009 [P] [US1] 编写同名公开代理、跨工作区工具/instructions/resources 隔离与图片投影的失败测试，修改 `tests/workspace-proxy.test.ts` 与新增 `tests/workspace-resources.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] 实现 active 获取、cwd 覆盖、同工作区复用、当前工作区状态读取和 active 删除警告，修改 `src/workspace-pool.ts`、`src/tools.ts` 与新增 `src/workspace-notices.ts`
-- [ ] T011 [US1] 将工作区代理和内部工具 deny 合并进现有 lazy 可见性，保持普通公开工具名并校验 target 与绑定，修改 `src/visibility.ts` 与 `src/workspace-proxy.ts`
-- [ ] T012 [P] [US1] 实现 instructions 过滤和 Agent-local resource provider 转发、内部资源调用守卫，新增 `src/workspace-presentation.ts`、`src/workspace-resources.ts`
-- [ ] T013 [US1] 装配 Agent 创建、tools/change、system-prompt/assemble 与资源守卫，修改 `src/index.ts` 与 `tests/plugin.test.ts`
+- [X] T010 [US1] 实现 active 获取、cwd 覆盖、同工作区复用、当前工作区状态读取和 active 删除警告，修改 `src/workspace-pool.ts`、`src/tools.ts` 与新增 `src/workspace-notices.ts`
+- [X] T011 [US1] 将工作区代理和内部工具 deny 合并进现有 lazy 可见性，保持普通公开工具名并校验 target 与绑定，修改 `src/visibility.ts` 与 `src/workspace-proxy.ts`
+- [X] T012 [P] [US1] 实现 instructions 过滤和 Agent-local resource provider 转发、内部资源调用守卫，新增 `src/workspace-presentation.ts`、`src/workspace-resources.ts`
+- [X] T013 [US1] 装配 Agent 创建、tools/change、system-prompt/assemble 与资源守卫，修改 `src/index.ts` 与 `tests/plugin.test.ts`
 
 **Checkpoint**: US1 独立可用，提交 Phase 3 commit
 

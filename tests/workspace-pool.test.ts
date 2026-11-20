@@ -69,6 +69,25 @@ describe('WorkspacePool acquire 与引用', () => {
     expect(pool.list()).toHaveLength(2);
   });
 
+  it('active 前通过注入回调检查规范化工作区，缺失时不保留引用或实例', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const manager = new ServerManager(ctx as never, () => config, { info: vi.fn(), warn: vi.fn() });
+    const workspaceExists = vi.fn(async (workspace: string) => workspace !== 'D:/Git/Missing');
+    const pool = new WorkspacePool(ctx as never, manager, { workspaceExists });
+    const agent = asAgent(makeAgent());
+
+    await expect(pool.acquireActive(agent, 'serena', 'd:\\Git\\Missing\\')).rejects.toThrow(
+      "Workspace 'D:/Git/Missing' does not exist",
+    );
+    expect(workspaceExists).toHaveBeenCalledWith('D:/Git/Missing');
+    expect(ctx._managerRegistered.size).toBe(0);
+    expect(pool.list()).toEqual([]);
+    await expect(pool.releaseActive(agent, 'serena', 'D:/Git/Missing')).resolves.toMatchObject({
+      state: 'idle',
+    });
+  });
+
   it('active 启动失败时回滚本次引用，允许后续重试', async () => {
     const ctx = makeCtx();
     const config = settings();

@@ -16,6 +16,15 @@ import type {
   UserMessage,
 } from './types.ts';
 import { isRecord } from './utils.ts';
+import {
+  createActiveWorkspaceNotice,
+  type WorkspaceNotice,
+  workspaceNoticeMessage,
+} from './workspace-notices.ts';
+import type { WorkspacePool } from './workspace-pool.ts';
+import type { WorkspaceProxyRuntime } from './workspace-proxy.ts';
+import { collectWorkspaceInternalToolNames } from './workspace-proxy.ts';
+import type { WorkspaceResourceRuntime } from './workspace-resources.ts';
 
 /** 目录中的一台服务器。 */
 export interface CatalogEntry {
@@ -150,12 +159,28 @@ interface Restriction {
   readonly dispose: (() => void) | undefined;
 }
 
+/** VisibilityRuntime 的可选工作区依赖。 */
+export interface WorkspaceVisibilityOptions {
+  /** 提供当前 active 实例与 generation 校验。 */
+  readonly pool: WorkspacePool;
+  /** 同步 Agent-local 公开工具代理。 */
+  readonly proxy: WorkspaceProxyRuntime;
+  /** 同步 Agent-local resource provider。 */
+  readonly resources?: WorkspaceResourceRuntime;
+  /** 从宿主读取 Agent 当前有效工作目录。 */
+  readonly currentWorkspaceKey: (agent: Agent) => string | undefined;
+}
+
 /** 按会话维护服务器可见性与工具限制。 */
 export class VisibilityRuntime {
   /** 每个 Agent 尚未落入目录消息的显式选择。 */
   private readonly pending = new WeakMap<Agent, Record<string, boolean>>();
   /** 每个 Agent 当前的工具限制。 */
   private readonly restrictions = new Map<Agent, Restriction>();
+  /** 每个 Agent 尚未注入的工作区提醒。 */
+  private readonly pendingNotices = new WeakMap<Agent, WorkspaceNotice[]>();
+  /** 工作区提醒的单调标识。 */
+  private nextNoticeId = 1;
   /** 目录投影句柄。 */
   private projection: ProjectionHandle<CatalogState> | undefined;
   /** 已排队的全量同步。 */
@@ -168,6 +193,7 @@ export class VisibilityRuntime {
     private readonly getSettings: SettingsReader,
     private readonly logger: PluginLogger,
     private readonly isAuthorized: (serverName: string) => boolean = () => false,
+    private readonly workspace?: WorkspaceVisibilityOptions,
   ) {}
 
   /** 注册目录投影。 */
@@ -241,6 +267,14 @@ export class VisibilityRuntime {
     pending[serverName] = active;
     this.pending.set(agent, pending);
     this.sync(agent);
+    if (active && this.getSettings().servers[serverName]?.workspace === true) {
+      const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
+      if (workspaceKey !== undefined) {
+        const notices = this.pendingNotices.get(agent) ?? [];
+        notices.push(createActiveWorkspaceNotice(serverName, workspaceKey, this.nextNoticeId++));
+        this.pendingNotices.set(agent, notices);
+      }
+    }
     this.notify(agent);
   }
 
@@ -254,15 +288,39 @@ export class VisibilityRuntime {
   sync(agent: Agent): void {
     if (this.disposed) return;
     const serverNames = Object.keys(this.getSettings().servers);
+    const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
+    for (const serverName of serverNames) {
+      if (this.getSettings().servers[serverName]?.workspace !== true) continue;
+      const route =
+        workspaceKey === undefined || !this.isActive(agent, serverName)
+          ? undefined
+          : this.workspace?.pool.activeInstance(agent, serverName, workspaceKey);
+      this.workspace?.proxy.sync(agent, route, serverName);
+      if (route === undefined) {
+        this.workspace?.resources?.release(agent, serverName);
+      } else {
+        try {
+          this.workspace?.resources?.sync(agent, route);
+        } catch (error) {
+          this.logger.warn(
+            `better-mcp: could not sync workspace MCP resources for '${serverName}': ${String(error)}`,
+          );
+        }
+      }
+    }
     const hidden = new Set(serverNames.filter((name) => !this.isActive(agent, name)));
-    const deny = this.ctx.tools
-      .schemas()
-      .map((schema) => schema.name)
-      .filter((name) => {
-        const owner = serverOfTool(name, serverNames);
-        return owner !== undefined && hidden.has(owner);
-      })
-      .sort();
+    const deny = [
+      ...new Set([
+        ...this.ctx.tools
+          .schemas()
+          .map((schema) => schema.name)
+          .filter((name) => {
+            const owner = serverOfTool(name, serverNames);
+            return owner !== undefined && hidden.has(owner);
+          }),
+        ...collectWorkspaceInternalToolNames(this.ctx),
+      ]),
+    ].sort();
     const key = deny.join('\n');
     const current = this.restrictions.get(agent);
     if (current?.key === key) return;
@@ -311,21 +369,34 @@ export class VisibilityRuntime {
   notify(agent: Agent): void {
     if (this.disposed) return;
     const catalog = this.catalogFor(agent);
-    if (catalog === undefined) return;
-    const entries = (catalog.source as CatalogSource).entries;
-    const queued = agent.inbox.nextStep.findLast((message) => {
-      const source = message.source as Partial<CatalogSource>;
-      if (source.kind !== CATALOG_SOURCE) return false;
-      const queuedEntries = readEntries(source.entries);
-      return queuedEntries !== undefined && sameEntries(queuedEntries, entries);
-    });
-    if (queued !== undefined) return;
-    try {
-      agent.inject(catalog);
-    } catch (error) {
-      this.logger.warn(
-        `better-mcp: could not inject the MCP catalog into '${agent.id}': ${String(error)}`,
-      );
+    if (catalog !== undefined) {
+      const entries = (catalog.source as CatalogSource).entries;
+      const queued = agent.inbox.nextStep.findLast((message) => {
+        const source = message.source as Partial<CatalogSource>;
+        if (source.kind !== CATALOG_SOURCE) return false;
+        const queuedEntries = readEntries(source.entries);
+        return queuedEntries !== undefined && sameEntries(queuedEntries, entries);
+      });
+      if (queued === undefined) {
+        try {
+          agent.inject(catalog);
+        } catch (error) {
+          this.logger.warn(
+            `better-mcp: could not inject the MCP catalog into '${agent.id}': ${String(error)}`,
+          );
+        }
+      }
+    }
+    const notices = this.pendingNotices.get(agent)?.splice(0) ?? [];
+    this.pendingNotices.delete(agent);
+    for (const notice of notices) {
+      try {
+        agent.inject(workspaceNoticeMessage(notice));
+      } catch (error) {
+        this.logger.warn(
+          `better-mcp: could not inject a workspace notice into '${agent.id}': ${String(error)}`,
+        );
+      }
     }
   }
 
@@ -361,6 +432,9 @@ export class VisibilityRuntime {
   forget(agent: Agent): void {
     this.restrictions.delete(agent);
     this.pending.delete(agent);
+    this.pendingNotices.delete(agent);
+    this.workspace?.proxy.disposeAgent(agent);
+    this.workspace?.resources?.disposeAgent(agent);
   }
 
   /** 解除全部限制。 */

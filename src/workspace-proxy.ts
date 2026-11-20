@@ -1,6 +1,10 @@
 /** 工作区工具代理：发现根内部工具、同步 Agent-local 公开代理并阻止过期调用。 */
 import type { Agent, Context, ToolDefinition, ToolRunContext } from './types.ts';
-import { isInternalToolName, workspacePublicToolName } from './workspace-names.ts';
+import {
+  isInternalToolName,
+  isWorkspaceInternalName,
+  workspacePublicToolName,
+} from './workspace-names.ts';
 
 /** 一个工作区实例的代理路由身份。 */
 export interface WorkspaceProxyRoute {
@@ -47,13 +51,21 @@ export function discoverWorkspaceToolTargets(
 /** 收集指定内部实例的全部根工具名，供 Agent visibility deny 使用。 */
 export function collectWorkspaceInternalToolNames(
   ctx: Context,
-  internalNames: Iterable<string>,
+  internalNames?: Iterable<string>,
 ): string[] {
-  const names = [...new Set(internalNames)];
+  const names = internalNames === undefined ? undefined : [...new Set(internalNames)];
   return ctx.tools
     .definitions()
     .map((tool) => tool.name)
-    .filter((toolName) => names.some((internalName) => isInternalToolName(toolName, internalName)))
+    .filter((toolName) => {
+      if (names !== undefined) {
+        return names.some((internalName) => isInternalToolName(toolName, internalName));
+      }
+      if (!toolName.startsWith('mcp__')) return false;
+      const rest = toolName.slice('mcp__'.length);
+      const separator = rest.indexOf('__');
+      return separator > 0 && isWorkspaceInternalName(rest.slice(0, separator));
+    })
     .sort();
 }
 
@@ -69,11 +81,22 @@ export class WorkspaceProxyRuntime {
     private readonly callbacks: WorkspaceProxyCallbacks,
   ) {}
 
-  /** 将 Agent 的公开代理同步到指定工作区实例；传 undefined 释放该 Agent 的全部代理。 */
-  sync(agent: Agent, route: WorkspaceProxyRoute | undefined): void {
+  /** 同步一个服务器的公开代理；route 为 undefined 时仅释放指定服务器，省略服务器则释放全部。 */
+  sync(agent: Agent, route: WorkspaceProxyRoute | undefined, serverName?: string): void {
     if (this.disposed) return;
     if (route === undefined) {
-      this.disposeAgent(agent);
+      if (serverName === undefined) {
+        this.disposeAgent(agent);
+        return;
+      }
+      const current = this.records.get(agent);
+      if (current === undefined) return;
+      for (const [publicName, record] of current) {
+        if (record.route.serverName !== serverName) continue;
+        current.delete(publicName);
+        release(record.dispose);
+      }
+      if (current.size === 0) this.records.delete(agent);
       return;
     }
     const current = this.records.get(agent) ?? new Map<string, ProxyRecord>();
