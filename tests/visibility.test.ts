@@ -342,9 +342,16 @@ describe('工作区实例可见性', () => {
     await runtime.manage('serena', 'active');
     const firstInternal = workspaceInternalName('serena', 'D:/Git/One');
     runtime.ctx._setStatus(firstInternal, { state: 'connecting', attempt: 0 });
-    await expect(runtime.manage('serena', 'active')).resolves.toMatchObject({
+    const waiting = runtime.manage('serena', 'active');
+    await vi.waitFor(() => expect(runtime.ctx._managerWatcherCount()).toBe(1));
+    runtime.ctx._setStatus(firstInternal, {
+      state: 'connected',
+      toolCount: 2,
+      connectedAt: Date.now(),
+    });
+    await expect(waiting).resolves.toMatchObject({
       active: true,
-      state: 'connecting',
+      state: 'connected',
     });
     await expect(
       runtime.tool.execute({ server: 'serena', command: 'active' }, {
@@ -368,10 +375,10 @@ describe('工作区实例可见性', () => {
       } as never),
     ).rejects.toThrow('does not exist');
     expect(runtime.visibility.isActive(fresh, 'serena')).toBe(false);
-    expect(runtime.ctx._managerRegistered.size).toBe(2);
+    expect(runtime.ctx._managerRegistered.size).toBe(1);
   });
 
-  it('注册后仍在 connecting 时 active 提醒只表示已启用，不声称连接成功', async () => {
+  it('连接成功后才写入 active 提醒', async () => {
     const runtime = await setupWorkspaceRuntime();
     const { ctx } = runtime;
     const internalName = workspaceInternalName('serena', 'D:/Git/One');
@@ -382,9 +389,13 @@ describe('工作区实例可见性', () => {
       return dispose;
     });
 
-    await expect(runtime.manage('serena', 'active')).resolves.toMatchObject({
+    const waiting = runtime.manage('serena', 'active');
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    expect(runtime.agent.inbox.nextStep).toHaveLength(0);
+    ctx._setStatus(internalName, { state: 'connected', toolCount: 2, connectedAt: Date.now() });
+    await expect(waiting).resolves.toMatchObject({
       active: true,
-      state: 'connecting',
+      state: 'connected',
     });
     const catalog = runtime.agent.inbox.nextStep.findLast(
       (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',

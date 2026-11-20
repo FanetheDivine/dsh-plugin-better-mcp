@@ -16,3 +16,4 @@
 
 - 注册 MCP 前复制冻结配置，兼容宿主 Schema 默认值解析。
 - 在插件自有的 Agent scope 中注册工作区 resource providers。
+- 工作区 active 等待实例连接成功，失败或取消时释放 active 引用。

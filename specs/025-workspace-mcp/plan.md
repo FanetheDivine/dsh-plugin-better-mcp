@@ -28,14 +28,19 @@ Record each undecided question with a stable id and its dependencies.
 - [D-105] Q: 工作区切换时实例准备失败是否阻止切换？ -> A: 允许切换并保留实例错误；每个失败工作区提供“重连”按钮。
 - [D-106] Q: 对宿主已做有损规范化的工具名，首版如何处理？ -> A: 使用宿主生成的名称，普通名称仅替换服务器前缀；这不列为已知风险。
 - [D-107] Q: 工作区级配置如何重连？ -> A: 主行提供“全部重连”，每个工作区可单独重连，工作区名称可搜索。
+- [D-108] 探索结论：active 注册后使用 MCP Manager 的实时状态订阅等待当前 generation 连接成功；成功前不开放代理，最终失败或取消时释放 active 引用并恢复 inactive。
 
 ## Review Record
+
+- 2026-11-20 | Decision: Approved | Scope: current full document and design artifacts | Open items: none | Risks: 等待期间取消与共享实例释放
+
+- 2026-11-20 | Decision: Changes requested | Scope: active 等待 connected 并处理失败 | Open items: none | Risks: 等待期间取消与共享实例释放
 
 - 2026-11-20 | Decision: Approved | Scope: current full document and design artifacts | Open items: none | Risks: 共享代理复杂度；清理超时；其他进程占用目录；resources/instructions 宿主接口耦合
 
 ## Summary
 
-为现有服务器定义增加可选的工作区级行为。工作区级 stdio 服务器固定懒加载，模型 active 时才建立所属工作区实例，inactive 时隐藏当前 Agent 工具，并在无其他 active Agent 时关闭共享实例。实例以所属工作区为 `cwd`。Agent 侧路由保持既有工具名，并隔离工具、状态、MCP instructions 与 resources。目录切换和文件夹缺失触发关闭屏障与占用提醒；Agent 释放本身保留实例。共享服务器继续使用现有挂载路径。
+为现有服务器定义增加可选的工作区级行为。工作区级 stdio 服务器固定懒加载，模型 active 时才建立所属工作区实例，并等待连接成功后开放工具。inactive 时隐藏当前 Agent 工具，并在无其他 active Agent 时关闭共享实例。实例以所属工作区为 `cwd`。Agent 侧路由保持既有工具名，并隔离工具、状态、MCP instructions 与 resources。目录切换和文件夹缺失触发关闭屏障与占用提醒；Agent 释放本身保留实例。共享服务器继续使用现有挂载路径。
 
 ## Technical Context
 
@@ -53,7 +58,7 @@ Record each undecided question with a stable id and its dependencies.
 
 **Performance Goals**: 三个工作区各至少 20 次并行调用均路由到正确实例；重复事件不重复创建实例；无变化的限制不重复注册。
 
-**Constraints**: 仅 stdio 支持工作区级；同一工作区跨 Agent 共享；active 才连接，inactive 在无其他 active Agent 时断连；公开工具名保持 `mcp__<server>__<tool>`；宿主全局 MCP 名称唯一；配置严格校验并保持向后兼容。
+**Constraints**: 仅 stdio 支持工作区级；同一工作区跨 Agent 共享；active 等待连接成功，inactive 在无其他 active Agent 时断连；公开工具名保持 `mcp__<server>__<tool>`；宿主全局 MCP 名称唯一；配置严格校验并保持向后兼容。
 
 **Scale/Scope**: 修改配置、宿主实例管理、工作区绑定、Agent 工具与上下文隔离、面板状态、测试、文档和实机验证。
 

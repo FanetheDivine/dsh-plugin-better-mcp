@@ -19,7 +19,7 @@ pnpm build
 重点测试：
 
 1. 配置默认共享，HTTP 拒绝工作区开关，工作区级强制 lazy。
-2. active 前不注册实例；active 后 cwd 正确并写入删除警告。
+2. active 前不注册实例；延迟 `connecting` 时 active 持续等待，`connected` 后才成功返回并写入删除警告；最终失败或取消时恢复 inactive。
 3. 同一工作区并发 active 只注册一次。
 4. 单 Agent inactive 等待关闭；共享实例有其他 active Agent 时保留并提醒占用。
 5. Turn 结束自动 inactive 使用相同引用和关闭规则。
@@ -40,10 +40,11 @@ pnpm build
 ### 场景 A：active 按需连接
 
 1. 在项目 A 建立会话，确认工作区服务器没有实例。
-2. 调用 `mcp_manage` active。
-3. 调用报告身份的工具并读取下一步消息。
+2. 让 fixture 延迟完成连接，确认 active 调用处于等待状态。
+3. 连接成功后检查 active 结果、cwd、公开代理和下一步消息。
+4. 分别模拟最终失败与调用取消，确认返回错误且 Agent 恢复 inactive。
 
-预期：只建立一个实例；cwd 等于项目 A；system-reminder 说明删除文件夹前必须 inactive。
+预期：active 仅在 `connected` 后成功返回；只建立一个实例；cwd 等于项目 A；system-reminder 说明删除文件夹前必须 inactive；失败或取消时不开放工具。
 
 ### 场景 B：inactive 与共享引用
 

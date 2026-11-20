@@ -20,13 +20,14 @@
 | 用例 | 结果 | 关键断言 |
 | --- | --- | --- |
 | W0 | 通过 | active 前没有内部实例 |
-| W1 | 通过 | active 启动进程，cwd 正确，注入删除警告 |
+| W1 | 通过 | active 在 400ms 初始化延迟期间保持等待，仅在 connected 后返回；cwd 正确并注入删除警告 |
 | W2 | 通过 | 同工作区两个 Agent 使用同一 PID |
 | W3 | 通过 | inactive 保留共享实例，最后 active 引用释放后关闭 |
 | W4 | 通过 | 不同工作区使用不同 PID 与各自 cwd |
 | W5 | 通过 | 公开资源名解析到当前 Agent 的工作区进程 |
 | W6 | 通过 | 切换目录等待清理，Windows 成功删除旧目录 |
 | W7 | 通过 | Agent 释放保留实例，配置删除完成最终清理 |
+| W8 | 环境阻塞 | Serena 的 uvx Git 依赖获取失败，直接命令不在隔离 profile 的 PATH；最终失败按预期返回错误并恢复 inactive |
 
 ## 浏览器
 
@@ -43,7 +44,7 @@
 - `80e31cc`：注册前复制冻结配置，允许宿主 Schema 解析嵌套 env 与 args。
 - `9199542`：通过 `createScope(pluginCtx, agent)` 注册 Agent-local resource providers。
 
-修复后已重跑全部工作区用例。
+修复后已重跑全部工作区用例。active 连接等待补充后，W0–W7 再次全部通过。W8 记录了 Serena 的隔离环境启动限制，需要在当前 Desktop 的可用 Serena 环境中复验成功路径。
 
 ## 产物
 

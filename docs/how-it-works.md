@@ -71,7 +71,7 @@
 生命周期：
 
 - Agent 创建时只建立目录绑定，不启动实例。
-- `mcp_manage` active 检查目录并注册实例；同键并发获取只注册一次。
+- `mcp_manage` active 检查目录并注册实例，等待当前 generation 变为 `connected` 后才开放代理并返回成功；最终失败或取消时释放 active 引用。
 - inactive 立即移除当前 Agent 的代理与 resources。没有其他 active Agent 时关闭实例，否则保留并提醒共享占用。
 - Turn 结束的自动 inactive 使用同一引用规则。
 - Agent 释放只移除引用，保留实例供后续会话使用。

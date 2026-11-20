@@ -205,6 +205,68 @@ describe('WorkspacePool acquire 与引用', () => {
     const reopened = await pool.acquireActive(agent, 'serena', '/tmp/project');
     expect(reopened.generation).toBe(1);
   });
+
+  it('active 等待当前 generation 从 connecting 到 connected', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent());
+    const instance = await pool.acquireActive(agent, 'serena', '/tmp/project');
+    ctx._setStatus(instance.internalName, { state: 'connecting' });
+    let settled = false;
+    const waiting = pool
+      .waitForConnected(agent, instance, new AbortController().signal)
+      .then(() => {
+        settled = true;
+      });
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    expect(settled).toBe(false);
+    ctx._setStatus(instance.internalName, {
+      state: 'connected',
+      toolCount: 1,
+      connectedAt: Date.now(),
+    });
+    await waiting;
+    expect(settled).toBe(true);
+    expect(ctx._managerWatcherCount()).toBe(0);
+  });
+
+  it('最终连接失败、取消、实例消失与 generation 失效均拒绝等待', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent());
+    const instance = await pool.acquireActive(agent, 'serena', '/tmp/project');
+    ctx._setStatus(instance.internalName, { state: 'connecting' });
+    const failed = pool.waitForConnected(agent, instance, new AbortController().signal);
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    ctx._setStatus(instance.internalName, {
+      state: 'failed',
+      reason: 'gave-up',
+      lastError: 'connection exploded',
+    });
+    await expect(failed).rejects.toThrow('connection exploded');
+
+    ctx._setStatus(instance.internalName, { state: 'connecting' });
+    const controller = new AbortController();
+    const cancelled = pool.waitForConnected(agent, instance, controller.signal);
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    controller.abort(new Error('cancelled by caller'));
+    await expect(cancelled).rejects.toThrow('cancelled by caller');
+
+    ctx._setStatus(instance.internalName, { state: 'connecting' });
+    const disappeared = pool.waitForConnected(agent, instance, new AbortController().signal);
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    ctx._dropManager(instance.internalName);
+    await expect(disappeared).rejects.toThrow(/disappeared|no longer active/);
+
+    await pool.acquireActive(agent, 'serena', '/tmp/project');
+    ctx._setStatus(instance.internalName, { state: 'connecting' });
+    const stale = pool.waitForConnected(agent, instance, new AbortController().signal);
+    await vi.waitFor(() => expect(ctx._managerWatcherCount()).toBe(1));
+    await pool.restart('serena', '/tmp/project');
+    await expect(stale).rejects.toThrow(/stale|no longer active|disappeared/);
+  });
 });
 
 describe('WorkspacePool 清理', () => {

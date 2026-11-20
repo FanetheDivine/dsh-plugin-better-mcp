@@ -113,9 +113,11 @@ export function buildManageTool(
         }
         if (active) {
           try {
-            await workspace.pool.acquireActive(agent, parsed.server, workspaceKey);
+            const instance = await workspace.pool.acquireActive(agent, parsed.server, workspaceKey);
+            await workspace.pool.waitForConnected(agent, instance, exec.signal);
           } catch (error) {
             visibility.setActive(agent, parsed.server, false);
+            await workspace.pool.releaseActive(agent, parsed.server, workspaceKey);
             throw error;
           }
           visibility.setActive(agent, parsed.server, true);

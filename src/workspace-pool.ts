@@ -268,6 +268,63 @@ export class WorkspacePool {
     return this.publicInstance(state, instance);
   }
 
+  /** 等待指定 Agent 捕获的实例连接成功；失败、取消、消失或换代时拒绝。 */
+  async waitForConnected(
+    agent: Agent,
+    route: WorkspaceInstance,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const assertCurrent = (): void => {
+      signal.throwIfAborted();
+      const state = this.stateOf(route.serverName, route.workspaceKey, false);
+      if (
+        this.disposed ||
+        state === undefined ||
+        state.instance === undefined ||
+        state.instance.generation !== route.generation ||
+        state.instance.closing ||
+        state.instance.closeResult !== undefined ||
+        !state.activeAgents.has(agent) ||
+        !this.isCurrent(route.serverName, route.workspaceKey, route.generation)
+      ) {
+        throw new Error(`Workspace MCP instance '${route.internalName}' is no longer active.`);
+      }
+    };
+    const inspect = (views: readonly McpManagedServerView[]): boolean => {
+      assertCurrent();
+      const view = views.find((candidate) => candidate.name === route.internalName);
+      if (view === undefined) {
+        throw new Error(
+          `Workspace MCP instance '${route.internalName}' disappeared while connecting.`,
+        );
+      }
+      const status = statusOf(view.status);
+      if (status.state === 'connected') return true;
+      if (status.state === 'failed') {
+        throw new Error(
+          `Workspace MCP instance '${route.internalName}' failed to connect: ${status.error ?? 'unknown error'}`,
+        );
+      }
+      return false;
+    };
+
+    signal.throwIfAborted();
+    if (inspect(this.ctx.mcpManager.list())) return;
+    const controller = new AbortController();
+    const abort = (): void => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    try {
+      for await (const views of this.ctx.mcpManager.watch(controller.signal)) {
+        if (inspect(views)) return;
+      }
+      signal.throwIfAborted();
+      throw new Error(`Workspace MCP watch for '${route.internalName}' ended before connection.`);
+    } finally {
+      signal.removeEventListener('abort', abort);
+      controller.abort();
+    }
+  }
+
   /** 校验代理捕获的实例 generation 仍是当前有效注册。 */
   isCurrent(serverName: string, workspace: string, generation: number): boolean {
     const state = this.stateOf(serverName, workspace, false);

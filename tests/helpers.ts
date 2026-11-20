@@ -830,6 +830,11 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
       state._managerStatuses.set(name, status);
       notifyManager();
     },
+    _dropManager(name: string) {
+      state._managerRegistered.delete(name);
+      state._managerStatuses.delete(name);
+      notifyManager();
+    },
     _failCleanup(name: string, result: FakeCleanupResult | string = 'simulated cleanup failure') {
       programmedCleanupFailures.set(name, normalizeCleanup(result));
     },

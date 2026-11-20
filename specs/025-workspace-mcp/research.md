@@ -151,3 +151,11 @@
 | `workspace-resources.ts` | Agent-local provider、资源转发与内部调用守卫 |
 
 现有 `servers.ts` 保留共享服务器管理并暴露工作区状态；`visibility.ts` 合并 lazy 限制与代理同步；`index.ts` 接入工作目录、系统提示、资源守卫和生命周期钩子。
+
+## active 等待连接成功
+
+**Decision**: `WorkspacePool` 在注册后按内部名称和 generation 等待 Manager 状态。`mcp_manage` 仅在 `connected` 后设置 Agent active 并返回成功。最终 `failed`、实例失效或调用取消时抛错，调用方释放 active 引用。
+
+**Rationale**: `mcpManager.watch(signal)` 首先返回当前列表，再推送状态变化，避免先读状态造成的事件遗漏。等待与取消沿用宿主信号，无需轮询或新增超时配置。
+
+**Alternatives Considered**: 立即返回 `connecting` 已被用户拒绝。定时轮询会引入延迟和额外配置。共享 MCP active 保持现状，本变更仅影响工作区实例。

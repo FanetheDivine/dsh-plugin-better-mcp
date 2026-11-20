@@ -52,7 +52,9 @@
 2. 工作区不存在时返回错误并准备提醒，不启动实例。
 3. 已存在实例时复用。
 4. 不存在实例时按实例键串行创建，完成后再次检查，避免并发重复注册。
-5. 写入 active 删除警告。
+5. 等待当前 generation 的 Manager 状态变为 `connected`，随后才开放代理并返回成功。
+6. 最终失败、取消或 generation 失效时释放当前 Agent 的 active 引用并恢复 inactive。
+7. 写入 active 删除警告。
 
 ### inactive
 

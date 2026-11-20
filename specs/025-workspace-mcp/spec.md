@@ -24,6 +24,9 @@ Record each undecided question with a stable id and its dependencies.
 
 ### Session 2026-11-20
 
+- 用户反馈：active 返回 `connecting` 不符合预期；调用必须等待实例成功连接。
+- [D-019] 探索结论：宿主连接具有重试预算耗尽后的最终失败状态。active 仅在连接成功后返回成功；最终失败或调用取消时明确失败并恢复 inactive。
+
 探索结果：
 
 - 现有插件在启动时为每台服务器挂载一个实例，`lazy` 只控制会话工具可见性。
@@ -59,6 +62,10 @@ Record each undecided question with a stable id and its dependencies.
 
 ## Review Record
 
+- 2026-11-20 | Decision: Approved | Scope: current full document | Open items: none | Risks: 连接等待与失败恢复
+
+- 2026-11-20 | Decision: Changes requested | Scope: active 必须等待连接成功 | Open items: D-019 | Risks: 连接重试期间的调用等待与失败恢复
+
 - 2026-11-20 | Decision: Approved | Scope: current full document | Open items: none | Risks: 共享实例路由复杂度；开发依赖 rc.3 与实机 rc.5 的版本差异
 - 2026-11-20 | Decision: Changes requested | Scope: 删除工作区环境变量，仅保留 cwd | Open items: none | Risks: 共享实例路由复杂度；宿主资源路由耦合
 - 2026-11-20 | Decision: Approved | Scope: current full document | Open items: none | Risks: 共享实例路由复杂度；宿主资源路由耦合
@@ -72,7 +79,7 @@ Record each undecided question with a stable id and its dependencies.
 
 ### User Story 1 - 按需连接每个工作区的独立实例 (Priority: P1)
 
-用户把 Serena 配置为工作区级 MCP。工作区级服务器始终懒加载，只有模型调用 `mcp_manage` 将其设为 active 时才连接所属工作区实例。active 时注入 system-reminder，说明删除文件夹前必须 inactive，并提示共享实例仍可能被其他 Agent 占用。
+用户把 Serena 配置为工作区级 MCP。工作区级服务器始终懒加载，只有模型调用 `mcp_manage` 将其设为 active 时才连接所属工作区实例。active 调用等待实例连接成功后返回成功。active 时注入 system-reminder，说明删除文件夹前必须 inactive，并提示共享实例仍可能被其他 Agent 占用。
 
 **Why this priority**: 按需连接减少空闲进程，同时保证每个项目使用独立 Serena 实例。
 
@@ -83,6 +90,7 @@ Record each undecided question with a stable id and its dependencies.
 1. **Given** 工作区级 Serena 配置和一个已确定工作区的 Agent，**When** 模型尚未激活 Serena，**Then** 系统不启动该工作区的 Serena 实例。
 2. **Given** 两个不同工作区，**When** 两个 Agent 分别激活 Serena，**Then** 系统建立两个独立实例、设置各自 cwd，并注入删除文件夹前必须 inactive 的提醒。
 3. **Given** 多个 Agent 绑定同一工作区，**When** 它们激活同一服务器，**Then** 它们共享同一个实例，提醒说明其他 active Agent 会继续占用文件夹。
+4. **Given** 工作区实例需要经过连接中状态，**When** 模型调用 active，**Then** 调用等待到连接成功后才返回成功，且成功结果与提醒均不显示 `connecting`。
 
 ---
 
@@ -141,6 +149,7 @@ Record each undecided question with a stable id and its dependencies.
 - Agent 切回已有连接的工作区时复用实例，无需重复启动。
 - 工作区路径包含空格、非 ASCII 字符或符号链接时，实例身份与 cwd 保持正确。
 - 工作区级实例启动失败或崩溃时，其他工作区实例继续可用。
+- active 等待期间连接最终失败或调用取消时，调用明确失败并恢复 inactive，不开放未确认可用的工具。
 - 文件夹在实例关闭完成前收到删除请求时，系统需要避免旧进程继续占用文件夹。
 - 工作区实例断连后，旧代理、instructions 与 resources 不得继续对失效绑定可用。
 
@@ -169,6 +178,7 @@ Record each undecided question with a stable id and its dependencies.
 - **FR-019**: 未启用工作区级别的 MCP 服务器 MUST 保持现有行为，既有配置 MUST 默认关闭工作区级别。
 - **FR-020**: HTTP MCP MUST 保持共享实例行为且不显示工作区级开关。
 - **FR-021**: Agent 释放导致工作区没有在线 Agent 时 MUST 保留已连接实例；目录切换仍按 FR-008 断连，宿主退出时释放全部实例。
+- **FR-022**: 工作区实例的 active 调用 MUST 等待到实例连接成功后才返回成功；最终连接失败或取消时 MUST 返回明确错误并恢复 inactive。
 
 ### Key Entities *(include if feature involves data)*
 
@@ -188,6 +198,7 @@ Record each undecided question with a stable id and its dependencies.
 - **SC-005**: 面板可将成功与失败实例分组折叠展示，按名称片段筛选，并验证全部重连与单工作区重连的范围正确。
 - **SC-006**: 一个工作区实例发生启动失败或崩溃时，其他工作区实例的工具调用不受该故障影响。
 - **SC-007**: 未启用工作区级别的既有服务器配置在升级后无需修改即可按原方式使用。
+- **SC-008**: 使用需要经过 `connecting` 的真实 stdio MCP 验证 active 仅在 `connected` 后成功返回；最终失败时返回错误且该 Agent 为 inactive。
 
 ## Assumptions
 

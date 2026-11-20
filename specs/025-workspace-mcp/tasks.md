@@ -135,11 +135,28 @@ description: "Task list for workspace-scoped MCP instances"
 
 ---
 
+## Phase 8: US1 补充 - active 等待连接成功 (Priority: P1)
+
+**Goal**: 工作区实例只有在 `connected` 后才完成 active；最终失败、取消或换代不会留下 active 工具。
+
+**Independent Test**: 用延迟连接 fixture 验证 active 阻塞到成功，并分别验证最终失败、取消和 generation 失效。
+
+- [X] T034 [US1] 在 `tests/workspace-pool.test.ts` 添加连接等待的成功、最终失败、取消、实例消失和 generation 失效回归，并确认修复前失败
+- [X] T035 [US1] 在 `src/workspace-pool.ts` 实现按内部名、当前 generation 和调用信号等待 `connected` 的实例池方法
+- [X] T036 [US1] 在 `tests/plugin.test.ts` 或 `tests/tools.test.ts` 添加 `mcp_manage` active 延迟成功、失败释放与共享配置不变的回归
+- [X] T037 [US1] 在 `src/tools.ts` 接入等待，仅成功后开放代理和提醒，失败时释放 active 引用并恢复 inactive
+- [X] T038 更新 `README.md`、`docs/configuration.md`、`docs/how-it-works.md`、`docs/known-risks.md`、`CHANGELOG.md` 和实机报告，并验证真实延迟连接 fixture 与 Serena
+- [X] T039 运行 `pnpm format && pnpm full-check`，审查最终 diff、任务完成度与公开引用，提交 Phase 8 commit
+
+**Checkpoint**: active 不再返回 `connecting`；全部测试与实机验收通过
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
 
-- Setup → Foundational → US1 → US2 → US3 → US4 → Polish。
+- Setup → Foundational → US1 → US2 → US3 → US4 → Polish → US1 连接等待补充。
 - 每个 Phase 一个 commit；后续 Phase 依赖前一 Phase 的 checkpoint。
 - US3 的宿主 API 可在 US2 实例状态稳定后开发，客户端表单任务 T024 与文案任务 T026 可并行。
 
@@ -157,6 +174,7 @@ description: "Task list for workspace-scoped MCP instances"
 - US2 的测试 T014、T015 可并行。
 - US3 的测试 T021、T022 可并行；T024、T026 可并行。
 - 文档任务 T029、T030 可并行。
+- Phase 8 的测试任务 T034、T036 可并行。
 
 ## Parallel Example: User Story 1
 
