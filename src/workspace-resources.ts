@@ -1,5 +1,6 @@
 /** Agent-local MCP resource provider 转发与内部服务器直接调用守卫。 */
 import type { McpResourceProvider, McpResourceRequest } from '@deepseek-ai/dsh-mcp-resources';
+import { createScope, type Scope } from '@deepseek-ai/dsh-scope';
 import type { PreToolDecision, ToolExecution, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Agent, Context, ToolDefinition } from './types.ts';
@@ -29,14 +30,25 @@ interface ResourceRecord {
   readonly dispose: () => void;
 }
 
+/** 一个 Agent 的插件自有 scope 与其 provider 集合。 */
+interface AgentResourceState {
+  readonly scope: Pick<Scope, 'ctx' | 'dispose'>;
+  readonly records: Map<string, ResourceRecord>;
+}
+
+/** 创建继承插件 inject 权限的 Agent scope。 */
+export type WorkspaceResourceScopeFactory = (agent: Agent) => Pick<Scope, 'ctx' | 'dispose'>;
+
 /** 捕获根资源工具，以公开配置名同步 Agent-local provider。 */
 export class WorkspaceResourceRuntime {
-  private readonly records = new Map<Agent, Map<string, ResourceRecord>>();
+  private readonly records = new Map<Agent, AgentResourceState>();
   private disposed = false;
 
   constructor(
     private readonly ctx: Context,
     private readonly callbacks: WorkspaceResourceCallbacks,
+    private readonly scopeFactory: WorkspaceResourceScopeFactory = (agent) =>
+      createScope(ctx, agent),
   ) {}
 
   /** 同步一个服务器的 provider；传 undefined 释放该 Agent 的全部 provider。 */
@@ -47,8 +59,12 @@ export class WorkspaceResourceRuntime {
       return;
     }
     const targets = captureResourceTargets(this.ctx);
-    const current = this.records.get(agent) ?? new Map<string, ResourceRecord>();
-    if (!this.records.has(agent)) this.records.set(agent, current);
+    let state = this.records.get(agent);
+    if (state === undefined) {
+      state = { scope: this.scopeFactory(agent), records: new Map<string, ResourceRecord>() };
+      this.records.set(agent, state);
+    }
+    const current = state.records;
     const previous = current.get(route.serverName);
     if (previous !== undefined && sameRecord(previous, route, targets)) return;
     if (previous !== undefined) {
@@ -60,26 +76,30 @@ export class WorkspaceResourceRuntime {
     const provider: McpResourceProvider = {
       request: (request, exec) => this.forward(agent, snapshot, targets, request, exec),
     };
-    const dispose = agent.ctx.mcpResources.register(route.serverName, provider);
+    const dispose = state.scope.ctx.mcpResources.register(route.serverName, provider);
     current.set(route.serverName, { route: snapshot, targets, dispose });
   }
 
   /** 释放一个 Agent 对指定公开服务器名的 provider。 */
   release(agent: Agent, serverName: string): void {
-    const current = this.records.get(agent);
-    const record = current?.get(serverName);
-    if (current === undefined || record === undefined) return;
-    current.delete(serverName);
-    if (current.size === 0) this.records.delete(agent);
+    const state = this.records.get(agent);
+    const record = state?.records.get(serverName);
+    if (state === undefined || record === undefined) return;
+    state.records.delete(serverName);
     release(record.dispose);
+    if (state.records.size === 0) {
+      this.records.delete(agent);
+      void state.scope.dispose();
+    }
   }
 
   /** 释放一个 Agent 的全部 provider。 */
   disposeAgent(agent: Agent): void {
-    const current = this.records.get(agent);
-    if (current === undefined) return;
+    const state = this.records.get(agent);
+    if (state === undefined) return;
     this.records.delete(agent);
-    for (const record of current.values()) release(record.dispose);
+    for (const record of state.records.values()) release(record.dispose);
+    void state.scope.dispose();
   }
 
   /** 释放全部 provider，并忽略后续同步。 */

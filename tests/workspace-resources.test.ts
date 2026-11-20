@@ -17,6 +17,7 @@ import {
   guardWorkspaceResourceCall,
   type WorkspaceResourceRoute,
   WorkspaceResourceRuntime,
+  type WorkspaceResourceScopeFactory,
 } from '../src/workspace-resources.ts';
 import { type FakeAgent, makeAgent, makeCtx } from './helpers.ts';
 
@@ -65,6 +66,14 @@ function resourceServers(names: string[]): AssembledSection {
   };
 }
 
+/** 用 Agent 模拟 context 代替真实 Cordis scope。 */
+function fakeScopeFactory(dispose = vi.fn()): WorkspaceResourceScopeFactory {
+  return (agent) => ({
+    ctx: (agent as unknown as FakeAgent).ctx as never,
+    dispose,
+  });
+}
+
 /** 创建多 Agent 可编程路由状态与资源运行时。 */
 function setupResources() {
   const ctx = makeCtx();
@@ -78,20 +87,26 @@ function setupResources() {
   const missing = new Set<string>();
   const requestsA = vi.fn(async () => ({ workspace: 'a' }));
   const requestsB = vi.fn(async () => ({ workspace: 'b' }));
+  const scopeDispose = vi.fn();
   ctx.mcpResources.register(INTERNAL_A, { request: requestsA });
   ctx.mcpResources.register(INTERNAL_B, { request: requestsB });
-  const runtime = new WorkspaceResourceRuntime(ctx, {
-    currentWorkspaceKey: (current) => bindings.get(current),
-    isActive: (current) => active.has(current),
-    isGenerationCurrent: (route) => generations.get(route.internalName) === route.generation,
-    workspaceExists: (workspaceKey) => !missing.has(workspaceKey),
-  });
+  const runtime = new WorkspaceResourceRuntime(
+    ctx,
+    {
+      currentWorkspaceKey: (current) => bindings.get(current),
+      isActive: (current) => active.has(current),
+      isGenerationCurrent: (route) => generations.get(route.internalName) === route.generation,
+      workspaceExists: (workspaceKey) => !missing.has(workspaceKey),
+    },
+    fakeScopeFactory(scopeDispose),
+  );
   return {
     ctx,
     agent,
     runtime,
     requestsA,
     requestsB,
+    scopeDispose,
     bindings,
     active,
     generations,
@@ -285,7 +300,7 @@ describe('WorkspaceResourceRuntime 转发与隔离', () => {
   });
 
   it('同步保持同代 provider，按服务器释放并在 dispose 时清空', () => {
-    const { agent, runtime } = setupResources();
+    const { agent, runtime, scopeDispose } = setupResources();
     const otherRoute: WorkspaceResourceRoute = {
       ...ROUTE_A,
       serverName: 'other',
@@ -312,6 +327,7 @@ describe('WorkspaceResourceRuntime 转发与隔离', () => {
     expect(agent._resourceProviders).toHaveLength(0);
     runtime.sync(agent, ROUTE_A);
     expect(agent._resourceProviders).toHaveLength(0);
+    expect(scopeDispose).toHaveBeenCalledTimes(2);
   });
 });
 

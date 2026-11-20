@@ -65,6 +65,9 @@ importers:
       '@deepseek-ai/dsh-mcp-resources':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(02ba0a72683aac5493f335b56f844a19)
+      '@deepseek-ai/dsh-scope':
+        specifier: 0.2.2-rc.5
+        version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/dsh-session':
         specifier: 0.2.2-rc.5
         version: 0.2.2-rc.5(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-error@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.5(@deepseek-ai/cordis@4.1.0))

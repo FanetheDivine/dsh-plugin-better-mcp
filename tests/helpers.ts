@@ -788,6 +788,21 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
       if (typeof disposer === 'function') effectDisposers.push(disposer as () => void);
       return () => true;
     },
+    plugin() {
+      const fiberCtx = {
+        extend(values: Record<PropertyKey, unknown>) {
+          const agent = Reflect.ownKeys(values)
+            .map((key) => values[key])
+            .find((value): value is FakeAgent => state._agents.includes(value as FakeAgent));
+          return agent?.ctx ?? ctx;
+        },
+      };
+      return {
+        ctx: fiberCtx,
+        dispose: () => undefined,
+        inertia: undefined,
+      };
+    },
     on(type: string, fn: (...args: unknown[]) => void) {
       const list = state._listeners.get(type) ?? [];
       list.push(fn);
