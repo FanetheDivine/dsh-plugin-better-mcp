@@ -3,6 +3,13 @@
 
 import type { CredentialRecord } from '@deepseek-ai/dsh-credentials';
 import type { McpManagedServerStatus, McpManagedServerView } from '@deepseek-ai/dsh-mcp-manager';
+import type { McpResourceProvider, McpResourceRequest } from '@deepseek-ai/dsh-mcp-resources';
+import type {
+  AssembleContext,
+  AssembledSection,
+  PromptPresentation,
+} from '@deepseek-ai/dsh-system-prompt';
+import type { ToolDefinition, ToolExecution, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Context } from '../src/types.ts';
 
@@ -23,13 +30,69 @@ export function volatile<T>(initial: T): FakeVolatile<T> {
   };
 }
 
-/** 一条工具注册记录。 */
-export interface RegisteredTool {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  execute(args: unknown, exec: { signal: AbortSignal }): Promise<unknown>;
-  output: { schema: unknown; render(args: unknown, value: unknown): unknown[] };
+/** 一条完整工具注册记录。 */
+export type RegisteredTool = ToolDefinition;
+
+/** MCP 清理失败结果。 */
+export type FakeCleanupResult = Extract<
+  McpManagedServerStatus,
+  { state: 'failed'; reason: 'cleanup' }
+>['result'];
+
+/** 一条 MCP resource provider 注册记录。 */
+export interface FakeMcpResourceRegistration {
+  server: string;
+  provider: McpResourceProvider;
+  agent?: FakeAgent;
+}
+
+/** Agent-local 工具服务。 */
+export interface FakeAgentTools {
+  register(definition: RegisteredTool): () => void;
+  definitions(): readonly RegisteredTool[];
+  get(name: string): RegisteredTool | undefined;
+  schemas(): Array<Record<string, unknown>>;
+  restrict(filter: { allow?: string[]; deny?: string[] }): () => void;
+}
+
+/** Agent 构造选项。 */
+export interface FakeAgentOptions {
+  /** 当前有效工作目录。 */
+  cwd?: string;
+}
+
+/** 资源工具参数结构。 */
+const RESOURCE_LIST_PARAMETERS = {
+  server: { type: 'string', required: true, description: 'Configured MCP server name.' },
+  cursor: { type: 'string', description: 'Continuation cursor returned by this server.' },
+} as const;
+
+/** 投影工具的模型可见 schema。 */
+function toolSchemas(definitions: readonly RegisteredTool[]): Array<Record<string, unknown>> {
+  return definitions.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    ...(tool.deferLoading === true ? { deferLoading: true } : {}),
+  }));
+}
+
+/** 注册一个 resource provider。 */
+function registerResourceProvider(
+  registrations: FakeMcpResourceRegistration[],
+  server: string,
+  provider: McpResourceProvider,
+  agent?: FakeAgent,
+): () => void {
+  if (registrations.some((registration) => registration.server === server)) {
+    throw new Error(`MCP resource server "${server}" is already registered in this scope`);
+  }
+  const registration = { server, provider, ...(agent === undefined ? {} : { agent }) };
+  registrations.push(registration);
+  return () => {
+    const index = registrations.indexOf(registration);
+    if (index >= 0) registrations.splice(index, 1);
+  };
 }
 
 /** 宿主 mocked 服务选项。 */
@@ -38,6 +101,10 @@ export interface MockCtxOptions {
   config?: { servers: FakeVolatile<unknown> };
   /** 初始管理器状态。 */
   statuses?: Record<string, McpManagedServerStatus>;
+  /** 指定名称下一次 disposer 产生的清理失败。 */
+  cleanupFailures?: Record<string, FakeCleanupResult | string>;
+  /** system-prompt/assemble 的默认 sections。 */
+  promptSections?: AssembledSection[];
   /** 外部插件管理的服务器。 */
   external?: string[];
   /** 不提供 connection 服务。 */
@@ -68,10 +135,28 @@ export interface FakeMessage {
 /** 可编程 Agent 模拟。 */
 export interface FakeAgent {
   id: string;
-  session: { id: string; events: FakeEvent[]; surface: { nodes: number[] }; readonly seq: number };
-  ctx: { tools: { restrict(filter: { allow?: string[]; deny?: string[] }): () => void } };
+  /** 当前有效工作目录，可直接赋值以准备测试状态。 */
+  cwd: string;
+  session: {
+    id: string;
+    header: { cwd: string };
+    events: FakeEvent[];
+    surface: { nodes: number[] };
+    readonly seq: number;
+    append(type: string, data: Record<string, unknown>): FakeEvent;
+  };
+  ctx: {
+    tools: FakeAgentTools;
+    mcpResources: {
+      register(server: string, provider: McpResourceProvider): () => void;
+    };
+  };
   /** 等待后续步骤准入的消息。 */
   inbox: { nextStep: FakeMessage[]; nextTurn: FakeMessage[] };
+  /** Agent-local 工具注册记录。 */
+  _registeredTools: RegisteredTool[];
+  /** Agent-local resource provider 注册记录。 */
+  _resourceProviders: FakeMcpResourceRegistration[];
   /** 把上下文写入下一步队列，不唤醒 Agent。 */
   inject(message: FakeMessage): void;
   /** 当前生效的 deny 列表。 */
@@ -86,43 +171,103 @@ export interface FakeAgent {
   _compact(): void;
 }
 
-/** 构造一个模拟 Agent。 */
-export function makeAgent(id = 'agent-1'): FakeAgent {
-  const restrictions = new Set<{ deny?: string[] }>();
+/** Agent 与根 ctx 的动态绑定。 */
+interface FakeAgentRoot {
+  definitions(): readonly RegisteredTool[];
+  emit(type: string, ...args: unknown[]): void;
+}
+
+const agentRoots = new WeakMap<FakeAgent, FakeAgentRoot>();
+const sessionOwners = new WeakMap<FakeAgent['session'], FakeAgent>();
+
+/** 构造一个模拟 Agent。第二个参数可直接传 cwd。 */
+export function makeAgent(id = 'agent-1', cwdOrOptions: string | FakeAgentOptions = {}): FakeAgent {
+  const initialCwd =
+    typeof cwdOrOptions === 'string' ? cwdOrOptions : (cwdOrOptions.cwd ?? process.cwd());
+  let currentCwd = initialCwd;
+  const restrictions = new Set<{ allow?: string[]; deny?: string[] }>();
   const events: FakeEvent[] = [];
   const nextStep: FakeMessage[] = [];
-  const session = {
+  const localTools: RegisteredTool[] = [];
+  const resourceProviders: FakeMcpResourceRegistration[] = [];
+  const session: FakeAgent['session'] = {
     id,
+    header: { cwd: initialCwd },
     events,
-    surface: { nodes: [] as number[] },
+    surface: { nodes: [] },
     get seq() {
       return events.length;
     },
+    append(type, data) {
+      const event = { seq: events.length, type, data };
+      events.push(event);
+      return event;
+    },
   };
-  return {
+  let agent: FakeAgent;
+  const definitions = (): readonly RegisteredTool[] => {
+    const globals = (agentRoots.get(agent)?.definitions() ?? []).filter((tool) =>
+      [...restrictions].every(
+        (filter) =>
+          (filter.allow === undefined || filter.allow.includes(tool.name)) &&
+          !filter.deny?.includes(tool.name),
+      ),
+    );
+    const visible = new Map(globals.map((tool) => [tool.name, tool]));
+    for (const tool of localTools) visible.set(tool.name, tool);
+    return [...visible.values()];
+  };
+  const changed = () => agentRoots.get(agent)?.emit('tools/change');
+  agent = {
     id,
+    get cwd() {
+      return currentCwd;
+    },
+    set cwd(value) {
+      currentCwd = value;
+    },
     session,
     ctx: {
       tools: {
+        register(definition) {
+          localTools.push(definition);
+          changed();
+          return () => {
+            const index = localTools.indexOf(definition);
+            if (index < 0) return;
+            localTools.splice(index, 1);
+            changed();
+          };
+        },
+        definitions,
+        get: (name) => definitions().find((tool) => tool.name === name),
+        schemas: () => toolSchemas(definitions()),
         restrict(filter) {
           restrictions.add(filter);
+          changed();
           return () => {
-            restrictions.delete(filter);
+            if (!restrictions.delete(filter)) return;
+            changed();
           };
         },
       },
+      mcpResources: {
+        register: (server, provider) =>
+          registerResourceProvider(resourceProviders, server, provider, agent),
+      },
     },
     inbox: { nextStep, nextTurn: [] },
+    _registeredTools: localTools,
+    _resourceProviders: resourceProviders,
     inject(message) {
       nextStep.push(message);
     },
     _deny: () => [...restrictions].flatMap((filter) => filter.deny ?? []).sort(),
     _restrictionCount: () => restrictions.size,
     _commit(message) {
-      const seq = events.length;
-      events.push({ seq, type: 'user/message', data: { role: 'user', ...message } });
-      session.surface.nodes.push(seq);
-      return seq;
+      const event = session.append('user/message', { role: 'user', ...message });
+      session.surface.nodes.push(event.seq);
+      return event.seq;
     },
     _claim() {
       return nextStep.splice(0);
@@ -131,11 +276,74 @@ export function makeAgent(id = 'agent-1'): FakeAgent {
       session.surface.nodes = [];
     },
   };
+  sessionOwners.set(session, agent);
+  return agent;
+}
+
+/** 构造三个与 rc.5 同名的全局 resource 工具。 */
+function createResourceTools(
+  resolve: (
+    server: string,
+    request: McpResourceRequest,
+    exec: ToolExecution,
+  ) => ReturnType<McpResourceProvider['request']>,
+): RegisteredTool[] {
+  const make = (
+    name: string,
+    description: string,
+    parameters: Record<string, unknown>,
+    request: (args: { server: string; cursor?: string; uri?: string }) => McpResourceRequest,
+  ): RegisteredTool => ({
+    name,
+    description,
+    parameters,
+    output: {
+      schema: { type: 'json' },
+      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) ?? '' }],
+    },
+    isConcurrencySafe: () => true,
+    execute: (raw, exec: ToolRunContext) => {
+      const args = raw as { server: string; cursor?: string; uri?: string };
+      return resolve(args.server, request(args), exec);
+    },
+  });
+  return [
+    make(
+      'list_mcp_resources',
+      'List resources available from an MCP server.',
+      RESOURCE_LIST_PARAMETERS,
+      (args) => ({
+        method: 'resources/list',
+        ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
+      }),
+    ),
+    make(
+      'list_mcp_resource_templates',
+      'List parameterized resource URI templates from an MCP server.',
+      RESOURCE_LIST_PARAMETERS,
+      (args) => ({
+        method: 'resources/templates/list',
+        ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
+      }),
+    ),
+    make(
+      'read_mcp_resource',
+      'Read an MCP resource by URI from the named server.',
+      {
+        server: RESOURCE_LIST_PARAMETERS.server,
+        uri: { type: 'string', required: true, description: 'Resource URI to read.' },
+      },
+      (args) => ({ method: 'resources/read', uri: args.uri ?? '' }),
+    ),
+  ];
 }
 
 /** 可编程宿主 ctx 模拟的观测字段。 */
 export interface MockCtxState {
   _registeredTools: RegisteredTool[];
+  /** 三个全局 MCP resource 工具，不计入旧工具注册数组。 */
+  _resourceTools: RegisteredTool[];
+  _resourceProviders: FakeMcpResourceRegistration[];
   _agents: FakeAgent[];
   _effects: string[];
   _listeners: Map<string, Array<(...args: unknown[]) => void>>;
@@ -143,25 +351,47 @@ export interface MockCtxState {
   _fetchRoutes: Array<Record<string, unknown>>;
   _managerRegistered: Map<string, { entry: Record<string, unknown> }>;
   _managerStatuses: Map<string, McpManagedServerStatus>;
+  _managerDisposals: string[];
+  _managerCleanupFailures: Map<string, FakeCleanupResult>;
+  _workingDirectoryAccesses: Array<{
+    agent: FakeAgent;
+    path: string | null;
+    signal: AbortSignal;
+  }>;
+  _promptSections: AssembledSection[];
   _credentials: Map<string, CredentialRecord>;
   _configStore: Record<string, unknown>;
   _configEdits: Array<Record<string, unknown>>;
   _injections: string[];
   _loggerCalls: Array<{ level: string; args: unknown[] }>;
   _setStatus(name: string, status: McpManagedServerStatus): void;
+  /** 让指定名称的下一次 Manager disposer 留下 configured:false 清理失败。 */
+  _failCleanup(name: string, result?: FakeCleanupResult | string): void;
+  _managerWatcherCount(): number;
   _setExecuteResult(result: { content: unknown[]; isError: boolean }): void;
+  /** 直接提交目录并发布 working-directory/change session/event。 */
+  _setWorkingDirectory(agent: FakeAgent, cwd: string): FakeEvent | undefined;
   /** 提交并发布一个 Turn 结束事件。 */
   _endTurn(agent: FakeAgent, kind?: 'completed' | 'error' | 'aborted'): void;
   _emit(type: string, ...args: unknown[]): void;
-  /** 依注册顺序执行一个 waterfall 事件。 */
-  _waterfall(type: string, payload: unknown, base: unknown): Promise<unknown>;
+  /** 依注册顺序执行一个 waterfall 事件，额外参数位于 next 之前。 */
+  _waterfall(type: string, payload: unknown, base: unknown, ...args: unknown[]): Promise<unknown>;
+  /** 构造并执行 system-prompt/assemble waterfall。 */
+  _assembleSystemPrompt(
+    input?: AssembledSection[] | PromptPresentation,
+    context?: AssembleContext,
+  ): Promise<PromptPresentation>;
   _dispose(): void;
 }
 
 /** 构造宿主 ctx 模拟。 */
 export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
+  const normalizeCleanup = (value: FakeCleanupResult | string): FakeCleanupResult =>
+    typeof value === 'string' ? { closeConfirmed: false, cleanupError: value } : value;
   const state = {
     _registeredTools: [] as RegisteredTool[],
+    _resourceTools: [] as RegisteredTool[],
+    _resourceProviders: [] as FakeMcpResourceRegistration[],
     _agents: [] as FakeAgent[],
     _effects: [] as string[],
     _listeners: new Map<string, Array<(...args: unknown[]) => void>>(),
@@ -171,6 +401,14 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
     _managerStatuses: new Map<string, McpManagedServerStatus>(
       Object.entries(options.statuses ?? {}),
     ),
+    _managerDisposals: [] as string[],
+    _managerCleanupFailures: new Map<string, FakeCleanupResult>(),
+    _workingDirectoryAccesses: [] as Array<{
+      agent: FakeAgent;
+      path: string | null;
+      signal: AbortSignal;
+    }>,
+    _promptSections: [...(options.promptSections ?? [])],
     _credentials: new Map<string, CredentialRecord>(),
     _configStore: {} as Record<string, unknown>,
     _configEdits: [] as Array<Record<string, unknown>>,
@@ -183,6 +421,125 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
   };
   const effectDisposers: Array<() => void> = [];
   const external = [...(options.external ?? [])];
+  const programmedCleanupFailures = new Map<string, FakeCleanupResult>(
+    Object.entries(options.cleanupFailures ?? {}).map(([name, result]) => [
+      name,
+      normalizeCleanup(result),
+    ]),
+  );
+  const managerWatchers = new Set<() => void>();
+  const managerLifetime = new AbortController();
+
+  const emit = (type: string, ...args: unknown[]): void => {
+    if (type === 'agent/created') {
+      const payload = args[0] as { agent?: FakeAgent };
+      if (payload.agent !== undefined) bindAgent(payload.agent);
+    }
+    for (const listener of state._listeners.get(type) ?? []) listener(...args);
+  };
+  const rawDefinitions = (): readonly RegisteredTool[] => [
+    ...state._registeredTools,
+    ...state._resourceTools,
+  ];
+  const bindAgent = (agent: FakeAgent): void => {
+    agentRoots.set(agent, { definitions: rawDefinitions, emit });
+  };
+  const notifyManager = (): void => {
+    for (const notify of [...managerWatchers]) notify();
+  };
+  const managerList = (): McpManagedServerView[] => {
+    const names = new Set([
+      ...state._managerRegistered.keys(),
+      ...external,
+      ...state._managerStatuses.keys(),
+    ]);
+    return [...names].map((name) => ({
+      name,
+      configured: !state._managerCleanupFailures.has(name),
+      status: state._managerStatuses.get(name) ?? {
+        state: 'closed',
+        result: { closeConfirmed: true },
+      },
+    })) as McpManagedServerView[];
+  };
+  const resolveResource = (
+    server: string,
+    request: McpResourceRequest,
+    exec: ToolExecution,
+  ): ReturnType<McpResourceProvider['request']> => {
+    const agent = exec.agent as FakeAgent | undefined;
+    const registration =
+      agent?._resourceProviders.find((candidate) => candidate.server === server) ??
+      state._resourceProviders.find((candidate) => candidate.server === server);
+    if (registration === undefined) {
+      throw new Error(`MCP resource server "${server}" is unavailable in this agent's scope`);
+    }
+    return registration.provider.request(request, exec);
+  };
+  state._resourceTools.push(...createResourceTools(resolveResource));
+
+  const runWaterfall = async (
+    type: string,
+    payload: unknown,
+    base: unknown,
+    ...args: unknown[]
+  ): Promise<unknown> => {
+    const listeners = state._listeners.get(type) ?? [];
+    const run = async (index: number): Promise<unknown> => {
+      const listener = listeners[index];
+      if (listener === undefined) {
+        return typeof base === 'function' ? (base as () => unknown)() : base;
+      }
+      return listener(payload, ...args, () => run(index + 1));
+    };
+    return run(0);
+  };
+  const commitWorkingDirectory = (agent: FakeAgent, cwd: string): FakeEvent | undefined => {
+    const previous = agent.cwd;
+    if (previous === cwd) return undefined;
+    agent.cwd = cwd;
+    const event = agent.session.append('working-directory/change', { cwd });
+    emit('session/event', agent.session, event);
+    agent.inject({
+      source: { kind: 'working-directory' },
+      content: [
+        {
+          type: 'text',
+          text: `The working directory changed from ${JSON.stringify(previous)} to ${JSON.stringify(cwd)}.`,
+        },
+      ],
+    });
+    return event;
+  };
+  const accessWorkingDirectory = async (
+    agent: FakeAgent,
+    path: string | null,
+    signal: AbortSignal | undefined,
+    commit: () => string,
+  ): Promise<string> => {
+    const control = signal ?? new AbortController().signal;
+    control.throwIfAborted();
+    const request = { agent, path, signal: control };
+    state._workingDirectoryAccesses.push(request);
+    return (await runWaterfall('working-directory/access', request, () => {
+      control.throwIfAborted();
+      return commit();
+    })) as string;
+  };
+  const assembleSystemPrompt = async (
+    input: AssembledSection[] | PromptPresentation = state._promptSections,
+    context: AssembleContext = {},
+  ): Promise<PromptPresentation> => {
+    const presentation: PromptPresentation = Array.isArray(input)
+      ? { sections: input, contexts: [], variables: {} }
+      : input;
+    return (await runWaterfall(
+      'system-prompt/assemble',
+      presentation,
+      presentation,
+      context,
+    )) as PromptPresentation;
+  };
 
   const logger = {
     debug: (...args: unknown[]) => state._loggerCalls.push({ level: 'debug', args }),
@@ -199,17 +556,24 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
     tools: {
       register(definition: RegisteredTool) {
         state._registeredTools.push(definition);
+        emit('tools/change');
         return () => {
           const index = state._registeredTools.indexOf(definition);
-          if (index >= 0) state._registeredTools.splice(index, 1);
+          if (index < 0) return;
+          state._registeredTools.splice(index, 1);
+          emit('tools/change');
         };
       },
-      schemas() {
-        return state._registeredTools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        }));
+      definitions(scope?: FakeAgent) {
+        return scope === undefined ? rawDefinitions() : scope.ctx.tools.definitions();
+      },
+      get(name: string, scope?: FakeAgent) {
+        return scope === undefined
+          ? rawDefinitions().find((tool) => tool.name === name)
+          : scope.ctx.tools.get(name);
+      },
+      schemas(scope?: FakeAgent) {
+        return toolSchemas(scope === undefined ? rawDefinitions() : scope.ctx.tools.definitions());
       },
       async execute(input: { calls: Array<{ name: string; arguments: string }> }) {
         const call = input.calls[0];
@@ -234,9 +598,43 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
         };
       },
     },
+    workingDirectory: {
+      defaultDirectory: process.cwd(),
+      get(session: FakeAgent['session']) {
+        return (
+          (sessionOwners.get(session) ?? state._agents.find((agent) => agent.session === session))
+            ?.cwd ?? process.cwd()
+        );
+      },
+      ensure(agent: FakeAgent, signal?: AbortSignal) {
+        return accessWorkingDirectory(agent, null, signal, () => agent.cwd);
+      },
+      set(agent: FakeAgent, path: string, signal?: AbortSignal) {
+        return accessWorkingDirectory(agent, path, signal, () => {
+          commitWorkingDirectory(agent, path);
+          return path;
+        });
+      },
+    },
+    systemPrompt: {
+      async assemble(context: AssembleContext = {}) {
+        const presentation = await assembleSystemPrompt(undefined, context);
+        const agent = context.agent as FakeAgent | undefined;
+        return {
+          ...presentation,
+          tools: toolSchemas(agent?.ctx.tools.definitions() ?? rawDefinitions()),
+        };
+      },
+    },
+    mcpResources: {
+      register(server: string, provider: McpResourceProvider) {
+        return registerResourceProvider(state._resourceProviders, server, provider);
+      },
+    },
     mcpManager: {
       register(name: string, entry: Record<string, unknown>) {
         state._managerRegistered.set(name, { entry });
+        state._managerCleanupFailures.delete(name);
         if (!state._managerStatuses.has(name)) {
           state._managerStatuses.set(name, {
             state: 'connected',
@@ -244,29 +642,52 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
             connectedAt: Date.now(),
           });
         }
+        notifyManager();
+        let active = true;
         return () => {
+          if (!active) return;
+          active = false;
+          state._managerDisposals.push(name);
           state._managerRegistered.delete(name);
-          state._managerStatuses.delete(name);
+          const failure = programmedCleanupFailures.get(name);
+          programmedCleanupFailures.delete(name);
+          if (failure === undefined) {
+            state._managerStatuses.delete(name);
+            state._managerCleanupFailures.delete(name);
+          } else {
+            state._managerCleanupFailures.set(name, failure);
+            state._managerStatuses.set(name, {
+              state: 'failed',
+              reason: 'cleanup',
+              result: failure,
+            });
+          }
+          notifyManager();
         };
       },
-      list(): McpManagedServerView[] {
-        const names = new Set([
-          ...state._managerRegistered.keys(),
-          ...external,
-          ...state._managerStatuses.keys(),
-        ]);
-        const views: McpManagedServerView[] = [];
-        for (const name of names) {
-          views.push({
-            name,
-            configured: true,
-            status: state._managerStatuses.get(name) ?? {
-              state: 'closed',
-              result: { closeConfirmed: true },
-            },
-          } as McpManagedServerView);
+      list: managerList,
+      async *watch(signal: AbortSignal): AsyncIterable<McpManagedServerView[]> {
+        const ended = AbortSignal.any([signal, managerLifetime.signal]);
+        let wake = Promise.withResolvers<void>();
+        let dirty = true;
+        const notify = (): void => {
+          dirty = true;
+          wake.resolve();
+        };
+        managerWatchers.add(notify);
+        ended.addEventListener('abort', notify, { once: true });
+        try {
+          while (!ended.aborted) {
+            if (!dirty) await wake.promise;
+            if (ended.aborted) break;
+            dirty = false;
+            wake = Promise.withResolvers<void>();
+            yield managerList();
+          }
+        } finally {
+          managerWatchers.delete(notify);
+          ended.removeEventListener('abort', notify);
         }
-        return views;
       },
     },
     credentials: {
@@ -309,7 +730,7 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
         (ctx as unknown as MockCtxState)._configEdits.push(structuredClone(next));
         if (options.config !== undefined) {
           options.config.servers.set(next.servers);
-          (ctx as unknown as MockCtxState)._emit('loader/volatile-update', [['servers']]);
+          emit('loader/volatile-update', [['servers']]);
         }
       },
     },
@@ -335,8 +756,15 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
       },
     },
     agents: {
-      get: (id: string) => state._agents.find((agent) => agent.id === id),
-      list: () => [...state._agents],
+      get: (id: string) => {
+        const agent = state._agents.find((candidate) => candidate.id === id);
+        if (agent !== undefined) bindAgent(agent);
+        return agent;
+      },
+      list: () => {
+        for (const agent of state._agents) bindAgent(agent);
+        return [...state._agents];
+      },
     },
     sessionProjections: {
       async register(definition: {
@@ -385,35 +813,28 @@ export function makeCtx(options: MockCtxOptions = {}): Context & MockCtxState {
   return Object.assign(ctx, state, {
     _setStatus(name: string, status: McpManagedServerStatus) {
       state._managerStatuses.set(name, status);
+      notifyManager();
     },
+    _failCleanup(name: string, result: FakeCleanupResult | string = 'simulated cleanup failure') {
+      programmedCleanupFailures.set(name, normalizeCleanup(result));
+    },
+    _managerWatcherCount: () => managerWatchers.size,
     _setExecuteResult(result: { content: unknown[]; isError: boolean }) {
       (
         ctx as unknown as { executeResult: { content: unknown[]; isError: boolean } }
       ).executeResult = result;
     },
+    _setWorkingDirectory: commitWorkingDirectory,
     _endTurn(agent: FakeAgent, kind = 'completed') {
-      const seq = agent.session.events.length;
       const turn = agent.session.events.filter((event) => event.type === 'turn/end').length + 1;
-      const event = { seq, type: 'turn/end', data: { turn, reason: { kind } } };
-      agent.session.events.push(event);
-      (ctx as unknown as MockCtxState)._emit('session/event', agent.session, event);
+      const event = agent.session.append('turn/end', { turn, reason: { kind } });
+      emit('session/event', agent.session, event);
     },
-    _emit(type: string, ...args: unknown[]) {
-      for (const listener of state._listeners.get(type) ?? []) listener(...args);
-    },
-    async _waterfall(type: string, payload: unknown, base: unknown): Promise<unknown> {
-      const listeners = state._listeners.get(type) ?? [];
-      const run = async (index: number): Promise<unknown> => {
-        const listener = listeners[index];
-        if (listener === undefined) return base;
-        return (listener as (payload: unknown, next: () => Promise<unknown>) => unknown)(
-          payload,
-          () => run(index + 1),
-        );
-      };
-      return run(0);
-    },
+    _emit: emit,
+    _waterfall: runWaterfall,
+    _assembleSystemPrompt: assembleSystemPrompt,
     _dispose() {
+      managerLifetime.abort();
       for (const disposer of effectDisposers.splice(0)) disposer();
     },
   }) as unknown as Context & MockCtxState;
