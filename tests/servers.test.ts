@@ -1,7 +1,7 @@
 // 服务器生命周期：挂载、卸载、快照与对账。
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PluginConfig } from '../src/config.ts';
+import { type PluginConfig, resolveConfig } from '../src/config.ts';
 import { recordKey } from '../src/credentials.ts';
 import { ServerManager, statusOf } from '../src/servers.ts';
 import { grantId } from '../src/utils.ts';
@@ -55,6 +55,35 @@ describe('mount', () => {
     expect(entry).not.toHaveProperty('lazy');
     expect(entry).not.toHaveProperty('auth');
     expect(entry).not.toHaveProperty('oauth');
+  });
+
+  it('注册参数使用可变副本，宿主 Schema 可填默认值且不修改冻结配置', async () => {
+    const ctx = makeCtx();
+    const config = resolveConfig({
+      servers: {
+        one: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          args: ['server.js'],
+          env: { RDT_FIXTURE_LOG: 'original' },
+          auth: 'none',
+        },
+      },
+    });
+    const manager = new ServerManager(ctx as never, () => config, { info: vi.fn(), warn: vi.fn() });
+    await manager.mount('one');
+    const entry = ctx._managerRegistered.get('one')?.entry;
+    const env = entry?.env as Record<string, string>;
+    const args = entry?.args as string[];
+    expect(Object.isFrozen(env)).toBe(false);
+    expect(Object.isFrozen(args)).toBe(false);
+    expect(() => {
+      env.RDT_FIXTURE_LOG = 'resolved';
+      args[0] = 'resolved.js';
+    }).not.toThrow();
+    expect(config.servers.one?.env?.RDT_FIXTURE_LOG).toBe('original');
+    expect(config.servers.one?.args?.[0]).toBe('server.js');
   });
 
   it('未授权时拒绝挂载 oauth 服务器', async () => {

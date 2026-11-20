@@ -176,7 +176,7 @@ export class ServerManager {
       ...rest
     } = definition;
     const entry: Record<string, unknown> = {
-      ...rest,
+      ...structuredClone(rest),
       ...(workspacePath === undefined ? {} : { cwd: workspacePath }),
     };
     if (auth === 'oauth' || auth === undefined) {
