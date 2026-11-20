@@ -114,7 +114,9 @@ function readNotices(value: unknown): WorkspaceNotice[] | undefined {
       !['active', 'inactive', 'workspace-cleanup', 'workspace-missing'].includes(kind as string) ||
       typeof serverName !== 'string' ||
       typeof workspace !== 'string' ||
-      !['connected', 'retained', 'closed', 'failed', 'cleanup-unknown'].includes(state as string) ||
+      !['active', 'connected', 'retained', 'closed', 'failed', 'cleanup-unknown'].includes(
+        state as string,
+      ) ||
       (detail !== undefined && typeof detail !== 'string')
     ) {
       return undefined;
@@ -224,6 +226,8 @@ export class VisibilityRuntime {
   private readonly pending = new WeakMap<Agent, Record<string, boolean>>();
   /** 每个 Agent 当前的工具限制。 */
   private readonly restrictions = new Map<Agent, Restriction>();
+  /** 每个 Agent 上次同步时的工作区服务器名。 */
+  private readonly workspaceServerNames = new Map<Agent, Set<string>>();
   /** 每个 Agent 尚未注入的工作区提醒。 */
   private readonly pendingNotices = new WeakMap<Agent, WorkspaceNotice[]>();
   /** 工作区提醒的单调标识。 */
@@ -378,10 +382,19 @@ export class VisibilityRuntime {
   /** 按当前可见性重算一个 Agent 的工具限制。 */
   sync(agent: Agent): void {
     if (this.disposed) return;
-    const serverNames = Object.keys(this.getSettings().servers);
+    const settings = this.getSettings();
+    const serverNames = Object.keys(settings.servers);
+    const workspaceServerNames = new Set(
+      serverNames.filter((serverName) => settings.servers[serverName]?.workspace === true),
+    );
+    for (const serverName of this.workspaceServerNames.get(agent) ?? []) {
+      if (workspaceServerNames.has(serverName)) continue;
+      this.workspace?.proxy.sync(agent, undefined, serverName);
+      this.workspace?.resources?.release(agent, serverName);
+    }
+    this.workspaceServerNames.set(agent, workspaceServerNames);
     const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
-    for (const serverName of serverNames) {
-      if (this.getSettings().servers[serverName]?.workspace !== true) continue;
+    for (const serverName of workspaceServerNames) {
       const route =
         workspaceKey === undefined || !this.isActive(agent, serverName)
           ? undefined
@@ -523,6 +536,7 @@ export class VisibilityRuntime {
   /** Agent 释放后丢弃其记录。 */
   forget(agent: Agent): void {
     this.restrictions.delete(agent);
+    this.workspaceServerNames.delete(agent);
     this.pending.delete(agent);
     this.pendingNotices.delete(agent);
     this.workspace?.proxy.disposeAgent(agent);
@@ -534,6 +548,7 @@ export class VisibilityRuntime {
     this.disposed = true;
     for (const restriction of this.restrictions.values()) release(restriction.dispose);
     this.restrictions.clear();
+    this.workspaceServerNames.clear();
   }
 }
 

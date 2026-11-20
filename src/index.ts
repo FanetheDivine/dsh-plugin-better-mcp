@@ -120,6 +120,7 @@ export function apply(ctx: Context, config?: unknown): void {
       const presentation = new WorkspacePresentationRuntime({
         currentWorkspaceKey,
         activeRoutes,
+        internalNames: () => pool.list().map((instance) => instance.internalName),
       });
       visibility = new VisibilityRuntime(
         scoped,

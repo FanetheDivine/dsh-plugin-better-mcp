@@ -17,12 +17,15 @@ describe('active 工作区提醒', () => {
       kind: 'active',
       serverName: 'serena',
       workspace: 'D:/Git/Project One',
-      state: 'connected',
+      state: 'active',
     });
 
     const text = renderWorkspaceNotice(notice);
     expect(text).toContain('<system-reminder>');
     expect(text).toContain('D:/Git/Project One');
+    expect(text).toContain('is active');
+    expect(text).not.toContain('is connected');
+    expect(text).not.toMatch(/the running MCP process/i);
     expect(text).toMatch(/Windows.*cwd/is);
     expect(text).toMatch(/inactive.*before deleting/is);
     expect(text).toMatch(/other active Agents.*occupy/is);

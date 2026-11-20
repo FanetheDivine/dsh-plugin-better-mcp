@@ -54,6 +54,13 @@ export function collectWorkspaceInternalToolNames(
   internalNames?: Iterable<string>,
 ): string[] {
   const names = internalNames === undefined ? undefined : [...new Set(internalNames)];
+  const configuredNames =
+    names === undefined
+      ? ctx.mcpManager
+          .list()
+          .filter((view) => view.configured)
+          .map((view) => view.name)
+      : undefined;
   return ctx.tools
     .definitions()
     .map((tool) => tool.name)
@@ -61,10 +68,10 @@ export function collectWorkspaceInternalToolNames(
       if (names !== undefined) {
         return names.some((internalName) => isInternalToolName(toolName, internalName));
       }
-      if (!toolName.startsWith('mcp__')) return false;
-      const rest = toolName.slice('mcp__'.length);
-      const separator = rest.indexOf('__');
-      return separator > 0 && isWorkspaceInternalName(rest.slice(0, separator));
+      return configuredNames?.some(
+        (internalName) =>
+          isWorkspaceInternalName(internalName) && isInternalToolName(toolName, internalName),
+      );
     })
     .sort();
 }

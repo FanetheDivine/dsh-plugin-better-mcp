@@ -292,6 +292,27 @@ describe('WorkspaceBindings 缺失检测', () => {
     ]);
     expect(onMissing).toHaveBeenCalledExactlyOnceWith(agent, '/tmp/missing', results);
   });
+
+  it('同一缺失目录只关闭、停用并提醒一次，目录恢复后可再次检测', async () => {
+    const agent = makeAgent('one', '/tmp/missing');
+    let exists = false;
+    const results = [cleanup('alpha', '/tmp/missing'), cleanup('beta', '/tmp/missing')];
+    const { pool, bindings, onDeactivate, onMissing } = harness(agent, () => exists);
+    pool.closeWorkspace.mockResolvedValue(results);
+
+    await expect(bindings.checkAgent(asAgent(agent))).resolves.toEqual(results);
+    await expect(bindings.checkAgent(asAgent(agent))).resolves.toBeUndefined();
+    expect(pool.closeWorkspace).toHaveBeenCalledTimes(1);
+    expect(onDeactivate).toHaveBeenCalledTimes(2);
+    expect(onMissing).toHaveBeenCalledTimes(1);
+
+    exists = true;
+    await expect(bindings.checkAgent(asAgent(agent))).resolves.toBeUndefined();
+    exists = false;
+    await expect(bindings.checkAgent(asAgent(agent))).resolves.toEqual(results);
+    expect(pool.closeWorkspace).toHaveBeenCalledTimes(2);
+    expect(onMissing).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('WorkspaceBindings 入口接线', () => {
@@ -384,6 +405,20 @@ describe('WorkspaceBindings 入口接线', () => {
         expect.objectContaining({ kind: 'workspace-missing', state: 'closed' }),
       );
       expect(JSON.stringify(catalog?.content)).toContain('is missing');
+      if (catalog === undefined) throw new Error('workspace-missing catalog missing');
+      agent._commit(catalog);
+
+      const repeated = (await ctx._waterfall(
+        'agent/pre-step',
+        { agent, messages: [] },
+        { kind: 'enter', messages: [] },
+      )) as { messages: Array<{ source: unknown }> };
+      expect(
+        repeated.messages.some(
+          (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+        ),
+      ).toBe(false);
+      expect(ctx._managerRegistered.size).toBe(0);
     } finally {
       ctx._dispose();
       rmSync(workspace, { recursive: true, force: true });

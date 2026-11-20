@@ -100,7 +100,7 @@ export class PluginRoutes {
     private readonly getSettings: SettingsReader,
     private readonly manager: ServerManager,
     private readonly waitIdle: () => Promise<void> = async () => undefined,
-    private readonly onAuthorizationChange: () => void = () => undefined,
+    private readonly onAfterChange: () => void = () => undefined,
     private readonly pool?: WorkspacePool,
   ) {}
 
@@ -301,7 +301,7 @@ export class PluginRoutes {
       if (body.all !== undefined && typeof body.all !== 'boolean') {
         return jsonResponse({ error: 'all must be a boolean' }, 400);
       }
-      if (body.all === true && workspace !== undefined) {
+      if (body.all !== undefined && workspace !== undefined) {
         return jsonResponse({ error: 'all and workspace cannot be used together' }, 400);
       }
       if (body.all === false && workspace === undefined) {
@@ -316,6 +316,7 @@ export class PluginRoutes {
           workspace !== undefined && message.startsWith('No workspace MCP instance') ? 404 : 409;
         return jsonResponse({ error: message }, status);
       }
+      this.onAfterChange();
       return jsonResponse(await this.currentSnapshot());
     }
     try {
@@ -521,7 +522,7 @@ export class PluginRoutes {
     await deleteGrant(this.ctx, serverName);
     await this.manager.refreshAuthorization(serverName);
     await this.manager.unmount(serverName);
-    this.onAuthorizationChange();
+    this.onAfterChange();
     return jsonResponse(await this.currentSnapshot());
   }
 
@@ -582,7 +583,7 @@ export class PluginRoutes {
         authorizedAt: Date.now(),
       });
       await this.manager.restart(context.serverName);
-      this.onAuthorizationChange();
+      this.onAfterChange();
       return { ok: true, detail: `Signed in for '${context.serverName}'. You can close this tab.` };
     } catch (error) {
       return { ok: false, detail: messageOf(error) };

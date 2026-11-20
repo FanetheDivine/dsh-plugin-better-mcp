@@ -20,12 +20,15 @@ export interface WorkspacePresentationView {
   readonly agent: Agent | undefined;
   readonly workspaceKey: string | undefined;
   readonly activeRoutes: Iterable<WorkspacePresentationRoute>;
+  /** 当前 pool 中的内部名；省略时按完整命名结构兼容纯函数调用。 */
+  readonly internalNames?: Iterable<string>;
 }
 
 /** 展示运行时读取 Agent 当前绑定与 active 路由。 */
 export interface WorkspacePresentationCallbacks {
   currentWorkspaceKey(agent: Agent): string | undefined;
   activeRoutes(agent: Agent): Iterable<WorkspacePresentationRoute>;
+  internalNames?(): Iterable<string>;
 }
 
 /** rc.5 资源服务器提示的固定前缀与结尾。 */
@@ -46,10 +49,12 @@ export class WorkspacePresentationRuntime {
   ): Promise<PromptPresentation> {
     const assembled = await next();
     const agent = context.agent;
+    const internalNames = this.callbacks.internalNames?.();
     return rewriteWorkspacePresentation(assembled, {
       agent,
       workspaceKey: agent === undefined ? undefined : this.callbacks.currentWorkspaceKey(agent),
       activeRoutes: agent === undefined ? [] : this.callbacks.activeRoutes(agent),
+      ...(internalNames === undefined ? {} : { internalNames }),
     });
   }
 }
@@ -60,17 +65,19 @@ export function rewriteWorkspacePresentation(
   view: WorkspacePresentationView,
 ): PromptPresentation {
   const routes = view.agent === undefined ? [] : [...view.activeRoutes];
+  const internalNames = view.internalNames === undefined ? undefined : new Set(view.internalNames);
   const currentRoutes = new Map(
     routes
       .filter(
         (route) =>
-          route.workspaceKey === view.workspaceKey && isWorkspaceInternalName(route.internalName),
+          route.workspaceKey === view.workspaceKey &&
+          isOwnedWorkspaceInternalName(route.internalName, internalNames),
       )
       .map((route) => [route.internalName, route.serverName]),
   );
   const sections: AssembledSection[] = [];
   for (const section of presentation.sections) {
-    const internalName = workspaceInstructionName(section);
+    const internalName = workspaceInstructionName(section, internalNames);
     if (internalName !== undefined) {
       const serverName = currentRoutes.get(internalName);
       if (serverName === undefined) continue;
@@ -82,7 +89,10 @@ export function rewriteWorkspacePresentation(
     }
     if (section.name === 'mcp-resource-servers') {
       const names = [...currentRoutes.values()];
-      sections.push({ ...section, text: rewriteResourceServerPrompt(section.text, names) });
+      sections.push({
+        ...section,
+        text: rewriteResourceServerPrompt(section.text, names, internalNames),
+      });
       continue;
     }
     sections.push(section);
@@ -91,10 +101,21 @@ export function rewriteWorkspacePresentation(
 }
 
 /** 返回本插件拥有的 instructions 内部名。 */
-function workspaceInstructionName(section: AssembledSection): string | undefined {
+function workspaceInstructionName(
+  section: AssembledSection,
+  internalNames: ReadonlySet<string> | undefined,
+): string | undefined {
   if (!section.name.startsWith('mcp:')) return undefined;
   const internalName = section.name.slice('mcp:'.length);
-  return isWorkspaceInternalName(internalName) ? internalName : undefined;
+  return isOwnedWorkspaceInternalName(internalName, internalNames) ? internalName : undefined;
+}
+
+/** 有 pool 名称集合时只识别集合成员，纯函数缺省调用保留结构判断。 */
+function isOwnedWorkspaceInternalName(
+  name: string,
+  internalNames: ReadonlySet<string> | undefined,
+): boolean {
+  return isWorkspaceInternalName(name) && (internalNames === undefined || internalNames.has(name));
 }
 
 /** rc.5 instructions 标题使用 `### MCP server: <name>`，正文保持原样。 */
@@ -105,11 +126,20 @@ function restoreInstructionTitle(text: string, internalName: string, serverName:
 }
 
 /** 从 rc.5 列表移除内部名，再加入当前 Agent 的 active 公开名。 */
-function rewriteResourceServerPrompt(text: string, activeNames: Iterable<string>): string {
+function rewriteResourceServerPrompt(
+  text: string,
+  activeNames: Iterable<string>,
+  internalNames: ReadonlySet<string> | undefined,
+): string {
   const sharedNames = parseResourceServerNames(text);
-  if (sharedNames === undefined) return text.includes('bm_') ? '' : text;
+  if (sharedNames === undefined) {
+    if (internalNames !== undefined) {
+      return [...internalNames].some((name) => text.includes(name)) ? '' : text;
+    }
+    return text.includes('bm_') ? '' : text;
+  }
   const names = new Set([
-    ...sharedNames.filter((name) => !isWorkspaceInternalName(name)),
+    ...sharedNames.filter((name) => !isOwnedWorkspaceInternalName(name, internalNames)),
     ...activeNames,
   ]);
   if (names.size === 0) return '';

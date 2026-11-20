@@ -127,11 +127,11 @@ description: "Task list for workspace-scoped MCP instances"
 
 **Purpose**: 文档、全量质量门禁和真实宿主验收
 
-- [ ] T029 [P] 更新用户功能与工作区 YAML 配置说明，修改 `README.md` 与 `docs/configuration.md`
-- [ ] T030 [P] 更新实例池、代理、生命周期、提醒、风险、测试和文件地图，修改 `docs/how-it-works.md`、`docs/known-risks.md` 与 `docs/development.md`
-- [ ] T031 运行 `pnpm format && pnpm full-check` 并修复全部问题，核对 `tests/package-pack.test.ts` 与构建产物新鲜度
-- [ ] T032 按 `specs/025-workspace-mcp/quickstart.md` 完成 rc.5 实机验证，覆盖 Serena、并行、inactive、共享占用、Windows 删除、resources、搜索与重连
-- [ ] T033 审查最终 diff、任务完成度和公开引用，更新 `CHANGELOG.md` 并准备交付
+- [X] T029 [P] 更新用户功能与工作区 YAML 配置说明，修改 `README.md` 与 `docs/configuration.md`
+- [X] T030 [P] 更新实例池、代理、生命周期、提醒、风险、测试和文件地图，修改 `docs/how-it-works.md`、`docs/known-risks.md` 与 `docs/development.md`
+- [X] T031 运行 `pnpm format && pnpm full-check` 并修复全部问题，核对 `tests/package-pack.test.ts` 与构建产物新鲜度
+- [X] T032 按 `specs/025-workspace-mcp/quickstart.md` 完成 rc.5 实机验证，覆盖 Serena、并行、inactive、共享占用、Windows 删除、resources、搜索与重连
+- [X] T033 审查最终 diff、任务完成度和公开引用，更新 `CHANGELOG.md` 并准备交付
 
 ---
 

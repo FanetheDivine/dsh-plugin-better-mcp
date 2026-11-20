@@ -8,6 +8,7 @@ import type {
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../src/types.ts';
+import { workspaceInternalName } from '../src/workspace-names.ts';
 import {
   collectWorkspaceInternalToolNames,
   discoverWorkspaceToolTargets,
@@ -106,6 +107,36 @@ describe('工作区工具发现', () => {
       `mcp__${INTERNAL}__write`,
     ]);
     expect(collectWorkspaceInternalToolNames(ctx, [INTERNAL, other])).toHaveLength(3);
+  });
+
+  it('按 configured 完整服务器名收集含双下划线配置名的内部工具', () => {
+    const internal = workspaceInternalName('foo__bar', WORKSPACE);
+    const shared = 'bm_shared_0123456789abcdef';
+    const ctx = makeCtx({
+      statuses: {
+        [internal]: { state: 'closed', result: { closeConfirmed: true } },
+        bm_shared: { state: 'closed', result: { closeConfirmed: true } },
+      },
+    });
+    const target = `mcp__${internal}__read_file`;
+    ctx._registeredTools.push(
+      tool(target),
+      tool(`mcp__${shared}__read_file`),
+      tool('mcp__bm_shared__read_file'),
+    );
+
+    expect(collectWorkspaceInternalToolNames(ctx)).toEqual([target]);
+  });
+
+  it('发现含双下划线配置名的 target 并还原完整公开名', () => {
+    const internal = workspaceInternalName('foo__bar', WORKSPACE);
+    const target = tool(`mcp__${internal}__read_file`);
+    const ctx = makeCtx();
+    ctx._registeredTools.push(target);
+
+    const discovered = discoverWorkspaceToolTargets(ctx, 'foo__bar', internal);
+    expect([...discovered.keys()]).toEqual(['mcp__foo__bar__read_file']);
+    expect(discovered.get('mcp__foo__bar__read_file')).toBe(target);
   });
 });
 

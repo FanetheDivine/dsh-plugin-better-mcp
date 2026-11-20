@@ -24,6 +24,12 @@
             command: npx
             args: ['-y', 'chrome-devtools-mcp@latest']
             lazy: false
+          serena:
+            description: 读取与编辑当前工作区项目
+            transport: stdio
+            command: uvx
+            args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server']
+            workspace: true
 ```
 
 ## 字段
@@ -40,11 +46,22 @@
 | `cwd` | stdio | 工作目录 |
 | `auth` | 可选 | `oauth` 或 `none`。http 默认 `oauth`，stdio 默认 `none` |
 | `lazy` | 可选 | 默认 `true`，新会话默认隐藏这台服务器的工具 |
+| `workspace` | 可选 | 仅 stdio，默认 `false`；启用后每个工作区使用独立实例并强制懒加载 |
 | `oauth.scopes` | 可选 | 请求的授权范围；留空用服务器建议值 |
 | `oauth.clientName` | 可选 | 动态注册身份，默认 `Codex`；选 DSH 时为 `DeepSeek Harness (better-mcp)` |
 | `oauth.clientId` | 可选 | 固定客户端标识；留空走动态注册 |
 | `oauth.redirectUri` | 可选 | 固定回调地址，必须是 `127.0.0.1` 或 `localhost` 的 http 地址 |
 | `oauth.clientSecret` | 兼容 | 旧配置的客户端密钥；面板会把它写入凭据库 |
+
+## 工作区级实例
+
+- 每个工作区按需启动一个实例，同一工作区的 Agent 共享实例。
+- 实例以所属工作区的规范化绝对路径为 `cwd`，覆盖定义中的 `cwd`。
+- 模型调用 `mcp_manage` active 时连接；inactive 时当前 Agent 的工具立即隐藏。
+- 没有其他 active Agent 使用实例时，inactive 会断连；其他 active Agent 会继续占用文件夹。
+- 删除文件夹前先将相关工作区服务器 inactive。active 与清理结果会写入 system-reminder。
+- 切换工作目录或检测到目录缺失时，实例关闭并写入提醒。
+- 面板的「连接情况」按成功和失败分组，支持路径搜索、全部重连和单工作区重连。
 
 ## Figma 官方 MCP
 

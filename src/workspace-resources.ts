@@ -114,7 +114,11 @@ export class WorkspaceResourceRuntime {
     exec: ToolExecution,
     next: () => Promise<PreToolDecision>,
   ): Promise<PreToolDecision> {
-    return guardWorkspaceResourceCall(exec) ?? next();
+    const internalNames = this.ctx.mcpManager
+      .list()
+      .filter((view) => view.configured)
+      .map((view) => view.name);
+    return guardWorkspaceResourceCall(exec, internalNames) ?? next();
   }
 
   /** 校验捕获身份，再通过根执行视图调用对应资源工具。 */
@@ -147,11 +151,13 @@ export class WorkspaceResourceRuntime {
 /** 拒绝三个全局资源工具直接访问本插件内部名。 */
 export function guardWorkspaceResourceCall(
   exec: Readonly<ToolExecution>,
+  internalNames?: Iterable<string>,
 ): PreToolDecision | undefined {
   if (!RESOURCE_TOOL_NAMES.includes(exec.name as ResourceToolName)) return undefined;
   if (typeof exec.arguments !== 'object' || exec.arguments === null) return undefined;
   const server = (exec.arguments as { server?: unknown }).server;
   if (typeof server !== 'string' || !isWorkspaceInternalName(server)) return undefined;
+  if (internalNames !== undefined && ![...internalNames].includes(server)) return undefined;
   return {
     kind: 'deny',
     reason: 'Direct access to workspace-internal MCP resource servers is not allowed.',

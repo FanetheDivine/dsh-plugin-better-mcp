@@ -12,6 +12,7 @@ import { workspaceInternalName } from '../src/workspace-names.ts';
 import { createWorkspaceCleanupNotice } from '../src/workspace-notices.ts';
 import { WorkspacePool } from '../src/workspace-pool.ts';
 import { WorkspaceProxyRuntime } from '../src/workspace-proxy.ts';
+import { WorkspaceResourceRuntime } from '../src/workspace-resources.ts';
 import { type FakeAgent, makeAgent, makeCtx, type RegisteredTool, volatile } from './helpers.ts';
 
 /** 两台服务器：lazy 默认不可见，eager 默认可见。 */
@@ -221,6 +222,81 @@ describe('工作区实例可见性', () => {
     expect(JSON.stringify(inactiveCatalog?.content)).toMatch(/can now be deleted/i);
   });
 
+  it('新增工作区配置后 active 同步 proxy 和 resource provider', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    runtime.config.servers.added = {
+      description: 'Added',
+      transport: 'stdio',
+      command: 'node',
+      auth: 'none',
+      lazy: true,
+      workspace: true,
+    };
+
+    runtime.visibility.syncAll();
+    await runtime.manage('added', 'active');
+    const internalName = workspaceInternalName('added', 'D:/Git/One');
+    runtime.ctx._registeredTools.push(mcpTool(`mcp__${internalName}__read`));
+    runtime.visibility.sync(runtime.agent);
+
+    expect(runtime.agent.ctx.tools.get('mcp__added__read')).toBeDefined();
+    expect(runtime.agent._resourceProviders.some((provider) => provider.server === 'added')).toBe(
+      true,
+    );
+  });
+
+  it.each(['delete', 'shared'] as const)(
+    '配置 %s 后释放每个 Agent 的旧 proxy 和 resource provider',
+    async (change) => {
+      const runtime = await setupWorkspaceRuntime();
+      const other = makeAgent('two', 'D:/Git/One');
+      runtime.ctx._agents.push(other);
+      runtime.ctx.agents.list();
+      runtime.visibility.sync(other);
+      await runtime.manage('serena', 'active');
+      await runtime.tool.execute({ server: 'serena', command: 'active' }, {
+        agent: other,
+        signal: new AbortController().signal,
+      } as never);
+      const internalName = workspaceInternalName('serena', 'D:/Git/One');
+      runtime.ctx._registeredTools.push(mcpTool(`mcp__${internalName}__read`));
+      runtime.visibility.syncAll();
+      for (const agent of [runtime.agent, other]) {
+        expect(agent.ctx.tools.get('mcp__serena__read')).toBeDefined();
+        expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(
+          true,
+        );
+      }
+
+      const sharedTool = mcpTool('mcp__serena__read');
+      if (change === 'shared') {
+        runtime.config.servers.serena = {
+          description: 'Serena',
+          transport: 'stdio',
+          command: 'node',
+          auth: 'none',
+          lazy: false,
+          workspace: false,
+        };
+        runtime.ctx._registeredTools.push(sharedTool);
+      } else {
+        delete runtime.config.servers.serena;
+      }
+      runtime.visibility.syncAll();
+
+      for (const agent of [runtime.agent, other]) {
+        expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(
+          false,
+        );
+        if (change === 'shared') {
+          expect(agent.ctx.tools.get('mcp__serena__read')).toBe(sharedTool);
+        } else {
+          expect(agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
+        }
+      }
+    },
+  );
+
   it('共享实例 retained 时只隐藏当前 Agent 并持久化占用警告', async () => {
     const runtime = await setupWorkspaceRuntime();
     const other = makeAgent('two', 'D:/Git/One');
@@ -293,6 +369,33 @@ describe('工作区实例可见性', () => {
     ).rejects.toThrow('does not exist');
     expect(runtime.visibility.isActive(fresh, 'serena')).toBe(false);
     expect(runtime.ctx._managerRegistered.size).toBe(2);
+  });
+
+  it('注册后仍在 connecting 时 active 提醒只表示已启用，不声称连接成功', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const { ctx } = runtime;
+    const internalName = workspaceInternalName('serena', 'D:/Git/One');
+    const register = ctx.mcpManager.register.bind(ctx.mcpManager);
+    vi.spyOn(ctx.mcpManager, 'register').mockImplementation((name, entry) => {
+      const dispose = register(name, entry);
+      if (name === internalName) ctx._setStatus(name, { state: 'connecting', attempt: 0 });
+      return dispose;
+    });
+
+    await expect(runtime.manage('serena', 'active')).resolves.toMatchObject({
+      active: true,
+      state: 'connecting',
+    });
+    const catalog = runtime.agent.inbox.nextStep.findLast(
+      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+    );
+    expect(catalog?.source).toMatchObject({
+      notices: expect.arrayContaining([
+        expect.objectContaining({ kind: 'active', serverName: 'serena', state: 'active' }),
+      ]),
+    });
+    expect(JSON.stringify(catalog?.content)).not.toContain('is connected');
+    expect(JSON.stringify(catalog?.content)).toMatch(/inactive.*before deleting/is);
   });
 
   it('恢复会话后的新 notice 不复用历史投影 id', async () => {
@@ -419,13 +522,19 @@ async function setupWorkspaceRuntime() {
   });
   const currentWorkspaceKey = (current: Agent) => ctx.workingDirectory.get(current.session);
   let visibility: VisibilityRuntime;
-  const proxy = new WorkspaceProxyRuntime(ctx, {
+  const proxyCallbacks = {
     currentWorkspaceKey,
-    isActive: (current, route) => visibility.isActive(current, route.serverName),
-    isGenerationCurrent: (route) =>
-      pool.isCurrent(route.serverName, route.workspaceKey, route.generation),
+    isActive: (current: Agent, route: { serverName: string }) =>
+      visibility.isActive(current, route.serverName),
+    isGenerationCurrent: (route: {
+      serverName: string;
+      workspaceKey: string;
+      generation: number;
+    }) => pool.isCurrent(route.serverName, route.workspaceKey, route.generation),
     workspaceExists: () => state.exists,
-  });
+  };
+  const proxy = new WorkspaceProxyRuntime(ctx, proxyCallbacks);
+  const resources = new WorkspaceResourceRuntime(ctx, proxyCallbacks);
   visibility = new VisibilityRuntime(
     ctx,
     () => config,
@@ -434,6 +543,7 @@ async function setupWorkspaceRuntime() {
     {
       pool,
       proxy,
+      resources,
       currentWorkspaceKey,
     },
   );

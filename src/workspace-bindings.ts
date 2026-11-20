@@ -38,6 +38,8 @@ export interface WorkspaceBindingsOptions {
 /** 维护 Agent 的目录引用，并在切换或缺失时使旧代理失效。 */
 export class WorkspaceBindings {
   private readonly bound = new WeakMap<Agent, string>();
+  /** 已完成的缺失目录清理，目录恢复或切换后允许再次检测。 */
+  private readonly missing = new WeakMap<Agent, string>();
   private readonly pool: WorkspaceBindingPool;
   private readonly getSettings: SettingsReader;
   private readonly currentWorkspaceKey: (agent: Agent) => string | undefined;
@@ -61,6 +63,7 @@ export class WorkspaceBindings {
 
   /** 建立当前目录的全部配置绑定，不创建 MCP 实例。 */
   created(agent: Agent): void {
+    this.missing.delete(agent);
     const workspace = this.workspaceOf(agent);
     if (workspace === undefined) return;
     this.bound.set(agent, workspace);
@@ -70,6 +73,7 @@ export class WorkspaceBindings {
   /** Agent 释放只移除其引用，保留工作区实例。 */
   disposed(agent: Agent): void {
     this.bound.delete(agent);
+    this.missing.delete(agent);
     this.pool.releaseAgent(agent);
   }
 
@@ -83,6 +87,7 @@ export class WorkspaceBindings {
     const oldWorkspace = knownWorkspace ?? this.workspaceOf(agent);
     const committed = await next();
     const newWorkspace = normalizeWorkspaceKey(this.currentWorkspaceKey(agent) ?? committed);
+    this.missing.delete(agent);
 
     if (oldWorkspace === newWorkspace) {
       if (knownWorkspace === undefined) {
@@ -123,7 +128,13 @@ export class WorkspaceBindings {
   /** 在下一步前检查目录；缺失时关闭实例并释放当前 Agent 的可见性。 */
   async checkAgent(agent: Agent): Promise<WorkspaceCleanupResult[] | undefined> {
     const workspace = this.workspaceOf(agent);
-    if (workspace === undefined || this.workspaceExists(workspace)) return undefined;
+    if (workspace === undefined) return undefined;
+    if (this.workspaceExists(workspace)) {
+      this.missing.delete(agent);
+      return undefined;
+    }
+    if (this.missing.get(agent) === workspace) return undefined;
+    this.missing.set(agent, workspace);
 
     const serverNames = this.workspaceServerNames();
     this.deactivateAll(agent, serverNames);

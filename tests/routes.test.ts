@@ -307,6 +307,29 @@ describe('status 与懒加载', () => {
       ).status,
     ).toBe(404);
   });
+
+  it.each([true, false])('all=%s 与 workspace 同时出现时返回 400', async (all) => {
+    const { ctx, pool } = harness({
+      serena: {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        workspace: true,
+      },
+    });
+    const restart = vi.spyOn(pool, 'restart');
+
+    const response = await call(ctx, '/api/better-mcp/restart', {
+      server: 'serena',
+      all,
+      workspace: '/tmp/one',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.json.error).toBe('all and workspace cannot be used together');
+    expect(restart).not.toHaveBeenCalled();
+  });
 });
 
 describe('服务器增删改', () => {

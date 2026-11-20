@@ -50,7 +50,7 @@ Record each undecided question with a stable id and its dependencies.
 - [D-018] Q: 同一工作区多个 Agent 共享实例时，一个 Agent inactive 是否立即断连？ -> A: 该 Agent 立即隐藏工具；仅当工作区没有其他 active Agent 时断连。提醒必须说明 inactive 后实例仍被其他 Agent 占用的情况。
 - 宿主 MCP 管理器按全局唯一服务器名注册实例。同名多实例需要额外的工作区路由与工具、提示、资源隔离。
 - 宿主没有内建工作区路径变量；stdio 支持 `cwd`、`args`、`env`，HTTP 支持 `url`、`headers`。
-- 当前开发依赖为 DSH `0.2.2-rc.3`，实机为 `0.2.2-rc.5`。涉及新增宿主接口时需要在计划阶段核对目标版本。
+- 开发依赖与实机宿主统一为 DSH `0.2.2-rc.5`。新增宿主接口按该版本的公开声明与源码契约实现。
 - 目录切换提交后可等待旧实例清理完成，再让切换工具返回。清理失败不改变已提交目录，并注入包含原因的提醒。
 - MCP Manager 的 disposer 不可等待；使用 `watch()` 确认内部名称消失或清理失败。
 - 成功清理确认插件拥有的直接 stdio 子进程已关闭。其他进程与分离孙进程仍可能占用文件夹。

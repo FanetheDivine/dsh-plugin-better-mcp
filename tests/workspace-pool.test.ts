@@ -124,6 +124,21 @@ describe('WorkspacePool acquire 与引用', () => {
     });
   });
 
+  it('从未 active 的共享绑定释放后返回 idle，不误报进程保留', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const first = asAgent(makeAgent('one'));
+    const second = asAgent(makeAgent('two'));
+    pool.bind(first, 'serena', '/tmp/project');
+    pool.bind(second, 'serena', '/tmp/project');
+
+    await expect(pool.releaseBinding(first, 'serena', '/tmp/project')).resolves.toMatchObject({
+      state: 'idle',
+    });
+    expect(ctx._managerRegistered.size).toBe(0);
+  });
+
   it('inactive 在共享引用存在时保留，最后引用释放后等待关闭', async () => {
     const ctx = makeCtx();
     const config = settings();
@@ -173,6 +188,22 @@ describe('WorkspacePool acquire 与引用', () => {
     await expect(pool.closeIfUnused('serena', '/tmp/project')).resolves.toMatchObject({
       state: 'closed',
     });
+  });
+
+  it('releaseAgent 清理无实例状态及其 generation，重开可从 1 开始', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent());
+    const before = await pool.acquireActive(agent, 'serena', '/tmp/project');
+    expect(before.generation).toBe(1);
+
+    await pool.releaseActive(agent, 'serena', '/tmp/project');
+    pool.releaseAgent(agent);
+    expect(pool.isCurrent('serena', '/tmp/project', before.generation)).toBe(false);
+
+    const reopened = await pool.acquireActive(agent, 'serena', '/tmp/project');
+    expect(reopened.generation).toBe(1);
   });
 });
 
@@ -230,6 +261,24 @@ describe('WorkspacePool 清理', () => {
     await vi.waitFor(() => expect(pool.list()).toEqual([]));
     expect(ctx._managerRegistered.size).toBe(0);
     expect(ctx._managerWatcherCount()).toBe(0);
+  });
+
+  it('closeWorkspace 清除失效引用并剪除状态，重复关闭与重开不复活旧 generation', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent());
+    const before = await pool.acquireActive(agent, 'serena', '/tmp/project');
+
+    await expect(pool.closeWorkspace('/tmp/project')).resolves.toEqual([
+      expect.objectContaining({ state: 'closed' }),
+    ]);
+    expect(pool.isCurrent('serena', '/tmp/project', before.generation)).toBe(false);
+    await expect(pool.closeWorkspace('/tmp/project')).resolves.toEqual([]);
+
+    const reopened = await pool.acquireActive(agent, 'serena', '/tmp/project');
+    expect(reopened.generation).toBe(1);
+    expect(reopened.activeAgents).toEqual(new Set([agent]));
   });
 
   it('dispose 关闭全部工作区实例', async () => {

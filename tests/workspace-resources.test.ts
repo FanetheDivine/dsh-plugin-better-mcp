@@ -25,6 +25,7 @@ const WORKSPACE_A = '/tmp/project-a';
 const WORKSPACE_B = '/tmp/project-b';
 const INTERNAL_A = workspaceInternalName('serena', WORKSPACE_A);
 const INTERNAL_B = workspaceInternalName('serena', WORKSPACE_B);
+const SHARED_INTERNAL_LIKE = 'bm_shared_0123456789abcdef';
 const ROUTE_A: WorkspaceResourceRoute = {
   serverName: 'serena',
   internalName: INTERNAL_A,
@@ -167,6 +168,21 @@ describe('工作区 system prompt 展示', () => {
     expect(result.sections[0]).toBe(shared);
     expect(result.sections[1]?.text).toBe('### MCP server: serena\n\nproject A');
     expect(result.sections[1]?.text).not.toContain(INTERNAL_A);
+  });
+
+  it('pool 内部名集合之外的形似共享名保留 instructions 与资源提示', async () => {
+    const agent = makeAgent('agent-a', WORKSPACE_A);
+    const shared = instructions(SHARED_INTERNAL_LIKE, 'shared instructions');
+    const runtime = new WorkspacePresentationRuntime({
+      currentWorkspaceKey: () => WORKSPACE_A,
+      activeRoutes: () => [],
+      internalNames: () => [INTERNAL_A],
+    });
+    const next = vi.fn(async () => presentation([shared, resourceServers([SHARED_INTERNAL_LIKE])]));
+
+    const result = await runtime.assemble(presentation([]), { agent } as AssembleContext, next);
+
+    expect(result.sections).toEqual([shared, resourceServers([SHARED_INTERNAL_LIKE])]);
   });
 
   it('无 Agent 或 inactive 时隐藏工作区 sections，共享 sections 保持原样', () => {
@@ -342,7 +358,12 @@ describe('工作区资源 pre-execute 守卫', () => {
       });
 
       const next = vi.fn(async (): Promise<PreToolDecision> => ({ kind: 'allow' }));
-      const runtime = new WorkspaceResourceRuntime(makeCtx(), {
+      const ctx = makeCtx({
+        statuses: {
+          [INTERNAL_A]: { state: 'closed', result: { closeConfirmed: true } },
+        },
+      });
+      const runtime = new WorkspaceResourceRuntime(ctx, {
         currentWorkspaceKey: () => undefined,
         isActive: () => false,
         isGenerationCurrent: () => false,
@@ -362,6 +383,7 @@ describe('工作区资源 pre-execute 守卫', () => {
     });
     for (const exec of [
       resourceExecution('list_mcp_resources', 'shared'),
+      resourceExecution('list_mcp_resources', SHARED_INTERNAL_LIKE),
       resourceExecution('read_mcp_resource', undefined),
       resourceExecution('mcp__shared__read', INTERNAL_A),
     ]) {

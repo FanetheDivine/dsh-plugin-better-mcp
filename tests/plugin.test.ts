@@ -177,6 +177,57 @@ describe('apply 接线', () => {
     expect(ctx._managerRegistered.size).toBe(0);
   });
 
+  it('工作区 restart 完成后立即同步 resource provider generation', async () => {
+    const config = refs({
+      serena: {
+        description: 'project tools',
+        transport: 'stdio',
+        command: 'node',
+        workspace: true,
+      },
+    });
+    const agent = makeAgent('workspace-agent', process.cwd());
+    const ctx = makeCtx({ config });
+    ctx._agents.push(agent);
+    const internalName = workspaceInternalName('serena', process.cwd());
+    ctx._registeredTools.push({
+      name: `mcp__${internalName}__read`,
+      description: 'read project',
+      parameters: {},
+      output: { schema: {}, render: () => [] },
+      execute: async () => 'ok',
+    });
+    apply(ctx, config);
+    await vi.waitFor(() =>
+      expect(ctx._registeredTools.some((tool) => tool.name === 'mcp_manage')).toBe(true),
+    );
+    const manage = ctx._registeredTools.find((tool) => tool.name === 'mcp_manage');
+    await manage?.execute({ server: 'serena', command: 'active' }, {
+      agent,
+      signal: new AbortController().signal,
+    } as never);
+    const before = agent._resourceProviders.find((provider) => provider.server === 'serena');
+    expect(before).toBeDefined();
+
+    const route = ctx._fetchRoutes.find(
+      (candidate) => candidate.path === '/api/better-mcp/restart',
+    );
+    if (route === undefined) throw new Error('restart route missing');
+    const response = await (route.fetch as (request: Request) => Promise<Response>)(
+      new Request('http://localhost/api/better-mcp/restart', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ server: 'serena', all: true }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const after = agent._resourceProviders.find((provider) => provider.server === 'serena');
+    expect(after).toBeDefined();
+    expect(after).not.toBe(before);
+    ctx._dispose();
+  });
+
   it('三个工作区并行调用保持同名代理路由与单实例故障隔离', async () => {
     const config = refs({
       serena: {

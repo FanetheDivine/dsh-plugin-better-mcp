@@ -13,7 +13,7 @@ export interface WorkspaceNotice {
   readonly kind: 'active' | 'inactive' | 'workspace-cleanup' | 'workspace-missing';
   readonly serverName: string;
   readonly workspace: string;
-  readonly state: 'connected' | 'retained' | 'closed' | 'failed' | 'cleanup-unknown';
+  readonly state: 'active' | 'connected' | 'retained' | 'closed' | 'failed' | 'cleanup-unknown';
   readonly detail?: string;
 }
 
@@ -38,11 +38,11 @@ export function createActiveWorkspaceNotice(
     kind: 'active',
     serverName,
     workspace,
-    state: 'connected',
+    state: 'active',
     detail:
-      'On Windows, the running MCP process uses this workspace as its cwd and occupies the folder. ' +
+      'When this MCP server runs on Windows, its process uses this workspace as its cwd and can occupy the folder. ' +
       `Set '${serverName}' inactive before deleting the folder. ` +
-      'Other active Agents sharing this workspace also occupy the folder.',
+      'Other active Agents sharing this workspace may also occupy the folder.',
   };
 }
 

@@ -89,14 +89,25 @@ export class WorkspacePool {
   private serialized<T>(key: string, operation: () => Promise<T>): Promise<T> {
     const previous = this.chains.get(key) ?? Promise.resolve();
     const next = previous.then(operation, operation);
-    this.chains.set(
-      key,
-      next.then(
-        () => undefined,
-        () => undefined,
-      ),
+    const chain = next.then(
+      () => undefined,
+      () => undefined,
     );
+    this.chains.set(key, chain);
+    void chain.then(() => this.finishChain(key, chain));
     return next;
+  }
+
+  /** 串行链结束后清理无引用状态；仍有后续操作时交给最新链收尾。 */
+  private finishChain(key: string, chain: Promise<void>): void {
+    if (this.chains.get(key) !== chain) return;
+    this.chains.delete(key);
+    const state = this.states.get(key);
+    if (state === undefined) {
+      this.generations.delete(key);
+      return;
+    }
+    this.prune(state);
   }
 
   /** 读取或建立只含引用的键状态，不注册 MCP 实例。 */
@@ -136,16 +147,23 @@ export class WorkspacePool {
     return generation;
   }
 
-  /** 删除没有引用和注册的空状态。 */
+  /** 删除没有引用和注册的空状态，并在串行链结束后释放其换代记录。 */
   private prune(state: KeyState): void {
     if (
-      state.instance === undefined &&
-      state.boundAgents.size === 0 &&
-      state.activeAgents.size === 0 &&
-      this.states.get(state.key) === state
+      state.instance !== undefined ||
+      state.boundAgents.size !== 0 ||
+      state.activeAgents.size !== 0 ||
+      this.states.get(state.key) !== state
     ) {
-      this.states.delete(state.key);
+      return;
     }
+    const chain = this.chains.get(state.key);
+    if (chain !== undefined) {
+      void chain.then(() => this.finishChain(state.key, chain));
+      return;
+    }
+    this.states.delete(state.key);
+    this.generations.delete(state.key);
   }
 
   /** 将私有状态转换为稳定的路由身份快照。 */
@@ -409,14 +427,19 @@ export class WorkspacePool {
     }
     state.boundAgents.delete(agent);
     state.activeAgents.delete(agent);
+    if (state.instance === undefined) {
+      this.prune(state);
+      return this.cleanupResult(state, 'idle');
+    }
     return this.closeIfUnused(state.serverName, state.workspaceKey);
   }
 
   /** 释放 Agent 的全部引用并保留实例，供后续 Agent 复用。 */
   releaseAgent(agent: Agent): void {
-    for (const state of this.states.values()) {
+    for (const state of [...this.states.values()]) {
       state.boundAgents.delete(agent);
       state.activeAgents.delete(agent);
+      this.prune(state);
     }
   }
 
@@ -434,14 +457,18 @@ export class WorkspacePool {
     return this.closeState(state);
   }
 
-  /** 强制关闭一个规范化工作区中的全部实例。 */
+  /** 强制关闭一个规范化工作区中的全部实例，并清除已失效目录的全部引用。 */
   async closeWorkspace(workspace: string): Promise<WorkspaceCleanupResult[]> {
     const workspaceKey = normalizeWorkspaceKey(workspace);
     const states = [...this.states.values()].filter(
       (state) =>
         state.workspaceKey === workspaceKey &&
-        (state.instance !== undefined || state.activeAgents.size > 0),
+        (state.instance !== undefined || state.boundAgents.size > 0 || state.activeAgents.size > 0),
     );
+    for (const state of states) {
+      state.boundAgents.clear();
+      state.activeAgents.clear();
+    }
     return Promise.all(states.map((state) => this.closeState(state)));
   }
 
