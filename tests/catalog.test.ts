@@ -2,6 +2,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { catalogMessage, renderCatalog, renderCatalogUpdate, sameEntries } from '../src/catalog.ts';
+import type { WorkspaceNotice } from '../src/workspace-notices.ts';
+
+const NOTICES: WorkspaceNotice[] = [
+  {
+    id: 4,
+    kind: 'inactive',
+    serverName: 'serena',
+    workspace: 'D:/Git/Project',
+    state: 'retained',
+    detail: 'Other active Agents still occupy this folder. Do not delete it.',
+  },
+];
 
 const ENTRIES = [
   { name: 'chrome', description: 'Control a <browser> & tabs', active: false },
@@ -17,6 +29,12 @@ describe('renderCatalog', () => {
     expect(text).toContain('- `figma` (active): Read designs');
     expect(text).toContain('mcp__<server>__<tool>');
     expect(text).toContain('`mcp_manage`');
+  });
+
+  it('把工作区提醒持久化在同一 system-reminder 消息中', () => {
+    const text = renderCatalog(ENTRIES, NOTICES);
+    expect(text).toContain("Workspace MCP 'serena' at 'D:/Git/Project' is retained.");
+    expect(text).toContain('Other active Agents still occupy this folder. Do not delete it.');
   });
 });
 
@@ -52,6 +70,13 @@ describe('renderCatalogUpdate', () => {
     expect(text).toContain('(none)');
     expect(text).toContain('No MCP servers are available.');
   });
+
+  it('entries 不变也渲染新的工作区提醒', () => {
+    const text = renderCatalogUpdate(ENTRIES, ENTRIES, NOTICES);
+    expect(text).toContain('The MCP server list changed.');
+    expect(text).toContain("Workspace MCP 'serena'");
+    expect(text).toContain('Do not delete it.');
+  });
 });
 
 describe('catalogMessage', () => {
@@ -68,6 +93,13 @@ describe('catalogMessage', () => {
     });
     expect(Object.isFrozen(message.source)).toBe(true);
     expect(catalogMessage('t', [], {}, false).source).not.toHaveProperty('update');
+  });
+
+  it('记录随目录提交的工作区提醒并冻结其结构', () => {
+    const message = catalogMessage('text', ENTRIES, { figma: true }, true, NOTICES);
+    expect(message.source).toMatchObject({ notices: NOTICES });
+    expect(Object.isFrozen((message.source as { notices: unknown[] }).notices)).toBe(true);
+    expect(catalogMessage('text', ENTRIES, {}, false).source).not.toHaveProperty('notices');
   });
 
   it('sameEntries 比较完整目录', () => {

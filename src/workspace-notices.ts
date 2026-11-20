@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { UserMessage } from './types.ts';
+import type { WorkspaceCleanupResult } from './workspace-pool.ts';
 
 /** 工作区提醒来源标识。 */
 export const WORKSPACE_NOTICE_SOURCE = 'better-mcp-workspace';
@@ -15,6 +16,9 @@ export interface WorkspaceNotice {
   readonly state: 'connected' | 'retained' | 'closed' | 'failed' | 'cleanup-unknown';
   readonly detail?: string;
 }
+
+/** 由 VisibilityRuntime 分配 id 的提醒草稿。 */
+export type WorkspaceNoticeDraft = Omit<WorkspaceNotice, 'id'>;
 
 /** 工作区提醒消息来源。 */
 export interface WorkspaceNoticeSource {
@@ -40,6 +44,59 @@ export function createActiveWorkspaceNotice(
       `Set '${serverName}' inactive before deleting the folder. ` +
       'Other active Agents sharing this workspace also occupy the folder.',
   };
+}
+
+/** 创建 inactive 的共享占用或关闭结果提醒。 */
+export function createInactiveWorkspaceNotice(
+  result: WorkspaceCleanupResult,
+): WorkspaceNoticeDraft {
+  return {
+    kind: 'inactive',
+    serverName: result.serverName,
+    workspace: result.workspace,
+    state: result.state === 'idle' ? 'closed' : result.state,
+    detail: cleanupDetail(result),
+  };
+}
+
+/** 创建目录切换或缺失时的清理提醒，供 bindings 排队。 */
+export function createWorkspaceCleanupNotice(
+  result: WorkspaceCleanupResult,
+  kind: 'workspace-cleanup' | 'workspace-missing' = 'workspace-cleanup',
+): WorkspaceNoticeDraft {
+  return {
+    kind,
+    serverName: result.serverName,
+    workspace: result.workspace,
+    state: result.state === 'idle' ? 'closed' : result.state,
+    detail: cleanupDetail(result, true),
+  };
+}
+
+/** 关闭结果只说明插件直接子进程，不担保其他进程已经释放目录。 */
+function cleanupDetail(result: WorkspaceCleanupResult, binding = false): string {
+  if (result.state === 'retained') {
+    if (binding) {
+      return (
+        'Other Agents remain bound to this workspace, so its MCP instance still occupies the folder. ' +
+        'Do not delete the folder until those bindings are released and cleanup is confirmed.'
+      );
+    }
+    return (
+      'The current Agent is inactive and its tools are hidden, but other active Agents still occupy this folder. ' +
+      'Do not delete the folder until every sharing Agent is inactive and cleanup is confirmed.'
+    );
+  }
+  if (result.state === 'failed') {
+    return `MCP cleanup failed: ${result.error ?? 'unknown error'}. Do not delete the folder; this result is not deletion permission.`;
+  }
+  if (result.state === 'cleanup-unknown') {
+    return `MCP cleanup did not confirm process closure: ${result.error ?? 'confirmation is still pending'}. Do not delete the folder; this result is not deletion permission.`;
+  }
+  return (
+    "The plugin-owned MCP server's direct stdio child process has closed. " +
+    'The folder can now be deleted if no other processes occupy it.'
+  );
 }
 
 /** 将结构化提醒渲染为 system-reminder。 */

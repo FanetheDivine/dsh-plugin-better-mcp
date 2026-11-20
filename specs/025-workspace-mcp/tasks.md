@@ -73,16 +73,16 @@ description: "Task list for workspace-scoped MCP instances"
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] 编写 inactive、Turn 结束、共享 active、Agent 释放和 Turn 后提醒的失败测试，修改 `tests/workspace-pool.test.ts`、`tests/workspace-notices.test.ts` 与 `tests/visibility.test.ts`
-- [ ] T015 [P] [US2] 编写目录切换关闭屏障、切换后错误不回滚、缺失检测、清理超时与旧代理失效的失败测试，新增 `tests/workspace-bindings.test.ts`
+- [X] T014 [P] [US2] 编写 inactive、Turn 结束、共享 active、Agent 释放和 Turn 后提醒的失败测试，修改 `tests/workspace-pool.test.ts`、`tests/workspace-notices.test.ts` 与 `tests/visibility.test.ts`
+- [X] T015 [P] [US2] 编写目录切换关闭屏障、切换后错误不回滚、缺失检测、清理超时与旧代理失效的失败测试，新增 `tests/workspace-bindings.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] 实现 inactive 与 Turn 结束的 active 引用释放、无引用关闭、共享占用状态和 Agent 释放保留，修改 `src/workspace-pool.ts`、`src/visibility.ts` 与 `src/tools.ts`
-- [ ] T017 [US2] 实现 working-directory/access 提交后绑定切换、无绑定旧工作区全部关闭和 watch 等待，新增 `src/workspace-bindings.ts`
-- [ ] T018 [US2] 在下一步与 active 前检测目录缺失并关闭失效实例，修改 `src/workspace-bindings.ts`、`src/workspace-pool.ts` 与 `src/index.ts`
-- [ ] T019 [US2] 扩展 CatalogSource、投影、渲染与去重，持久化 active/inactive/共享占用/切换/缺失/清理失败提醒，修改 `src/catalog.ts`、`src/visibility.ts` 与 `src/workspace-notices.ts`
-- [ ] T020 [US2] 串联关闭结果、面板错误和提醒，确保提交后清理异常不改变新 cwd，修改 `src/index.ts` 与 `tests/plugin.test.ts`
+- [X] T016 [US2] 实现 inactive 与 Turn 结束的 active 引用释放、无引用关闭、共享占用状态和 Agent 释放保留，修改 `src/workspace-pool.ts`、`src/visibility.ts` 与 `src/tools.ts`
+- [X] T017 [US2] 实现 working-directory/access 提交后绑定切换、无绑定旧工作区全部关闭和 watch 等待，新增 `src/workspace-bindings.ts`
+- [X] T018 [US2] 在下一步与 active 前检测目录缺失并关闭失效实例，修改 `src/workspace-bindings.ts`、`src/workspace-pool.ts` 与 `src/index.ts`
+- [X] T019 [US2] 扩展 CatalogSource、投影、渲染与去重，持久化 active/inactive/共享占用/切换/缺失/清理失败提醒，修改 `src/catalog.ts`、`src/visibility.ts` 与 `src/workspace-notices.ts`
+- [X] T020 [US2] 串联关闭结果、面板错误和提醒，确保提交后清理异常不改变新 cwd，修改 `src/index.ts` 与 `tests/plugin.test.ts`
 
 **Checkpoint**: US2 独立可用，Windows 删除时序测试通过，提交 Phase 4 commit
 

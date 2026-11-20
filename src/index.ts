@@ -13,7 +13,9 @@ import { ServerManager } from './servers.ts';
 import { buildManageTool } from './tools.ts';
 import type { Agent, Context, PluginLogger } from './types.ts';
 import { VisibilityRuntime } from './visibility.ts';
+import { WorkspaceBindings } from './workspace-bindings.ts';
 import { normalizeWorkspaceKey } from './workspace-names.ts';
+import { createWorkspaceCleanupNotice } from './workspace-notices.ts';
 import { WorkspacePool } from './workspace-pool.ts';
 import { WorkspacePresentationRuntime } from './workspace-presentation.ts';
 import { type WorkspaceProxyRoute, WorkspaceProxyRuntime } from './workspace-proxy.ts';
@@ -125,6 +127,37 @@ export function apply(ctx: Context, config?: unknown): void {
         (serverName) => manager.isAuthorized(serverName),
         { pool, proxy, resources, currentWorkspaceKey },
       );
+      const bindings = new WorkspaceBindings({
+        pool,
+        getSettings: () => settings,
+        currentWorkspaceKey,
+        workspaceExists,
+        onDeactivate: (agent, serverName) => visibility.setActive(agent, serverName, false),
+      });
+      bindings.onCleanup = (agent, oldWorkspace, newWorkspace, results) => {
+        for (const result of results) {
+          const notice = createWorkspaceCleanupNotice(result);
+          const occupancy =
+            result.state === 'retained'
+              ? 'Other Agents remain bound to the old workspace, so its MCP instance is still running and the folder remains occupied.'
+              : notice.detail;
+          visibility.queueWorkspaceNotice(agent, {
+            ...notice,
+            detail:
+              `The working directory changed from '${oldWorkspace}' to '${newWorkspace}'. ` +
+              (occupancy ?? ''),
+          });
+        }
+      };
+      bindings.onMissing = (agent, workspace, results) => {
+        for (const result of results) {
+          const notice = createWorkspaceCleanupNotice(result, 'workspace-missing');
+          visibility.queueWorkspaceNotice(agent, {
+            ...notice,
+            detail: `Workspace folder '${workspace}' is missing. ${notice.detail ?? ''}`,
+          });
+        }
+      };
       await visibility.start();
       await manager.refreshAuthorizationAll();
       scoped.effect(() => {
@@ -147,19 +180,22 @@ export function apply(ctx: Context, config?: unknown): void {
         'better-mcp: mcp_manage',
       );
       scoped.on('agent/created', ({ agent }) => {
+        bindings.created(agent);
         visibility.sync(agent);
         return undefined;
       });
       scoped.on('agent/disposed', ({ agent }) => {
         visibility.forget(agent);
-        pool.releaseAgent(agent);
+        bindings.disposed(agent);
       });
+      scoped.on('working-directory/access', (request, next) => bindings.access(request, next));
       scoped.on('session/event', (session, event) => {
         if (event.type !== 'turn/end') return;
         const agent = scoped.agents.get(session.id);
         if (agent !== undefined) visibility.deactivateAfterTurn(agent);
       });
       scoped.on('agent/pre-step', async ({ agent }, next) => {
+        await bindings.checkAgent(agent);
         const decision = await next();
         if (decision.kind === 'reject') return decision;
         const catalog = visibility.catalogFor(agent);
@@ -175,6 +211,7 @@ export function apply(ctx: Context, config?: unknown): void {
       );
       scoped.on('tools/pre-execute', (execution, next) => resources.preExecute(execution, next));
       scoped.on('tools/change', () => visibility.scheduleSyncAll());
+      for (const agent of scoped.agents.list()) bindings.created(agent);
       visibility.syncAll();
     },
   );

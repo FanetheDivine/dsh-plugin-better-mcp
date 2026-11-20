@@ -9,6 +9,7 @@ import { buildManageTool } from '../src/tools.ts';
 import type { Agent } from '../src/types.ts';
 import { serverOfTool, VisibilityRuntime } from '../src/visibility.ts';
 import { workspaceInternalName } from '../src/workspace-names.ts';
+import { createWorkspaceCleanupNotice } from '../src/workspace-notices.ts';
 import { WorkspacePool } from '../src/workspace-pool.ts';
 import { WorkspaceProxyRuntime } from '../src/workspace-proxy.ts';
 import { type FakeAgent, makeAgent, makeCtx, type RegisteredTool, volatile } from './helpers.ts';
@@ -190,11 +191,16 @@ describe('工作区实例可见性', () => {
       `mcp__${serenaInternal}__read`,
       'mcp__shared__lazy',
     ]);
-    const activeNotice = agent.inbox.nextStep.find(
-      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-workspace',
+    const activeCatalog = agent.inbox.nextStep.findLast(
+      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
     );
-    expect(JSON.stringify(activeNotice)).toContain('<system-reminder>');
-    expect(JSON.stringify(activeNotice)).toMatch(/Windows.*cwd.*inactive.*other active Agents/is);
+    expect(activeCatalog?.source).toMatchObject({
+      notices: expect.arrayContaining([
+        expect.objectContaining({ kind: 'active', serverName: 'serena' }),
+      ]),
+    });
+    expect(JSON.stringify(activeCatalog)).toContain('<system-reminder>');
+    expect(JSON.stringify(activeCatalog)).toMatch(/Windows.*cwd.*inactive.*other active Agents/is);
 
     await expect(manage('serena', 'inactive')).resolves.toMatchObject({
       active: false,
@@ -204,6 +210,51 @@ describe('工作区实例可见性', () => {
     expect(agent.ctx.tools.get('mcp__project__search')).toBeDefined();
     expect(ctx._managerRegistered.has(serenaInternal)).toBe(false);
     expect(ctx._managerRegistered.has(projectInternal)).toBe(true);
+    const inactiveCatalog = agent.inbox.nextStep.findLast(
+      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+    );
+    expect(inactiveCatalog?.source).toMatchObject({
+      notices: expect.arrayContaining([
+        expect.objectContaining({ kind: 'inactive', state: 'closed' }),
+      ]),
+    });
+    expect(JSON.stringify(inactiveCatalog?.content)).toMatch(/can now be deleted/i);
+  });
+
+  it('共享实例 retained 时只隐藏当前 Agent 并持久化占用警告', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const other = makeAgent('two', 'D:/Git/One');
+    runtime.ctx._agents.push(other);
+    runtime.ctx.agents.list();
+    runtime.visibility.sync(other);
+    await runtime.manage('serena', 'active');
+    await runtime.tool.execute({ server: 'serena', command: 'active' }, {
+      agent: other,
+      signal: new AbortController().signal,
+    } as never);
+    runtime.ctx._registeredTools.push(
+      mcpTool(`mcp__${workspaceInternalName('serena', 'D:/Git/One')}__read`),
+    );
+    runtime.visibility.sync(runtime.agent);
+    runtime.visibility.sync(other);
+
+    await expect(runtime.manage('serena', 'inactive')).resolves.toMatchObject({
+      active: false,
+      state: 'connected',
+      detail: 'Other active Agents still occupy this workspace.',
+    });
+
+    expect(runtime.agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
+    expect(other.ctx.tools.get('mcp__serena__read')).toBeDefined();
+    expect(runtime.ctx._managerRegistered.size).toBe(1);
+    const catalog = runtime.agent.inbox.nextStep.findLast(
+      (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+    );
+    expect(catalog?.source).toMatchObject({
+      notices: expect.arrayContaining([expect.objectContaining({ state: 'retained' })]),
+    });
+    expect(JSON.stringify(catalog?.content)).toMatch(/other active Agents.*still occupy/is);
+    expect(JSON.stringify(catalog?.content)).toMatch(/Do not delete/i);
   });
 
   it('状态只读取当前工作区，active 失败时保持 inactive', async () => {
@@ -242,6 +293,86 @@ describe('工作区实例可见性', () => {
     ).rejects.toThrow('does not exist');
     expect(runtime.visibility.isActive(fresh, 'serena')).toBe(false);
     expect(runtime.ctx._managerRegistered.size).toBe(2);
+  });
+
+  it('恢复会话后的新 notice 不复用历史投影 id', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const { agent } = runtime;
+    await step(runtime.ctx, agent);
+    runtime.visibility.queueWorkspaceNotice(
+      agent as never,
+      createWorkspaceCleanupNotice({
+        serverName: 'serena',
+        workspace: 'D:/Git/One',
+        state: 'closed',
+      }),
+    );
+    const historical = agent.inbox.nextStep.at(-1);
+    if (historical === undefined) throw new Error('historical notice missing');
+    agent._commit(historical);
+
+    const restored = makeAgent('restored', 'D:/Git/One');
+    restored.session.events.push(...agent.session.events);
+    restored.session.surface.nodes.push(...agent.session.surface.nodes);
+    const restoredVisibility = new VisibilityRuntime(runtime.ctx, () => runtime.config, {
+      info: vi.fn(),
+      warn: vi.fn(),
+    });
+    await restoredVisibility.start();
+    restoredVisibility.queueWorkspaceNotice(
+      restored as never,
+      createWorkspaceCleanupNotice({
+        serverName: 'project',
+        workspace: 'D:/Git/One',
+        state: 'failed',
+        error: 'new failure',
+      }),
+    );
+
+    const catalog = restoredVisibility.catalogFor(restored as never);
+    if (catalog === undefined) throw new Error('restored notice catalog missing');
+    expect(catalog.source).toMatchObject({
+      notices: [
+        expect.objectContaining({
+          serverName: 'project',
+          detail: expect.stringMatching(/new failure/),
+        }),
+      ],
+    });
+    const nextId = (catalog.source as { notices: Array<{ id: number }> }).notices[0]?.id ?? 0;
+    const historicalId =
+      (historical.source as { notices: Array<{ id: number }> }).notices[0]?.id ?? 0;
+    expect(nextId).toBeGreaterThan(historicalId);
+  });
+
+  it('entries 不变也发布 notice，pending notice 在投影确认前可重建且 notify 去重', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const { agent, visibility } = runtime;
+    await step(runtime.ctx, agent);
+    visibility.queueWorkspaceNotice(
+      agent as never,
+      createWorkspaceCleanupNotice({
+        serverName: 'serena',
+        workspace: 'D:/Git/One',
+        state: 'closed',
+      }),
+    );
+
+    expect(agent.inbox.nextStep).toHaveLength(1);
+    visibility.notify(agent as never);
+    expect(agent.inbox.nextStep).toHaveLength(1);
+    const first = visibility.catalogFor(agent as never);
+    const rebuilt = visibility.catalogFor(agent as never);
+    if (first === undefined || rebuilt === undefined) throw new Error('notice catalog missing');
+    expect(first.source).toMatchObject({
+      notices: [expect.objectContaining({ kind: 'workspace-cleanup', state: 'closed' })],
+    });
+    expect((rebuilt.source as { notices?: unknown[] }).notices).toEqual(
+      (first.source as { notices?: unknown[] }).notices,
+    );
+
+    agent._commit(first as never);
+    expect(visibility.catalogFor(agent as never)).toBeUndefined();
   });
 });
 
@@ -315,6 +446,7 @@ async function setupWorkspaceRuntime() {
   });
   return {
     ctx,
+    config,
     agent,
     pool,
     proxy,
@@ -332,6 +464,63 @@ async function setupWorkspaceRuntime() {
 }
 
 describe('Turn 结束自动停用', () => {
+  it('对所有当前 active 工作区服务器释放引用，并在异步关闭后留下目录提醒', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const { agent, ctx, visibility } = runtime;
+    await runtime.manage('serena', 'active');
+    await runtime.manage('project', 'active');
+    agent._claim();
+
+    visibility.deactivateAfterTurn(agent);
+
+    expect(visibility.isActive(agent, 'serena')).toBe(false);
+    expect(visibility.isActive(agent, 'project')).toBe(false);
+    await vi.waitFor(() => {
+      expect(ctx._managerRegistered.size).toBe(0);
+      const catalog = agent.inbox.nextStep.findLast(
+        (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+      );
+      expect(catalog?.source).toMatchObject({
+        notices: expect.arrayContaining([
+          expect.objectContaining({ serverName: 'serena', state: 'closed' }),
+          expect.objectContaining({ serverName: 'project', state: 'closed' }),
+        ]),
+      });
+    });
+    expect(ctx._managerDisposals).toEqual([
+      workspaceInternalName('serena', 'D:/Git/One'),
+      workspaceInternalName('project', 'D:/Git/One'),
+    ]);
+    expect(agent.inbox.nextTurn).toHaveLength(0);
+  });
+
+  it('Turn 结束遇到其他 active Agent 时保留共享实例并提醒', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    const other = makeAgent('two', 'D:/Git/One');
+    runtime.ctx._agents.push(other);
+    runtime.ctx.agents.list();
+    runtime.visibility.sync(other);
+    await runtime.manage('serena', 'active');
+    await runtime.tool.execute({ server: 'serena', command: 'active' }, {
+      agent: other,
+      signal: new AbortController().signal,
+    } as never);
+    runtime.agent._claim();
+
+    runtime.visibility.deactivateAfterTurn(runtime.agent);
+
+    await vi.waitFor(() => {
+      const catalog = runtime.agent.inbox.nextStep.findLast(
+        (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
+      );
+      expect(catalog?.source).toMatchObject({
+        notices: expect.arrayContaining([expect.objectContaining({ state: 'retained' })]),
+      });
+    });
+    expect(runtime.ctx._managerRegistered.size).toBe(1);
+    expect(runtime.pool.list()[0]?.activeAgents.has(other as never)).toBe(true);
+  });
+
   it('重置默认 active 与手动 active 的服务器，且不注入唤醒消息', async () => {
     const agent = makeAgent();
     const { ctx, manage } = await setup([agent]);

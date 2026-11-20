@@ -7,6 +7,7 @@ import type { ServerManager, StatusView } from './servers.ts';
 import type { Agent, SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
 import { isRecord } from './utils.ts';
 import type { VisibilityRuntime } from './visibility.ts';
+import { createInactiveWorkspaceNotice } from './workspace-notices.ts';
 import type { WorkspacePool } from './workspace-pool.ts';
 
 /** 一次 `mcp_manage` 的已校验参数。 */
@@ -122,6 +123,7 @@ export function buildManageTool(
         } else {
           visibility.setActive(agent, parsed.server, false);
           const cleanup = await workspace.pool.releaseActive(agent, parsed.server, workspaceKey);
+          visibility.queueWorkspaceNotice(agent, createInactiveWorkspaceNotice(cleanup));
           status =
             cleanup.state === 'retained'
               ? {
