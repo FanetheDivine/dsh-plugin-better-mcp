@@ -1,4 +1,6 @@
 // 插件入口接线：导出契约、启动挂载、热更新对账、路由、卸载清理。
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { Config } from '../src/config.ts';
@@ -85,6 +87,45 @@ describe('apply 接线', () => {
     });
   });
 
+  it('既有共享配置无需 workspace 字段并保持 lazy 与全局挂载行为', async () => {
+    const config = refs({
+      resident: { description: 'd', transport: 'stdio', command: 'node', lazy: false },
+      remote: {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://example.com/mcp',
+        auth: 'none',
+        lazy: true,
+      },
+    });
+    const agent = makeAgent('legacy', process.cwd());
+    const ctx = makeCtx({ config });
+    ctx._agents.push(agent);
+    ctx._registeredTools.push(
+      {
+        name: 'mcp__resident__run',
+        description: '',
+        parameters: {},
+        output: { schema: {}, render: () => [] },
+        execute: async () => 'ok',
+      },
+      {
+        name: 'mcp__remote__ping',
+        description: '',
+        parameters: {},
+        output: { schema: {}, render: () => [] },
+        execute: async () => 'ok',
+      },
+    );
+    apply(ctx, config);
+    await vi.waitFor(() => expect(ctx._managerRegistered.size).toBe(2));
+    expect(ctx._managerRegistered.has('resident')).toBe(true);
+    expect(ctx._managerRegistered.has('remote')).toBe(true);
+    expect(agent._deny()).toEqual(['mcp__remote__ping']);
+    expect(agent._registeredTools).toHaveLength(0);
+    ctx._dispose();
+  });
+
   it('工作区服务器 active 时才挂载并接入公开代理、资源与删除提醒', async () => {
     const config = refs({
       serena: {
@@ -134,6 +175,80 @@ describe('apply 接线', () => {
     expect(agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
     expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(false);
     expect(ctx._managerRegistered.size).toBe(0);
+  });
+
+  it('三个工作区并行调用保持同名代理路由与单实例故障隔离', async () => {
+    const config = refs({
+      serena: {
+        description: 'project tools',
+        transport: 'stdio',
+        command: 'node',
+        workspace: true,
+      },
+    });
+    const workspaces = [
+      process.cwd(),
+      join(process.cwd(), 'tests'),
+      join(process.cwd(), 'docs'),
+    ].map(normalizeWorkspaceKey);
+    const agents = workspaces.map((workspace, index) => makeAgent(`parallel-${index}`, workspace));
+    const ctx = makeCtx({ config });
+    ctx._agents.push(...agents);
+    const calls = new Map<string, ReturnType<typeof vi.fn>>();
+    for (const workspace of workspaces) {
+      const internalName = workspaceInternalName('serena', workspace);
+      const execute = vi.fn(async () => workspace);
+      calls.set(workspace, execute);
+      ctx._registeredTools.push({
+        name: `mcp__${internalName}__identity`,
+        description: 'workspace identity',
+        parameters: {},
+        output: { schema: {}, render: () => [] },
+        execute,
+      });
+    }
+    apply(ctx, config);
+    await vi.waitFor(() =>
+      expect(ctx._registeredTools.some((tool) => tool.name === 'mcp_manage')).toBe(true),
+    );
+    const manage = ctx._registeredTools.find((tool) => tool.name === 'mcp_manage');
+    for (const agent of agents) {
+      await manage?.execute({ server: 'serena', command: 'active' }, {
+        agent,
+        signal: new AbortController().signal,
+      } as never);
+    }
+    expect(ctx._managerRegistered.size).toBe(3);
+
+    const results = await Promise.all(
+      agents.flatMap((agent) =>
+        Array.from({ length: 20 }, async () =>
+          agent.ctx.tools.get('mcp__serena__identity')?.execute({}, {
+            agent,
+            signal: new AbortController().signal,
+          } as never),
+        ),
+      ),
+    );
+    for (const [index, result] of results.entries()) {
+      expect(result).toBe(workspaces[Math.floor(index / 20)]);
+    }
+    expect(calls.get(workspaces[0] ?? '')).toHaveBeenCalledTimes(20);
+
+    calls.get(workspaces[0] ?? '')?.mockRejectedValueOnce(new Error('workspace failed'));
+    await expect(
+      agents[0]?.ctx.tools.get('mcp__serena__identity')?.execute({}, {
+        agent: agents[0],
+        signal: new AbortController().signal,
+      } as never),
+    ).rejects.toThrow('workspace failed');
+    await expect(
+      agents[1]?.ctx.tools.get('mcp__serena__identity')?.execute({}, {
+        agent: agents[1],
+        signal: new AbortController().signal,
+      } as never),
+    ).resolves.toBe(workspaces[1]);
+    ctx._dispose();
   });
 
   it('未知配置键让加载失败', () => {

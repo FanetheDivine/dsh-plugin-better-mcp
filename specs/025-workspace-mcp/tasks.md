@@ -116,8 +116,8 @@ description: "Task list for workspace-scoped MCP instances"
 
 **Independent Test**: 既有配置无需修改即可加载，shared lazy、OAuth、挂载、路由与面板回归通过
 
-- [ ] T027 [P] [US4] 增加旧配置兼容、HTTP 不显示工作区开关、共享 lazy/OAuth/挂载回归测试，修改 `tests/config.test.ts`、`tests/client.test.ts` 与 `tests/plugin.test.ts`
-- [ ] T028 [US4] 修复回归并完成三工作区各 20 次并行调用与单实例故障隔离集成测试，修改 `src/index.ts` 与 `tests/plugin.test.ts`
+- [X] T027 [P] [US4] 增加旧配置兼容、HTTP 不显示工作区开关、共享 lazy/OAuth/挂载回归测试，修改 `tests/config.test.ts`、`tests/client.test.ts` 与 `tests/plugin.test.ts`
+- [X] T028 [US4] 修复回归并完成三工作区各 20 次并行调用与单实例故障隔离集成测试，修改 `src/index.ts` 与 `tests/plugin.test.ts`
 
 **Checkpoint**: 四个用户故事全部通过，提交 Phase 6 commit
 
