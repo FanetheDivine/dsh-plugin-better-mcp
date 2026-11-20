@@ -105,6 +105,7 @@ dsh plugin add <repo>
 | `tests/credentials.test.ts` | 授权与客户端密钥 |
 | `tests/oauth.test.ts` | 发现、动态注册、PKCE、换码与刷新 |
 | `tests/servers.test.ts` | 挂载、状态、快照与对账 |
+| `tests/workspace-*.test.ts` | 工作区命名、实例池、代理、绑定、资源与生命周期提醒 |
 | `tests/routes.test.ts` | 面板路由、OAuth 路由与回调 |
 | `tests/client.test.ts` | 字典、槽位注册、表单校验、状态格式化与静态渲染 |
 | `tests/client-bundle.test.ts` | `dist/client.js` 的注册契约与导出（产物测试） |
@@ -200,7 +201,14 @@ src/
 ├── utils.ts                # 对象读取、JSON 响应、回环地址、grantId
 ├── credentials.ts          # 授权与客户端密钥
 ├── oauth.ts                # 发现、注册、PKCE、换码与刷新
-├── servers.ts              # 挂载、对账、状态与面板快照
+├── servers.ts              # 共享挂载、状态与面板快照
+├── workspace-names.ts      # 工作区键、内部实例名与公开工具名
+├── workspace-pool.ts       # 工作区实例、Agent 引用、换代与关闭等待
+├── workspace-bindings.ts   # 目录绑定、切换关闭屏障与缺失检测
+├── workspace-proxy.ts      # Agent-local 工具代理与执行保护
+├── workspace-resources.ts  # Agent-local resource provider 与资源守卫
+├── workspace-presentation.ts # instructions 与资源服务器提示隔离
+├── workspace-notices.ts    # 工作区生命周期 system-reminder
 ├── routes.ts               # /api 路由与 OAuth 回调
 ├── visibility.ts           # 会话可见性、工具限制与目录投影
 ├── catalog.ts              # 目录消息渲染
@@ -222,7 +230,7 @@ tests/                      # vitest 单元测试
 │   ├── primitives.ts       # 平台组件包解析到源码
 │   └── dist-freshness.ts   # 产物新鲜度检查
 docs/                       # 开发者文档
-├── assets/panel.jpg        # README 中的面板截图
+├── assets/panel.png        # README 中的面板截图
 └── configuration.md        # YAML 配置参考
 specs/<NNN>-<name>/         # 每个需求的 spec、plan、tasks
 .dsh/skills/

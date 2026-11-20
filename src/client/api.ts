@@ -1,5 +1,23 @@
 /** 面板调用的插件路由。 */
 
+/** 一个工作区实例的面板数据。 */
+export interface WorkspaceInstanceRow {
+  serverName: string;
+  workspace: string;
+  workspaceKey: string;
+  internalName: string;
+  generation: number;
+  boundAgents: number;
+  activeAgents: number;
+  state: string;
+  toolCount?: number;
+  connectedAt?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  error?: string;
+  cleanup?: 'failed' | 'unconfirmed';
+}
+
 /** 一台服务器的面板数据。 */
 export interface ServerRow {
   name: string;
@@ -8,6 +26,8 @@ export interface ServerRow {
   url?: string;
   auth?: string;
   lazy: boolean;
+  workspace: boolean;
+  instances?: WorkspaceInstanceRow[];
   authorized: boolean;
   /** 完整鉴权地址，由宿主给出。 */
   authorizeUrl?: string;
@@ -71,9 +91,12 @@ export function setLazy(server: string, lazy: boolean): Promise<PanelSnapshot> {
   return call('/api/better-mcp/lazy', { method: 'POST', body: { server, lazy } });
 }
 
-/** 重连。 */
-export function restart(server: string): Promise<PanelSnapshot> {
-  return call('/api/better-mcp/restart', { method: 'POST', body: { server } });
+/** 重连共享服务器、全部工作区实例或单个工作区实例。 */
+export function restart(
+  server: string,
+  options: { all?: boolean; workspace?: string } = {},
+): Promise<PanelSnapshot> {
+  return call('/api/better-mcp/restart', { method: 'POST', body: { server, ...options } });
 }
 
 /** 新增或更新服务器。 */

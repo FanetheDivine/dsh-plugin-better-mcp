@@ -1,11 +1,12 @@
 // 服务器生命周期：挂载、卸载、快照与对账。
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PluginConfig } from '../src/config.ts';
+import { type PluginConfig, resolveConfig } from '../src/config.ts';
 import { recordKey } from '../src/credentials.ts';
 import { ServerManager, statusOf } from '../src/servers.ts';
 import { grantId } from '../src/utils.ts';
-import { type MockCtxState, makeCtx } from './helpers.ts';
+import { WorkspacePool } from '../src/workspace-pool.ts';
+import { type MockCtxState, makeAgent, makeCtx } from './helpers.ts';
 
 /** 配置。 */
 function settings(servers: PluginConfig['servers']): PluginConfig {
@@ -56,6 +57,35 @@ describe('mount', () => {
     expect(entry).not.toHaveProperty('oauth');
   });
 
+  it('注册参数使用可变副本，宿主 Schema 可填默认值且不修改冻结配置', async () => {
+    const ctx = makeCtx();
+    const config = resolveConfig({
+      servers: {
+        one: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          args: ['server.js'],
+          env: { RDT_FIXTURE_LOG: 'original' },
+          auth: 'none',
+        },
+      },
+    });
+    const manager = new ServerManager(ctx as never, () => config, { info: vi.fn(), warn: vi.fn() });
+    await manager.mount('one');
+    const entry = ctx._managerRegistered.get('one')?.entry;
+    const env = entry?.env as Record<string, string>;
+    const args = entry?.args as string[];
+    expect(Object.isFrozen(env)).toBe(false);
+    expect(Object.isFrozen(args)).toBe(false);
+    expect(() => {
+      env.RDT_FIXTURE_LOG = 'resolved';
+      args[0] = 'resolved.js';
+    }).not.toThrow();
+    expect(config.servers.one?.env?.RDT_FIXTURE_LOG).toBe('original');
+    expect(config.servers.one?.args?.[0]).toBe('server.js');
+  });
+
   it('未授权时拒绝挂载 oauth 服务器', async () => {
     const ctx = makeCtx();
     const manager = makeManager(
@@ -77,6 +107,59 @@ describe('mount', () => {
     const ctx = makeCtx();
     const manager = makeManager(ctx, settings({}));
     await expect(manager.mount('missing')).rejects.toThrow('No configured MCP server');
+  });
+
+  it('shared 定义沿用共享挂载，workspace 定义不自动注册', async () => {
+    const ctx = makeCtx();
+    const manager = makeManager(
+      ctx,
+      settings({
+        shared: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          auth: 'none',
+          lazy: false,
+          workspace: false,
+        },
+        scoped: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          auth: 'none',
+          lazy: true,
+          workspace: true,
+        },
+      }),
+    );
+    await manager.mountAll('in test');
+    await manager.mount('scoped');
+    await manager.restart('scoped');
+    expect([...ctx._managerRegistered.keys()]).toEqual(['shared']);
+    expect(ctx._managerRegistered.get('shared')?.entry).not.toHaveProperty('workspace');
+  });
+
+  it('为工作区实例构造连接参数并覆盖 cwd', async () => {
+    const ctx = makeCtx();
+    const manager = makeManager(
+      ctx,
+      settings({
+        scoped: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          cwd: 'configured-cwd',
+          auth: 'none',
+          lazy: true,
+          workspace: true,
+        },
+      }),
+    );
+    const entry = await manager.entryOf('scoped', '/workspace/project');
+    expect(entry).toMatchObject({ transport: 'stdio', command: 'node', cwd: '/workspace/project' });
+    expect(entry).not.toHaveProperty('workspace');
+    expect(entry).not.toHaveProperty('description');
+    expect(entry).not.toHaveProperty('lazy');
   });
 });
 
@@ -146,6 +229,35 @@ describe('snapshot', () => {
     expect(snapshot.servers[0]?.definition).toMatchObject({ url: 'https://x' });
     expect(JSON.stringify(snapshot.servers[0]?.definition)).not.toContain('hide-me');
   });
+
+  it('快照标识 shared 与 workspace 定义', async () => {
+    const ctx = makeCtx();
+    const manager = makeManager(
+      ctx,
+      settings({
+        scoped: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          auth: 'none',
+          lazy: false,
+          workspace: true,
+        },
+        shared: {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          auth: 'none',
+          lazy: false,
+        },
+      }),
+    );
+    const snapshot = await manager.snapshot();
+    expect(snapshot.servers).toEqual([
+      expect.objectContaining({ name: 'scoped', workspace: true, lazy: true, mounted: false }),
+      expect.objectContaining({ name: 'shared', workspace: false, lazy: false }),
+    ]);
+  });
 });
 
 describe('reconcile', () => {
@@ -193,6 +305,45 @@ describe('reconcile', () => {
     });
     await manager.reconcile(previous, next);
     expect(ctx._managerRegistered.get('one')).toBe(entry);
+  });
+
+  it('shared 与 workspace 互转只维护共享实例', async () => {
+    const ctx = makeCtx();
+    let config = settings({
+      one: { description: 'd', transport: 'stdio', command: 'node', auth: 'none', lazy: false },
+    });
+    const manager = new ServerManager(ctx as never, () => config, { info: vi.fn(), warn: vi.fn() });
+    await manager.mount('one');
+    expect(ctx._managerRegistered.has('one')).toBe(true);
+
+    const shared = config;
+    config = settings({
+      one: {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        lazy: true,
+        workspace: true,
+      },
+    });
+    await manager.reconcile(shared, config);
+    expect(ctx._managerRegistered.size).toBe(0);
+
+    const scoped = config;
+    config = settings({
+      one: {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        lazy: false,
+        workspace: false,
+      },
+    });
+    await manager.reconcile(scoped, config);
+    expect(ctx._managerRegistered.get('one')?.entry.command).toBe('node');
+    expect(ctx._managerRegistered.get('one')?.entry).not.toHaveProperty('workspace');
   });
 });
 

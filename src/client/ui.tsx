@@ -950,6 +950,47 @@ select.better-mcp-input {
   margin: 2px 0;
   accent-color: var(--dsw-alias-brand-primary);
 }
+.better-mcp-instance-options {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.better-mcp-instance-options .better-mcp-help-trigger {
+  margin-inline-start: 2px;
+}
+.better-mcp-workspace-connections {
+  margin: 8px 0 12px;
+}
+.better-mcp-workspace-connections > summary,
+.better-mcp-workspace-group > summary {
+  cursor: pointer;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+}
+.better-mcp-workspace-search {
+  width: 100%;
+  margin: 10px 0;
+}
+.better-mcp-workspace-group {
+  margin: 6px 0 6px 12px;
+}
+.better-mcp-workspace-group ul {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+.better-mcp-workspace-instance {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.better-mcp-workspace-instance strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
 .better-mcp-field-error,
 .better-mcp-form-error {
   margin: 0;

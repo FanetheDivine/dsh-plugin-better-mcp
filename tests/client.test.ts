@@ -22,7 +22,14 @@ import {
   SidebarButton,
 } from '../src/client/index.tsx';
 import { en, NS, zh } from '../src/client/locales.ts';
-import { McpPanel, ServerItem, startStatusPolling, statusParts } from '../src/client/panel.tsx';
+import {
+  filterWorkspaceInstances,
+  groupWorkspaceInstances,
+  McpPanel,
+  ServerItem,
+  startStatusPolling,
+  statusParts,
+} from '../src/client/panel.tsx';
 import {
   definitionFromValues,
   emptyForm,
@@ -200,6 +207,79 @@ describe('字典', () => {
   });
 });
 
+describe('工作区连接情况', () => {
+  const instances = [
+    {
+      serverName: 'serena',
+      workspace: '/tmp/alpha',
+      workspaceKey: '/tmp/alpha',
+      internalName: 'bm_a_0123456789abcdef',
+      generation: 1,
+      boundAgents: 1,
+      activeAgents: 1,
+      state: 'connected',
+    },
+    {
+      serverName: 'serena',
+      workspace: '/tmp/beta',
+      workspaceKey: '/tmp/beta',
+      internalName: 'bm_b_0123456789abcdef',
+      generation: 1,
+      boundAgents: 1,
+      activeAgents: 0,
+      state: 'failed',
+      error: 'boom',
+    },
+  ];
+
+  it('按成功与失败分组，并按名称或路径过滤', () => {
+    expect(groupWorkspaceInstances(instances).connected.map((item) => item.workspace)).toEqual([
+      '/tmp/alpha',
+    ]);
+    expect(groupWorkspaceInstances(instances).failed.map((item) => item.workspace)).toEqual([
+      '/tmp/beta',
+    ]);
+    expect(filterWorkspaceInstances(instances, 'BETA').map((item) => item.workspace)).toEqual([
+      '/tmp/beta',
+    ]);
+    expect(filterWorkspaceInstances(instances, '/tmp/')).toHaveLength(2);
+  });
+
+  it('工作区主行隐藏已连接标签，提供分组、搜索、全部与单实例重连', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ServerItem as never,
+        {
+          t: translate(zh),
+          row: {
+            name: 'serena',
+            lazy: true,
+            workspace: true,
+            authorized: true,
+            mounted: true,
+            state: 'connected',
+            instances,
+          },
+          busy: undefined,
+          onLazy: () => undefined,
+          onRestart: () => undefined,
+          onSignOut: () => undefined,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+        } as never,
+      ),
+    );
+    expect(html).toContain('全部重连');
+    expect(html).toContain('连接情况');
+    expect(html).toContain('搜索工作区');
+    expect(html).toContain('成功');
+    expect(html).toContain('失败');
+    expect(html).toContain('重连工作区 /tmp/alpha');
+    expect(html).not.toContain('data-state="connected"');
+    expect(html).not.toContain('懒加载');
+  });
+});
+
 describe('服务器表单辅助函数', () => {
   it('解析合法的请求头文本', () => {
     expect(parseHeaders('Authorization: Bearer token\nX-Test: 1\n')).toEqual({
@@ -246,6 +326,35 @@ describe('服务器表单辅助函数', () => {
     expect(html.indexOf('value="stdio"')).toBeLessThan(html.indexOf('value="streamable-http"'));
     expect(html).toContain('name="command"');
     expect(html).not.toContain('name="url"');
+  });
+
+  it('工作区级 stdio 强制懒加载并隐藏 lazy，HTTP 不显示工作区开关', () => {
+    const definition = definitionFromValues(
+      values({ transport: 'stdio', command: 'node', workspace: true, lazy: false }),
+    );
+    expect(definition).toMatchObject({ workspace: true, lazy: true });
+    expect(valuesFromDefinition('serena', definition).workspace).toBe(true);
+
+    const render = (initial: ServerFormValues) =>
+      renderToStaticMarkup(
+        createElement(
+          ServerForm as never,
+          {
+            t: translate(zh),
+            initial,
+            isEdit: false,
+            busy: false,
+            onSubmit: () => undefined,
+          } as never,
+        ),
+      );
+    const workspace = render(values({ transport: 'stdio', command: 'node', workspace: true }));
+    expect(workspace).toContain('name="workspace"');
+    expect(workspace).toContain('工作区级实例说明');
+    expect(workspace).not.toContain('name="lazy"');
+    const shared = render(values({ transport: 'stdio', command: 'node' }));
+    expect(shared.indexOf('name="lazy"')).toBeLessThan(shared.indexOf('name="workspace"'));
+    expect(render(values())).not.toContain('name="workspace"');
   });
 
   it('接受合法的 http 配置', () => {

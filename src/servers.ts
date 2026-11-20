@@ -17,6 +17,17 @@ import type {
 } from './types.ts';
 import { isRecord } from './utils.ts';
 
+/** 一个工作区实例的面板行。 */
+export interface WorkspaceInstanceRow extends StatusView {
+  serverName: string;
+  workspace: string;
+  workspaceKey: string;
+  internalName: string;
+  generation: number;
+  boundAgents: number;
+  activeAgents: number;
+}
+
 /** 面板里的一台服务器。 */
 export interface ServerRow extends StatusView {
   /** 服务器名。 */
@@ -31,6 +42,10 @@ export interface ServerRow extends StatusView {
   auth?: string;
   /** 是否懒加载。 */
   lazy: boolean;
+  /** 是否使用工作区实例。 */
+  workspace: boolean;
+  /** 工作区实例，按路径排序。 */
+  instances?: WorkspaceInstanceRow[];
   /** 是否已有授权。 */
   authorized: boolean;
   /** 完整鉴权地址，仅在快照返回时补上。 */
@@ -146,14 +161,24 @@ export class ServerManager {
     }
   }
 
-  /** 构造交给管理器的条目。 */
-  private async entryOf(serverName: string): Promise<Record<string, unknown>> {
+  /** 构造交给管理器的条目；工作区实例可覆盖 stdio 的 cwd。 */
+  async entryOf(serverName: string, workspacePath?: string): Promise<Record<string, unknown>> {
     const definition = this.getSettings().servers[serverName];
     if (definition === undefined) {
       throw new Error(`No configured MCP server named '${serverName}'.`);
     }
-    const { description: _description, lazy: _lazy, auth, oauth: _oauth, ...rest } = definition;
-    const entry: Record<string, unknown> = { ...rest };
+    const {
+      description: _description,
+      lazy: _lazy,
+      workspace: _workspace,
+      auth,
+      oauth: _oauth,
+      ...rest
+    } = definition;
+    const entry: Record<string, unknown> = {
+      ...structuredClone(rest),
+      ...(workspacePath === undefined ? {} : { cwd: workspacePath }),
+    };
     if (auth === 'oauth' || auth === undefined) {
       const token = await this.accessTokenOf(serverName);
       if (token !== undefined) {
@@ -175,9 +200,11 @@ export class ServerManager {
   async mount(serverName: string): Promise<void> {
     await this.serialized(serverName, async () => {
       if (this.mounts.has(serverName)) return;
-      if (this.getSettings().servers[serverName] === undefined) {
+      const definition = this.getSettings().servers[serverName];
+      if (definition === undefined) {
         throw new Error(`No configured MCP server named '${serverName}'.`);
       }
+      if (definition.workspace === true) return;
       const entry = await this.entryOf(serverName);
       const dispose = this.ctx.mcpManager.register(
         serverName,
@@ -260,7 +287,8 @@ export class ServerManager {
         transport: definition.transport,
         ...(typeof definition.url === 'string' ? { url: definition.url } : {}),
         auth: definition.auth ?? 'oauth',
-        lazy: definition.lazy !== false,
+        lazy: definition.workspace === true || definition.lazy !== false,
+        workspace: definition.workspace === true,
         authorized: this.isAuthorized(serverName),
         mounted: this.mounts.has(serverName),
         ...status,

@@ -15,10 +15,15 @@ import type { CredentialKey, CredentialRecord, CredentialRef } from '@deepseek-a
 import type {} from '@deepseek-ai/dsh-host-webserver';
 import type { UserMessage } from '@deepseek-ai/dsh-llm';
 import type { McpManagedServerStatus, McpManagedServerView } from '@deepseek-ai/dsh-mcp-manager';
+// Type-only：拉取工作区 resource provider 与资源工具事件声明。
+import type {} from '@deepseek-ai/dsh-mcp-resources';
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
 // Type-only：拉取 `ctx.sessionProjections` 声明。
 import type { ProjectionDefinition, ProjectionHandle } from '@deepseek-ai/dsh-session-projection';
+// Type-only：拉取 system-prompt/assemble 与 working-directory 服务声明。
+import type {} from '@deepseek-ai/dsh-system-prompt';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
+import type {} from '@deepseek-ai/dsh-working-directory';
 import type { PluginConfig } from './config.ts';
 import type { CatalogSource } from './visibility.ts';
 

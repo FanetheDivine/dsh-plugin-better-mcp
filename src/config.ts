@@ -54,6 +54,8 @@ export interface ServerDefinition {
   auth: 'oauth' | 'none';
   /** 是否默认对会话隐藏，缺省 true。 */
   lazy: boolean;
+  /** 是否按工作区创建独立实例，缺省 false。 */
+  workspace: boolean;
   /** OAuth 参数。 */
   oauth?: OAuthClientConfig;
   /** 单次工具调用超时，转发给管理器。 */
@@ -104,6 +106,7 @@ const ServerSchema = Schema.intersect([
     headers: Schema.dict(Schema.string()),
     auth: Schema.union(['oauth', 'none']),
     lazy: Schema.boolean(),
+    workspace: Schema.boolean(),
     oauth: OAuthSchema,
     toolCallTimeoutMs: Schema.number(),
     startupTimeoutMs: Schema.number(),
@@ -208,6 +211,7 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
           : 'oauth'
         : (raw.auth as 'oauth' | 'none'),
     lazy: raw.lazy === undefined ? true : (raw.lazy as boolean),
+    workspace: raw.workspace === undefined ? false : (raw.workspace as boolean),
   };
   if (config.auth !== 'oauth' && config.auth !== 'none') {
     throw new Error(`${PLUGIN_LABEL}: servers.${name}.auth must be oauth or none`);
@@ -215,6 +219,13 @@ export function normalizeServerDefinition(name: string, raw: unknown): ServerDef
   if (typeof config.lazy !== 'boolean') {
     throw new Error(`${PLUGIN_LABEL}: servers.${name}.lazy must be a boolean`);
   }
+  if (typeof config.workspace !== 'boolean') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.workspace must be a boolean`);
+  }
+  if (config.workspace && transport !== 'stdio') {
+    throw new Error(`${PLUGIN_LABEL}: servers.${name}.workspace requires stdio`);
+  }
+  if (config.workspace) config.lazy = true;
   if (transport === 'stdio') {
     const command = asString(config.command);
     if (command === undefined || command.trim() === '') {

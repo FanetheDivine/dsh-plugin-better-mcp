@@ -26,6 +26,8 @@ export interface ServerFormValues {
   argsText: string;
   /** 是否懒加载。 */
   lazy: boolean;
+  /** 是否按工作区创建独立实例。 */
+  workspace: boolean;
   /** OAuth 动态注册身份。 */
   clientIdentity: 'dsh' | 'codex';
   /** OAuth 固定客户端标识。 */
@@ -68,6 +70,7 @@ export function emptyForm(): ServerFormValues {
     command: '',
     argsText: '',
     lazy: true,
+    workspace: false,
     clientIdentity: 'codex',
     clientId: '',
     clientSecret: '',
@@ -95,7 +98,8 @@ export function valuesFromDefinition(name: string, definition: ServerDefinition)
     argsText: Array.isArray(definition.args)
       ? definition.args.filter((value): value is string => typeof value === 'string').join('\n')
       : '',
-    lazy: definition.lazy !== false,
+    lazy: definition.workspace === true || definition.lazy !== false,
+    workspace: definition.workspace === true,
     clientIdentity: oauth.clientName === 'DeepSeek Harness (better-mcp)' ? 'dsh' : 'codex',
     clientId: typeof oauth.clientId === 'string' ? oauth.clientId : '',
     clientSecret: '',
@@ -151,9 +155,10 @@ export function definitionFromValues(values: ServerFormValues): ServerDefinition
   const definition: ServerDefinition = {
     description: values.description.trim(),
     transport: values.transport,
-    lazy: values.lazy,
+    lazy: values.workspace || values.lazy,
     auth: values.transport === 'stdio' ? 'none' : 'oauth',
   };
+  if (values.transport === 'stdio' && values.workspace) definition.workspace = true;
   if (values.transport === 'streamable-http') {
     definition.url = values.url.trim();
     const headers = parseHeaders(values.headersText) ?? {};
@@ -612,16 +617,41 @@ export function ServerForm({
           </>
         )}
         <div className="better-mcp-field better-mcp-field-full">
-          <label className="better-mcp-checkbox" htmlFor="better-mcp-lazy">
-            <input
-              id="better-mcp-lazy"
-              name="lazy"
-              type="checkbox"
-              checked={values.lazy}
-              onChange={(event) => update('lazy', event.target.checked)}
-            />
-            <span>{t('lazy')}</span>
-          </label>
+          <div className="better-mcp-instance-options">
+            {!values.workspace ? (
+              <label className="better-mcp-checkbox" htmlFor="better-mcp-lazy">
+                <input
+                  id="better-mcp-lazy"
+                  name="lazy"
+                  type="checkbox"
+                  checked={values.lazy}
+                  onChange={(event) => update('lazy', event.target.checked)}
+                />
+                <span>{t('lazy')}</span>
+              </label>
+            ) : null}
+            {values.transport === 'stdio' ? (
+              <label className="better-mcp-checkbox" htmlFor="better-mcp-workspace">
+                <input
+                  id="better-mcp-workspace"
+                  name="workspace"
+                  type="checkbox"
+                  checked={values.workspace}
+                  onChange={(event) => update('workspace', event.target.checked)}
+                />
+                <span>{t('workspace')}</span>
+                <button
+                  type="button"
+                  className="better-mcp-help-trigger"
+                  aria-label={t('workspaceHelp')}
+                  title={t('workspaceHint')}
+                  onClick={(event) => event.preventDefault()}
+                >
+                  ?
+                </button>
+              </label>
+            ) : null}
+          </div>
         </div>
       </fieldset>
       {error !== undefined ? (

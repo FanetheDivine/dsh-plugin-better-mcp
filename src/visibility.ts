@@ -16,6 +16,16 @@ import type {
   UserMessage,
 } from './types.ts';
 import { isRecord } from './utils.ts';
+import {
+  createActiveWorkspaceNotice,
+  createInactiveWorkspaceNotice,
+  type WorkspaceNotice,
+  type WorkspaceNoticeDraft,
+} from './workspace-notices.ts';
+import type { WorkspacePool } from './workspace-pool.ts';
+import type { WorkspaceProxyRuntime } from './workspace-proxy.ts';
+import { collectWorkspaceInternalToolNames } from './workspace-proxy.ts';
+import type { WorkspaceResourceRuntime } from './workspace-resources.ts';
 
 /** 目录中的一台服务器。 */
 export interface CatalogEntry {
@@ -39,6 +49,8 @@ export interface CatalogSource {
   readonly entries: readonly CatalogEntry[];
   /** 写入时本会话的显式选择。 */
   readonly overrides: Readonly<Record<string, boolean>>;
+  /** 随目录持久化、等待投影确认的工作区提醒。 */
+  readonly notices?: readonly WorkspaceNotice[];
 }
 
 /** 会话投影：最近一条目录消息。 */
@@ -49,6 +61,8 @@ export interface CatalogState {
   readonly entries: readonly CatalogEntry[];
   /** 消息记录的显式选择。 */
   readonly overrides: Readonly<Record<string, boolean>>;
+  /** 消息记录的工作区提醒。 */
+  readonly notices: readonly WorkspaceNotice[];
   /** 最近一个 turn/end 的 seq；没有时为 null。 */
   readonly turnEndSeq: number | null;
 }
@@ -58,6 +72,7 @@ const EMPTY_STATE: CatalogState = Object.freeze({
   seq: null,
   entries: Object.freeze([]),
   overrides: Object.freeze({}),
+  notices: Object.freeze([]),
   turnEndSeq: null,
 });
 
@@ -85,6 +100,39 @@ function readOverrides(value: unknown): Record<string, boolean> {
   return overrides;
 }
 
+/** 读取工作区提醒；格式不符时返回 undefined。 */
+function readNotices(value: unknown): WorkspaceNotice[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const notices: WorkspaceNotice[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) return undefined;
+    const { id, kind, serverName, workspace, state, detail } = item;
+    if (
+      typeof id !== 'number' ||
+      !Number.isInteger(id) ||
+      id < 0 ||
+      !['active', 'inactive', 'workspace-cleanup', 'workspace-missing'].includes(kind as string) ||
+      typeof serverName !== 'string' ||
+      typeof workspace !== 'string' ||
+      !['active', 'connected', 'retained', 'closed', 'failed', 'cleanup-unknown'].includes(
+        state as string,
+      ) ||
+      (detail !== undefined && typeof detail !== 'string')
+    ) {
+      return undefined;
+    }
+    notices.push({
+      id,
+      kind: kind as WorkspaceNotice['kind'],
+      serverName,
+      workspace,
+      state: state as WorkspaceNotice['state'],
+      ...(detail === undefined ? {} : { detail }),
+    });
+  }
+  return notices;
+}
+
 /** 校验持久化的投影状态。 */
 export function parseCatalogState(value: unknown): CatalogState {
   if (!isRecord(value)) throw new Error('better-mcp catalog state must be an object');
@@ -101,7 +149,9 @@ export function parseCatalogState(value: unknown): CatalogState {
   }
   const entries = readEntries(value.entries);
   if (entries === undefined) throw new Error('better-mcp catalog state entries are invalid');
-  return { seq, entries, overrides: readOverrides(value.overrides), turnEndSeq };
+  const notices = value.notices === undefined ? [] : readNotices(value.notices);
+  if (notices === undefined) throw new Error('better-mcp catalog state notices are invalid');
+  return { seq, entries, overrides: readOverrides(value.overrides), notices, turnEndSeq };
 }
 
 /** 折叠一条会话事件：关心本插件的目录消息与 Turn 结束边界。 */
@@ -112,7 +162,15 @@ export function applyCatalogEvent(state: CatalogState, event: SessionEvent): Cat
   if (!isRecord(source) || source.kind !== CATALOG_SOURCE) return state;
   const entries = readEntries(source.entries);
   if (entries === undefined) return state;
-  return { ...state, seq: event.seq, entries, overrides: readOverrides(source.overrides) };
+  const notices = source.notices === undefined ? [] : readNotices(source.notices);
+  if (notices === undefined) return state;
+  return {
+    ...state,
+    seq: event.seq,
+    entries,
+    overrides: readOverrides(source.overrides),
+    notices,
+  };
 }
 
 /** 目录投影定义：宿主私有，不进入客户端快照。 */
@@ -122,7 +180,7 @@ export const catalogProjection = {
     typeof CATALOG_SOURCE,
     CatalogState
   >['stateSchema'],
-  stateVersion: 2,
+  stateVersion: 3,
   init: () => EMPTY_STATE,
   apply: applyCatalogEvent,
 } satisfies Omit<ProjectionDefinition<typeof CATALOG_SOURCE, CatalogState>, 'wire'>;
@@ -150,12 +208,30 @@ interface Restriction {
   readonly dispose: (() => void) | undefined;
 }
 
+/** VisibilityRuntime 的可选工作区依赖。 */
+export interface WorkspaceVisibilityOptions {
+  /** 提供当前 active 实例与 generation 校验。 */
+  readonly pool: WorkspacePool;
+  /** 同步 Agent-local 公开工具代理。 */
+  readonly proxy: WorkspaceProxyRuntime;
+  /** 同步 Agent-local resource provider。 */
+  readonly resources?: WorkspaceResourceRuntime;
+  /** 从宿主读取 Agent 当前有效工作目录。 */
+  readonly currentWorkspaceKey: (agent: Agent) => string | undefined;
+}
+
 /** 按会话维护服务器可见性与工具限制。 */
 export class VisibilityRuntime {
   /** 每个 Agent 尚未落入目录消息的显式选择。 */
   private readonly pending = new WeakMap<Agent, Record<string, boolean>>();
   /** 每个 Agent 当前的工具限制。 */
   private readonly restrictions = new Map<Agent, Restriction>();
+  /** 每个 Agent 上次同步时的工作区服务器名。 */
+  private readonly workspaceServerNames = new Map<Agent, Set<string>>();
+  /** 每个 Agent 尚未注入的工作区提醒。 */
+  private readonly pendingNotices = new WeakMap<Agent, WorkspaceNotice[]>();
+  /** 工作区提醒的单调标识。 */
+  private nextNoticeId = 1;
   /** 目录投影句柄。 */
   private projection: ProjectionHandle<CatalogState> | undefined;
   /** 已排队的全量同步。 */
@@ -168,6 +244,7 @@ export class VisibilityRuntime {
     private readonly getSettings: SettingsReader,
     private readonly logger: PluginLogger,
     private readonly isAuthorized: (serverName: string) => boolean = () => false,
+    private readonly workspace?: WorkspaceVisibilityOptions,
   ) {}
 
   /** 注册目录投影。 */
@@ -241,28 +318,113 @@ export class VisibilityRuntime {
     pending[serverName] = active;
     this.pending.set(agent, pending);
     this.sync(agent);
+    if (active && this.getSettings().servers[serverName]?.workspace === true) {
+      const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
+      if (workspaceKey !== undefined) {
+        this.queueWorkspaceNotice(
+          agent,
+          createActiveWorkspaceNotice(serverName, workspaceKey, this.nextNoticeId),
+        );
+        return;
+      }
+    }
     this.notify(agent);
   }
 
-  /** Turn 结束后清除待定选择并重算限制；目录更新留到下一模型步骤。 */
+  /** 将工作区提醒并入下一条目录消息；投影确认前保留以便重建。 */
+  queueWorkspaceNotice(agent: Agent, notice: WorkspaceNotice | WorkspaceNoticeDraft): void {
+    if (this.disposed) return;
+    const notices = this.pendingNotices.get(agent) ?? [];
+    for (const existing of [...this.catalogState(agent).notices, ...notices]) {
+      this.nextNoticeId = Math.max(this.nextNoticeId, existing.id + 1);
+    }
+    notices.push({ ...notice, id: this.nextNoticeId++ });
+    this.pendingNotices.set(agent, notices);
+    this.notify(agent);
+  }
+
+  /** 读取尚未被最近目录投影确认的提醒。 */
+  private noticesOf(agent: Agent, state: CatalogState): WorkspaceNotice[] {
+    const pending = this.pendingNotices.get(agent);
+    if (pending === undefined) return [];
+    const confirmed = new Set(state.notices.map((notice) => notice.id));
+    const remaining = pending.filter((notice) => !confirmed.has(notice.id));
+    if (remaining.length === 0) this.pendingNotices.delete(agent);
+    else if (remaining.length !== pending.length) this.pendingNotices.set(agent, remaining);
+    return [...remaining];
+  }
+
+  /** Turn 结束后立即隐藏，并释放全部当前 active 工作区引用。 */
   deactivateAfterTurn(agent: Agent): void {
+    const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
+    const activeWorkspaceServers = Object.keys(this.getSettings().servers).filter(
+      (serverName) =>
+        this.getSettings().servers[serverName]?.workspace === true &&
+        this.isActive(agent, serverName),
+    );
     this.pending.delete(agent);
     this.sync(agent);
+    if (this.workspace === undefined || workspaceKey === undefined) return;
+    for (const serverName of activeWorkspaceServers) {
+      void this.workspace.pool
+        .releaseActive(agent, serverName, workspaceKey)
+        .then((result) => {
+          this.queueWorkspaceNotice(agent, createInactiveWorkspaceNotice(result));
+        })
+        .catch((error: unknown) => {
+          this.logger.warn(
+            `better-mcp: could not release workspace MCP '${serverName}' after turn: ${String(error)}`,
+          );
+        });
+    }
   }
 
   /** 按当前可见性重算一个 Agent 的工具限制。 */
   sync(agent: Agent): void {
     if (this.disposed) return;
-    const serverNames = Object.keys(this.getSettings().servers);
+    const settings = this.getSettings();
+    const serverNames = Object.keys(settings.servers);
+    const workspaceServerNames = new Set(
+      serverNames.filter((serverName) => settings.servers[serverName]?.workspace === true),
+    );
+    for (const serverName of this.workspaceServerNames.get(agent) ?? []) {
+      if (workspaceServerNames.has(serverName)) continue;
+      this.workspace?.proxy.sync(agent, undefined, serverName);
+      this.workspace?.resources?.release(agent, serverName);
+    }
+    this.workspaceServerNames.set(agent, workspaceServerNames);
+    const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
+    for (const serverName of workspaceServerNames) {
+      const route =
+        workspaceKey === undefined || !this.isActive(agent, serverName)
+          ? undefined
+          : this.workspace?.pool.activeInstance(agent, serverName, workspaceKey);
+      this.workspace?.proxy.sync(agent, route, serverName);
+      if (route === undefined) {
+        this.workspace?.resources?.release(agent, serverName);
+      } else {
+        try {
+          this.workspace?.resources?.sync(agent, route);
+        } catch (error) {
+          this.logger.warn(
+            `better-mcp: could not sync workspace MCP resources for '${serverName}': ${String(error)}`,
+          );
+        }
+      }
+    }
     const hidden = new Set(serverNames.filter((name) => !this.isActive(agent, name)));
-    const deny = this.ctx.tools
-      .schemas()
-      .map((schema) => schema.name)
-      .filter((name) => {
-        const owner = serverOfTool(name, serverNames);
-        return owner !== undefined && hidden.has(owner);
-      })
-      .sort();
+    const deny = [
+      ...new Set([
+        ...this.ctx.tools
+          .schemas()
+          .map((schema) => schema.name)
+          .filter((name) => {
+            const owner = serverOfTool(name, serverNames);
+            return owner !== undefined && hidden.has(owner);
+          }),
+        ...collectWorkspaceInternalToolNames(this.ctx),
+      ]),
+    ].sort();
     const key = deny.join('\n');
     const current = this.restrictions.get(agent);
     if (current?.key === key) return;
@@ -291,10 +453,11 @@ export class VisibilityRuntime {
   catalogFor(agent: Agent): UserMessage | undefined {
     const entries = this.entriesOf(agent);
     const state = this.catalogState(agent);
+    const notices = this.noticesOf(agent, state);
     const visible = state.seq !== null && agent.session.surface.nodes.includes(state.seq as never);
-    if (visible && sameEntries(state.entries, entries)) return undefined;
-    if (state.seq === null && entries.length === 0) return undefined;
-    if (!visible && entries.length === 0) return undefined;
+    if (visible && sameEntries(state.entries, entries) && notices.length === 0) return undefined;
+    if (state.seq === null && entries.length === 0 && notices.length === 0) return undefined;
+    if (!visible && entries.length === 0 && notices.length === 0) return undefined;
     const overrides = this.overridesOf(agent);
     const previous = state.entries.filter((entry) => {
       const definition = this.getSettings().servers[entry.name];
@@ -303,21 +466,34 @@ export class VisibilityRuntime {
       );
     });
     return visible
-      ? catalogMessage(renderCatalogUpdate(previous, entries), entries, overrides, true)
-      : catalogMessage(renderCatalog(entries), entries, overrides, false);
+      ? catalogMessage(
+          renderCatalogUpdate(previous, entries, notices),
+          entries,
+          overrides,
+          true,
+          notices,
+        )
+      : catalogMessage(renderCatalog(entries, notices), entries, overrides, false, notices);
   }
 
-  /** 向一个在线 Agent 注入最新目录；相同目录已在队列时跳过。 */
+  /** 向一个在线 Agent 注入最新目录；目录与提醒均相同时跳过。 */
   notify(agent: Agent): void {
     if (this.disposed) return;
     const catalog = this.catalogFor(agent);
     if (catalog === undefined) return;
-    const entries = (catalog.source as CatalogSource).entries;
+    const source = catalog.source as CatalogSource;
+    const notices = source.notices ?? [];
     const queued = agent.inbox.nextStep.findLast((message) => {
-      const source = message.source as Partial<CatalogSource>;
-      if (source.kind !== CATALOG_SOURCE) return false;
-      const queuedEntries = readEntries(source.entries);
-      return queuedEntries !== undefined && sameEntries(queuedEntries, entries);
+      const candidate = message.source as Partial<CatalogSource>;
+      if (candidate.kind !== CATALOG_SOURCE) return false;
+      const queuedEntries = readEntries(candidate.entries);
+      const queuedNotices = candidate.notices === undefined ? [] : readNotices(candidate.notices);
+      return (
+        queuedEntries !== undefined &&
+        queuedNotices !== undefined &&
+        sameEntries(queuedEntries, source.entries) &&
+        sameNotices(queuedNotices, notices)
+      );
     });
     if (queued !== undefined) return;
     try {
@@ -360,7 +536,11 @@ export class VisibilityRuntime {
   /** Agent 释放后丢弃其记录。 */
   forget(agent: Agent): void {
     this.restrictions.delete(agent);
+    this.workspaceServerNames.delete(agent);
     this.pending.delete(agent);
+    this.pendingNotices.delete(agent);
+    this.workspace?.proxy.disposeAgent(agent);
+    this.workspace?.resources?.disposeAgent(agent);
   }
 
   /** 解除全部限制。 */
@@ -368,7 +548,27 @@ export class VisibilityRuntime {
     this.disposed = true;
     for (const restriction of this.restrictions.values()) release(restriction.dispose);
     this.restrictions.clear();
+    this.workspaceServerNames.clear();
   }
+}
+
+/** 比较目录消息中的完整提醒队列。 */
+function sameNotices(a: readonly WorkspaceNotice[], b: readonly WorkspaceNotice[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((notice, index) => {
+      const other = b[index];
+      return (
+        other !== undefined &&
+        notice.id === other.id &&
+        notice.kind === other.kind &&
+        notice.serverName === other.serverName &&
+        notice.workspace === other.workspace &&
+        notice.state === other.state &&
+        notice.detail === other.detail
+      );
+    })
+  );
 }
 
 /** 调用一个 disposer；Agent 已释放时宿主可能抛错，忽略即可。 */

@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { CATALOG_SOURCE } from './constants.ts';
 import type { UserMessage } from './types.ts';
 import type { CatalogEntry, CatalogSource } from './visibility.ts';
+import { renderWorkspaceNotice, type WorkspaceNotice } from './workspace-notices.ts';
 
 /** 转义简介中的尖括号与 &，避免破坏消息结构。 */
 function escapeText(value: string): string {
@@ -35,8 +36,11 @@ const USAGE =
   'Call `mcp_manage` with `{ "server": "<name>", "command": "active" }` before you need an inactive server\'s tools, and with `"inactive"` when you no longer need them. Active servers become inactive when the current turn ends. This list replaces earlier MCP server lists in this session.';
 
 /** 渲染完整目录。 */
-export function renderCatalog(entries: readonly CatalogEntry[]): string {
-  return [
+export function renderCatalog(
+  entries: readonly CatalogEntry[],
+  notices: readonly WorkspaceNotice[] = [],
+): string {
+  const catalog = [
     '<system-reminder>',
     "The following MCP servers are configured for this session. Each server's tools are named mcp__<server>__<tool>; only active servers' tools are in your tool list.",
     '',
@@ -45,12 +49,14 @@ export function renderCatalog(entries: readonly CatalogEntry[]): string {
     USAGE,
     '</system-reminder>',
   ].join('\n');
+  return appendNotices(catalog, notices);
 }
 
 /** 渲染更新消息：列出可见性变化，并附完整目录。 */
 export function renderCatalogUpdate(
   previous: readonly CatalogEntry[],
   entries: readonly CatalogEntry[],
+  notices: readonly WorkspaceNotice[] = [],
 ): string {
   const before = new Map(previous.map((entry) => [entry.name, entry.active]));
   const activated = entries.filter((entry) => entry.active && before.get(entry.name) !== true);
@@ -76,7 +82,7 @@ export function renderCatalogUpdate(
     entries.length === 0
       ? 'No MCP servers are available. Do not call mcp__ tools from earlier lists.'
       : 'Call `mcp_manage` to change visibility. This list replaces earlier MCP server lists in this session.';
-  return [
+  const catalog = [
     '<system-reminder>',
     ...lines,
     '',
@@ -85,6 +91,13 @@ export function renderCatalogUpdate(
     tail,
     '</system-reminder>',
   ].join('\n');
+  return appendNotices(catalog, notices);
+}
+
+/** 将生命周期提醒附在同一个持久化 user 消息中。 */
+function appendNotices(text: string, notices: readonly WorkspaceNotice[]): string {
+  if (notices.length === 0) return text;
+  return [text, ...notices.map(renderWorkspaceNotice)].join('\n');
 }
 
 /** 两份目录是否相同。 */
@@ -98,6 +111,7 @@ export function sameEntries(a: readonly CatalogEntry[], b: readonly CatalogEntry
  * @param entries - 消息记录的目录。
  * @param overrides - 写入时的显式选择。
  * @param update - 是否为更新消息。
+ * @param notices - 随目录持久化的工作区生命周期提醒。
  * @returns 冻结的 user 角色消息。
  */
 export function catalogMessage(
@@ -105,6 +119,7 @@ export function catalogMessage(
   entries: readonly CatalogEntry[],
   overrides: Readonly<Record<string, boolean>>,
   update: boolean,
+  notices: readonly WorkspaceNotice[] = [],
 ): UserMessage {
   const source: CatalogSource = {
     kind: CATALOG_SOURCE,
@@ -112,6 +127,7 @@ export function catalogMessage(
     ...(update ? { update: true as const } : {}),
     entries: entries.map((entry) => ({ ...entry })),
     overrides: { ...overrides },
+    ...(notices.length === 0 ? {} : { notices: notices.map((notice) => ({ ...notice })) }),
   };
   return deepFreeze({
     id: randomUUID(),
