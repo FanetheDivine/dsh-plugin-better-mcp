@@ -16,6 +16,7 @@ import {
   setLazy,
   signOut,
   upsertServer,
+  type WorkspaceInstanceRow,
 } from './api.ts';
 import type { McpKey, NS } from './locales.ts';
 import {
@@ -57,6 +58,8 @@ const STATE_KEYS: Record<string, McpKey> = {
   failed: 'stateFailed',
   disabled: 'stateDisabled',
   closed: 'stateClosed',
+  closing: 'stateClosing',
+  'cleanup-unknown': 'stateCleanupUnknown',
 };
 
 /** 面板状态轮询间隔。 */
@@ -83,7 +86,10 @@ export function startStatusPolling(refresh: () => Promise<void>): () => void {
 }
 
 /** 把服务器状态格式化为状态名与补充元数据。 */
-export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[] {
+export function statusParts(
+  t: TranslateNS<typeof NS>,
+  row: ServerRow | WorkspaceInstanceRow,
+): string[] {
   const key = STATE_KEYS[row.state];
   const parts = [key === undefined ? row.state : t(key)];
   if (row.state === 'connected') {
@@ -104,18 +110,44 @@ export function statusParts(t: TranslateNS<typeof NS>, row: ServerRow): string[]
   return parts;
 }
 
+/** 按名称或路径过滤工作区实例。 */
+export function filterWorkspaceInstances(
+  instances: readonly WorkspaceInstanceRow[],
+  query: string,
+): WorkspaceInstanceRow[] {
+  const normalized = query.trim().toLocaleLowerCase();
+  if (normalized === '') return [...instances];
+  return instances.filter((instance) =>
+    instance.workspace.toLocaleLowerCase().includes(normalized),
+  );
+}
+
+/** 将实例分为成功组与需要关注的失败组。 */
+export function groupWorkspaceInstances(instances: readonly WorkspaceInstanceRow[]): {
+  connected: WorkspaceInstanceRow[];
+  failed: WorkspaceInstanceRow[];
+} {
+  return {
+    connected: instances.filter((instance) => instance.state === 'connected'),
+    failed: instances.filter((instance) => instance.state !== 'connected'),
+  };
+}
+
 /** 服务器行。 */
 export function ServerItem(props: {
   t: TranslateNS<typeof NS>;
   row: ServerRow;
   busy: string | undefined;
   onLazy: (lazy: boolean) => void;
-  onRestart: () => void;
+  onRestart: (workspace?: string) => void;
   onSignOut: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }): JSX.Element {
   const { t, row } = props;
+  const [workspaceQuery, setWorkspaceQuery] = useState('');
+  const filteredInstances = filterWorkspaceInstances(row.instances ?? [], workspaceQuery);
+  const groups = groupWorkspaceInstances(filteredInstances);
   const working = props.busy === row.name;
   const needsAuth = row.auth === 'oauth' && !row.authorized;
   const status = needsAuth
@@ -136,19 +168,23 @@ export function ServerItem(props: {
         <div className="better-mcp-server-main">
           <div className="better-mcp-server-title">
             <span className="better-mcp-server-name">{row.name}</span>
-            <span className="better-mcp-badge" data-state={status.state}>
-              {t(status.key)}
-            </span>
-            <span className="better-mcp-lazy" title={t('lazyHint')}>
-              <Switch
-                checked={row.lazy}
-                disabled={working}
-                onChange={props.onLazy}
-                label={t('lazyFor', { name: row.name })}
-                title={t('lazyHint')}
-              />
-              <span>{t('lazy')}</span>
-            </span>
+            {!row.workspace ? (
+              <span className="better-mcp-badge" data-state={status.state}>
+                {t(status.key)}
+              </span>
+            ) : null}
+            {!row.workspace ? (
+              <span className="better-mcp-lazy" title={t('lazyHint')}>
+                <Switch
+                  checked={row.lazy}
+                  disabled={working}
+                  onChange={props.onLazy}
+                  label={t('lazyFor', { name: row.name })}
+                  title={t('lazyHint')}
+                />
+                <span>{t('lazy')}</span>
+              </span>
+            ) : null}
           </div>
           {row.description !== undefined ? (
             <p className="better-mcp-description">{row.description}</p>
@@ -166,9 +202,36 @@ export function ServerItem(props: {
             <p>{row.error}</p>
           </details>
         ) : null}
+        {row.workspace ? (
+          <details className="better-mcp-workspace-connections">
+            <summary>{t('connections')}</summary>
+            <input
+              className="better-mcp-input better-mcp-workspace-search"
+              type="search"
+              value={workspaceQuery}
+              aria-label={t('workspaceSearch')}
+              placeholder={t('workspaceSearchPlaceholder')}
+              onChange={(event) => setWorkspaceQuery(event.target.value)}
+            />
+            <WorkspaceGroup
+              t={t}
+              title={t('connectedGroup')}
+              instances={groups.connected}
+              working={working}
+              onRestart={props.onRestart}
+            />
+            <WorkspaceGroup
+              t={t}
+              title={t('failedGroup')}
+              instances={groups.failed}
+              working={working}
+              onRestart={props.onRestart}
+            />
+          </details>
+        ) : null}
         <div className="better-mcp-actions">
-          <Button busy={working} onClick={props.onRestart}>
-            {working ? t('working') : t('restart')}
+          <Button busy={working} onClick={() => props.onRestart()}>
+            {working ? t('working') : row.workspace ? t('restartAll') : t('restart')}
           </Button>
           {row.auth === 'oauth' && row.authorized ? (
             <Button disabled={working} onClick={props.onSignOut}>
@@ -197,6 +260,47 @@ export function ServerItem(props: {
         ) : null}
       </div>
     </li>
+  );
+}
+
+/** 一个可折叠的工作区连接分组。 */
+function WorkspaceGroup({
+  t,
+  title,
+  instances,
+  working,
+  onRestart,
+}: {
+  t: TranslateNS<typeof NS>;
+  title: string;
+  instances: WorkspaceInstanceRow[];
+  working: boolean;
+  onRestart: (workspace?: string) => void;
+}): JSX.Element {
+  return (
+    <details className="better-mcp-workspace-group">
+      <summary>
+        {title} ({instances.length})
+      </summary>
+      <ul>
+        {instances.map((instance) => (
+          <li key={instance.workspaceKey} className="better-mcp-workspace-instance">
+            <div>
+              <strong>{instance.workspace}</strong>
+              <p className="better-mcp-server-meta">{statusParts(t, instance).join(' · ')}</p>
+              {instance.error ? <p className="better-mcp-form-error">{instance.error}</p> : null}
+            </div>
+            <Button
+              disabled={working}
+              onClick={() => onRestart(instance.workspace)}
+              aria-label={t('restartWorkspaceFor', { name: instance.workspace })}
+            >
+              {t('restart')}
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -353,7 +457,14 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
               row={row}
               busy={busy}
               onLazy={(lazy) => void run(row.name, () => setLazy(row.name, lazy))}
-              onRestart={() => void run(row.name, () => restart(row.name))}
+              onRestart={(workspace) =>
+                void run(row.name, () =>
+                  restart(
+                    row.name,
+                    row.workspace ? (workspace === undefined ? { all: true } : { workspace }) : {},
+                  ),
+                )
+              }
               onSignOut={() => void run(row.name, () => signOut(row.name))}
               onEdit={() => {
                 setFormError(undefined);
@@ -366,6 +477,7 @@ export function McpPanel({ t, variant, onClose }: McpPanelProps): JSX.Element {
                       transport: row.transport ?? 'streamable-http',
                       auth: row.auth,
                       lazy: row.lazy,
+                      workspace: row.workspace,
                       url: row.url,
                     },
                   ),

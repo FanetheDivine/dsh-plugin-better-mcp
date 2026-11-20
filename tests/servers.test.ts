@@ -5,7 +5,8 @@ import type { PluginConfig } from '../src/config.ts';
 import { recordKey } from '../src/credentials.ts';
 import { ServerManager, statusOf } from '../src/servers.ts';
 import { grantId } from '../src/utils.ts';
-import { type MockCtxState, makeCtx } from './helpers.ts';
+import { WorkspacePool } from '../src/workspace-pool.ts';
+import { type MockCtxState, makeAgent, makeCtx } from './helpers.ts';
 
 /** 配置。 */
 function settings(servers: PluginConfig['servers']): PluginConfig {

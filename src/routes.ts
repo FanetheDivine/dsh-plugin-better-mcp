@@ -23,9 +23,10 @@ import {
   type PendingAuthorization,
   registerClient,
 } from './oauth.ts';
-import type { PanelSnapshot, ServerManager } from './servers.ts';
+import type { PanelSnapshot, ServerManager, ServerRow, WorkspaceInstanceRow } from './servers.ts';
 import type { Context, ServerRoute, SettingsReader } from './types.ts';
 import { asString, escapeHtml, isLoopbackHttpUrl, isRecord, jsonResponse } from './utils.ts';
+import type { WorkspacePool } from './workspace-pool.ts';
 
 /** 固定回调地址不合法时的错误文本。 */
 const LOOPBACK_REDIRECT_ERROR = 'redirectUri must be an http URL on 127.0.0.1 or localhost';
@@ -100,6 +101,7 @@ export class PluginRoutes {
     private readonly manager: ServerManager,
     private readonly waitIdle: () => Promise<void> = async () => undefined,
     private readonly onAuthorizationChange: () => void = () => undefined,
+    private readonly pool?: WorkspacePool,
   ) {}
 
   /** 注册全部同源 JSON 路由。 */
@@ -234,15 +236,30 @@ export class PluginRoutes {
     const snapshot = await this.manager.snapshot();
     const origin = this.originOf(null);
     return {
-      servers: snapshot.servers.map((row) =>
-        row.auth === 'oauth'
+      servers: snapshot.servers.map((sourceRow) => {
+        const row = this.withWorkspaceInstances(sourceRow);
+        return row.auth === 'oauth'
           ? {
               ...row,
               authorizeUrl: `${origin}${OAUTH_START_PATH}?server=${encodeURIComponent(row.name)}`,
             }
-          : row,
-      ),
+          : row;
+      }),
     };
+  }
+
+  /** 为工作区配置附加实例快照与聚合状态。 */
+  private withWorkspaceInstances(row: ServerRow): ServerRow {
+    if (!row.workspace) return row;
+    const instances = (this.pool?.snapshot(row.name) ?? []) as WorkspaceInstanceRow[];
+    if (instances.length === 0) return { ...row, instances, mounted: false, state: 'idle' };
+    const states = instances.map((instance) => instance.state);
+    const state = states.includes('connected')
+      ? 'connected'
+      : ((['failed', 'cleanup-unknown', 'reconnecting', 'connecting', 'closed'] as const).find(
+          (candidate) => states.includes(candidate),
+        ) ?? row.state);
+    return { ...row, instances, mounted: true, state };
   }
 
   /** 写入一台服务器的懒加载开关，作为各会话的默认可见性。 */
@@ -264,12 +281,42 @@ export class PluginRoutes {
     return jsonResponse(await this.currentSnapshot());
   }
 
-  /** 重连一台服务器。 */
+  /** 重连共享服务器、全部工作区实例或单个工作区实例。 */
   private async restart(request: Request): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const serverName = asString(body.server);
-    if (serverName === undefined || this.getSettings().servers[serverName] === undefined) {
+    const definition =
+      serverName === undefined ? undefined : this.getSettings().servers[serverName];
+    if (serverName === undefined || definition === undefined) {
       return jsonResponse({ error: `Unknown server '${String(body.server)}'` }, 400);
+    }
+    if (definition.workspace === true) {
+      if (this.pool === undefined) {
+        return jsonResponse({ error: 'Workspace MCP instances are unavailable' }, 409);
+      }
+      const workspace = body.workspace === undefined ? undefined : asString(body.workspace);
+      if (body.workspace !== undefined && workspace === undefined) {
+        return jsonResponse({ error: 'workspace must be a non-empty string' }, 400);
+      }
+      if (body.all !== undefined && typeof body.all !== 'boolean') {
+        return jsonResponse({ error: 'all must be a boolean' }, 400);
+      }
+      if (body.all === true && workspace !== undefined) {
+        return jsonResponse({ error: 'all and workspace cannot be used together' }, 400);
+      }
+      if (body.all === false && workspace === undefined) {
+        return jsonResponse({ error: 'workspace is required when all is false' }, 400);
+      }
+      try {
+        if (workspace === undefined) await this.pool.restart(serverName);
+        else await this.pool.restart(serverName, workspace);
+      } catch (error) {
+        const message = messageOf(error);
+        const status =
+          workspace !== undefined && message.startsWith('No workspace MCP instance') ? 404 : 409;
+        return jsonResponse({ error: message }, status);
+      }
+      return jsonResponse(await this.currentSnapshot());
     }
     try {
       await this.manager.restart(serverName);

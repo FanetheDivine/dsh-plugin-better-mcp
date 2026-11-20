@@ -17,6 +17,17 @@ import type {
 } from './types.ts';
 import { isRecord } from './utils.ts';
 
+/** 一个工作区实例的面板行。 */
+export interface WorkspaceInstanceRow extends StatusView {
+  serverName: string;
+  workspace: string;
+  workspaceKey: string;
+  internalName: string;
+  generation: number;
+  boundAgents: number;
+  activeAgents: number;
+}
+
 /** 面板里的一台服务器。 */
 export interface ServerRow extends StatusView {
   /** 服务器名。 */
@@ -33,6 +44,8 @@ export interface ServerRow extends StatusView {
   lazy: boolean;
   /** 是否使用工作区实例。 */
   workspace: boolean;
+  /** 工作区实例，按路径排序。 */
+  instances?: WorkspaceInstanceRow[];
   /** 是否已有授权。 */
   authorized: boolean;
   /** 完整鉴权地址，仅在快照返回时补上。 */

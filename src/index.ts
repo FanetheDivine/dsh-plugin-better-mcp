@@ -53,6 +53,7 @@ export function apply(ctx: Context, config?: unknown): void {
     manager,
     () => reconciliation,
     () => afterReconcile?.(),
+    pool,
   );
 
   routes.registerApi();

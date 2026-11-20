@@ -96,15 +96,15 @@ description: "Task list for workspace-scoped MCP instances"
 
 ### Tests for User Story 3
 
-- [ ] T021 [P] [US3] 编写状态快照、全部/单实例重连参数与错误码的失败测试，修改 `tests/routes.test.ts` 与 `tests/servers.test.ts`
-- [ ] T022 [P] [US3] 编写工作区开关、隐藏 lazy、连接分组、折叠、搜索和重连按钮的失败测试，修改 `tests/client.test.ts`
+- [X] T021 [P] [US3] 编写状态快照、全部/单实例重连参数与错误码的失败测试，修改 `tests/routes.test.ts` 与 `tests/servers.test.ts`
+- [X] T022 [P] [US3] 编写工作区开关、隐藏 lazy、连接分组、折叠、搜索和重连按钮的失败测试，修改 `tests/client.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T023 [US3] 扩展实例快照和重连路由，支持 `all: true`、workspace 参数、404 与参数冲突，修改 `src/servers.ts` 与 `src/routes.ts`
-- [ ] T024 [P] [US3] 实现工作区开关、问号帮助和 stdio 下隐藏 lazy，修改 `src/client/server-form.tsx` 与 `src/client/api.ts`
-- [ ] T025 [US3] 实现可折叠连接情况、成功/失败分组、路径搜索、全部重连与单实例重连，修改 `src/client/panel.tsx`
-- [ ] T026 [P] [US3] 增加全部中英文面板与提醒文案，修改 `src/client/locales.ts`
+- [X] T023 [US3] 扩展实例快照和重连路由，支持 `all: true`、workspace 参数、404 与参数冲突，修改 `src/servers.ts` 与 `src/routes.ts`
+- [X] T024 [P] [US3] 实现工作区开关、问号帮助和 stdio 下隐藏 lazy，修改 `src/client/server-form.tsx` 与 `src/client/api.ts`
+- [X] T025 [US3] 实现可折叠连接情况、成功/失败分组、路径搜索、全部重连与单实例重连，修改 `src/client/panel.tsx`
+- [X] T026 [P] [US3] 增加全部中英文面板与提醒文案，修改 `src/client/locales.ts`
 
 **Checkpoint**: US3 独立可用，提交 Phase 5 commit
 

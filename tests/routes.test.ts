@@ -6,7 +6,9 @@ import { readClientSecret, readGrant, recordKey } from '../src/credentials.ts';
 import { PluginRoutes } from '../src/routes.ts';
 import { ServerManager } from '../src/servers.ts';
 import { grantId } from '../src/utils.ts';
-import { makeCtx, volatile } from './helpers.ts';
+import { workspaceInternalName } from '../src/workspace-names.ts';
+import { WorkspacePool } from '../src/workspace-pool.ts';
+import { makeAgent, makeCtx, volatile } from './helpers.ts';
 
 beforeEach(() => {
   vi.unstubAllGlobals();
@@ -20,6 +22,7 @@ interface Harness {
   ctx: ReturnType<typeof makeCtx>;
   routes: PluginRoutes;
   manager: ServerManager;
+  pool: WorkspacePool;
   current: () => ReturnType<typeof readConfig>;
   refs: { servers: ReturnType<typeof volatile> };
 }
@@ -38,16 +41,18 @@ function harness(
   ctx._configStore = structuredClone(current) as unknown as Record<string, unknown>;
   const logger = { info: vi.fn(), warn: vi.fn() };
   const manager = new ServerManager(ctx, () => current, logger);
+  const pool = new WorkspacePool(ctx, manager);
   const routes = new PluginRoutes(
     ctx,
     () => current,
     manager,
     async () => undefined,
     onAuthorizationChange,
+    pool,
   );
   routes.registerApi();
   routes.registerWeb();
-  return { ctx, routes, manager, current: () => current, refs };
+  return { ctx, routes, manager, pool, current: () => current, refs };
 }
 
 /** 取得一条 fetch 路由。 */
@@ -250,6 +255,57 @@ describe('status 与懒加载', () => {
     const response = await call(ctx, '/api/better-mcp/restart', { server: 'one' });
     expect(response.status).toBe(200);
     expect(ctx._managerRegistered.has('one')).toBe(true);
+  });
+
+  it('工作区快照按路径返回实例，并支持单个与全部重连', async () => {
+    const { ctx, pool } = harness({
+      serena: {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        auth: 'none',
+        workspace: true,
+      },
+    });
+    const agent = makeAgent('one') as never;
+    await pool.acquireActive(agent, 'serena', '/tmp/two');
+    await pool.acquireActive(agent, 'serena', '/tmp/one');
+
+    const snapshot = await call(ctx, '/api/better-mcp/status');
+    const row = (snapshot.json.servers as Array<Record<string, unknown>>)[0];
+    expect(row).toMatchObject({ workspace: true, mounted: true, state: 'connected' });
+    expect(
+      ((row?.instances ?? []) as Array<Record<string, unknown>>).map((item) => item.workspace),
+    ).toEqual(['/tmp/one', '/tmp/two']);
+
+    const single = await call(ctx, '/api/better-mcp/restart', {
+      server: 'serena',
+      workspace: '/tmp/one',
+    });
+    expect(single.status).toBe(200);
+    expect(ctx._managerDisposals).toContain(workspaceInternalName('serena', '/tmp/one'));
+    const beforeAll = ctx._managerDisposals.length;
+    const all = await call(ctx, '/api/better-mcp/restart', { server: 'serena', all: true });
+    expect(all.status).toBe(200);
+    expect(ctx._managerDisposals.length).toBe(beforeAll + 2);
+
+    expect(
+      (
+        await call(ctx, '/api/better-mcp/restart', {
+          server: 'serena',
+          all: true,
+          workspace: '/tmp/one',
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call(ctx, '/api/better-mcp/restart', {
+          server: 'serena',
+          workspace: '/tmp/missing',
+        })
+      ).status,
+    ).toBe(404);
   });
 });
 
