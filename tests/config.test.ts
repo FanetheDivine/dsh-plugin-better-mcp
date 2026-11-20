@@ -98,6 +98,65 @@ describe('服务器定义校验', () => {
     expect(stdio.auth).toBe('none');
   });
 
+  it('workspace 缺省为 false', () => {
+    const definition = normalizeServerDefinition('one', {
+      description: 'd',
+      transport: 'stdio',
+      command: 'node',
+    });
+    expect(definition.workspace).toBe(false);
+  });
+
+  it('共享服务器保留 lazy 配置', () => {
+    const definition = normalizeServerDefinition('one', {
+      description: 'd',
+      transport: 'stdio',
+      command: 'node',
+      workspace: false,
+      lazy: false,
+    });
+    expect(definition.workspace).toBe(false);
+    expect(definition.lazy).toBe(false);
+  });
+
+  it('stdio workspace=true 强制 lazy=true', () => {
+    for (const lazy of [undefined, false, true]) {
+      const definition = normalizeServerDefinition('one', {
+        description: 'd',
+        transport: 'stdio',
+        command: 'node',
+        workspace: true,
+        lazy,
+      });
+      expect(definition.workspace).toBe(true);
+      expect(definition.lazy).toBe(true);
+    }
+  });
+
+  it('拒绝非 boolean 的 workspace', () => {
+    for (const workspace of ['true', 1, null, {}, []]) {
+      expect(() =>
+        normalizeServerDefinition('one', {
+          description: 'd',
+          transport: 'stdio',
+          command: 'node',
+          workspace,
+        }),
+      ).toThrow('servers.one.workspace must be a boolean');
+    }
+  });
+
+  it('拒绝 HTTP workspace=true', () => {
+    expect(() =>
+      normalizeServerDefinition('one', {
+        description: 'd',
+        transport: 'streamable-http',
+        url: 'https://x',
+        workspace: true,
+      }),
+    ).toThrow('servers.one.workspace requires stdio');
+  });
+
   it('简介必填并去掉首尾空白', () => {
     expect(() => normalizeServerDefinition('one', { transport: 'stdio', command: 'node' })).toThrow(
       'servers.one.description is required',
@@ -188,6 +247,15 @@ describe('Config schema', () => {
     const parsed = Config({});
     expect(typeof parsed.servers.get).toBe('function');
     expect(parsed.servers.get()).toEqual({});
+  });
+
+  it('支持 workspace 布尔字段', () => {
+    const parsed = Config({
+      servers: {
+        one: { description: 'd', transport: 'stdio', command: 'node', workspace: true },
+      },
+    });
+    expect(parsed.servers.get()).toMatchObject({ one: { workspace: true } });
   });
 
   it('拒绝非法传输方式', () => {

@@ -33,11 +33,11 @@ description: "Task list for workspace-scoped MCP instances"
 
 **⚠️ CRITICAL**: 本阶段完成前不开始用户故事
 
-- [ ] T003 [P] 增加 `workspace: boolean` 严格校验、默认 `false`、仅 stdio 可为 true 且工作区级强制 lazy，修改 `src/config.ts` 与 `tests/config.test.ts`
-- [ ] T004 [P] 实现规范化工作区键、稳定内部实例名、section 名和普通公开代理名，新增 `src/workspace-names.ts` 与 `tests/workspace-names.test.ts`
-- [ ] T005 [P] 重构共享挂载以区分共享配置和工作区配置，并保持共享路径兼容，修改 `src/servers.ts` 与 `tests/servers.test.ts`
-- [ ] T006 实现 `(serverName, workspaceKey)` 实例池、串行创建、引用集合、配置 generation、Manager watch 关闭等待与结构化清理结果，新增 `src/workspace-pool.ts` 与 `tests/workspace-pool.test.ts`
-- [ ] T007 实现 Agent-local 代理定义、target 身份校验、execute/output/projectContent/finalizeContent 委托与差异同步，新增 `src/workspace-proxy.ts` 与 `tests/workspace-proxy.test.ts`
+- [X] T003 [P] 增加 `workspace: boolean` 严格校验、默认 `false`、仅 stdio 可为 true 且工作区级强制 lazy，修改 `src/config.ts` 与 `tests/config.test.ts`
+- [X] T004 [P] 实现规范化工作区键、稳定内部实例名、section 名和普通公开代理名，新增 `src/workspace-names.ts` 与 `tests/workspace-names.test.ts`
+- [X] T005 [P] 重构共享挂载以区分共享配置和工作区配置，并保持共享路径兼容，修改 `src/servers.ts` 与 `tests/servers.test.ts`
+- [X] T006 实现 `(serverName, workspaceKey)` 实例池、串行创建、引用集合、配置 generation、Manager watch 关闭等待与结构化清理结果，新增 `src/workspace-pool.ts` 与 `tests/workspace-pool.test.ts`
+- [X] T007 实现 Agent-local 代理定义、target 身份校验、execute/output/projectContent/finalizeContent 委托与差异同步，新增 `src/workspace-proxy.ts` 与 `tests/workspace-proxy.test.ts`
 
 **Checkpoint**: 配置、实例池与代理原语通过独立单元测试
 
