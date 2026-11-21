@@ -424,4 +424,39 @@ describe('WorkspaceBindings 入口接线', () => {
       rmSync(workspace, { recursive: true, force: true });
     }
   });
+
+  it('旧工作区没有实例时，切换与目录缺失都不注入清理提醒', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'better-mcp-bindings-'));
+    const config = {
+      servers: volatile({ serena: definition(true) }),
+    };
+    const agent = makeAgent('one', process.cwd());
+    const ctx = makeCtx({ config });
+    ctx._agents.push(agent);
+    const noticesOf = (messages: Array<{ source: unknown }>) =>
+      messages.flatMap(
+        (message) => (message.source as { notices?: Array<{ kind: string }> }).notices ?? [],
+      );
+    try {
+      apply(ctx, config);
+      await vi.waitFor(() =>
+        expect(ctx._registeredTools.some((tool) => tool.name === 'mcp_manage')).toBe(true),
+      );
+
+      await ctx.workingDirectory.set(asAgent(agent), workspace);
+      expect(noticesOf(agent.inbox.nextStep)).toEqual([]);
+
+      rmSync(workspace, { recursive: true });
+      const decision = (await ctx._waterfall(
+        'agent/pre-step',
+        { agent, messages: [] },
+        { kind: 'enter', messages: [] },
+      )) as { messages: Array<{ source: unknown }> };
+      expect(noticesOf(decision.messages)).toEqual([]);
+      expect(noticesOf(agent.inbox.nextStep)).toEqual([]);
+    } finally {
+      ctx._dispose();
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
 });

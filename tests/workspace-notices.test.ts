@@ -10,7 +10,7 @@ import {
 } from '../src/workspace-notices.ts';
 
 describe('active 工作区提醒', () => {
-  it('保留结构化身份并说明 Windows cwd 与共享 active 占用', () => {
+  it('保留结构化身份并说明占用、关闭时机、其他 Agent 与关闭延迟', () => {
     const notice = createActiveWorkspaceNotice('serena', 'D:/Git/Project One', 7);
     expect(notice).toMatchObject({
       id: 7,
@@ -26,9 +26,11 @@ describe('active 工作区提醒', () => {
     expect(text).toContain('is active');
     expect(text).not.toContain('is connected');
     expect(text).not.toMatch(/the running MCP process/i);
-    expect(text).toMatch(/Windows.*cwd/is);
-    expect(text).toMatch(/inactive.*before deleting/is);
-    expect(text).toMatch(/other active Agents.*occupy/is);
+    expect(text).toMatch(/cwd.*occupies the folder/is);
+    expect(text).toMatch(/closes when this Agent sets it inactive or the current turn ends/i);
+    expect(text).toMatch(/other Agents still have it active.*keep the folder occupied/is);
+    expect(text).toMatch(/Closing can take several seconds or fail to confirm/i);
+    expect(text).toMatch(/Before deleting the folder, set it inactive and confirm.*closed/is);
 
     const message = workspaceNoticeMessage(notice);
     expect(message.source).toMatchObject({

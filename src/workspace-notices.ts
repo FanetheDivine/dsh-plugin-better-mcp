@@ -27,7 +27,7 @@ export interface WorkspaceNoticeSource {
   readonly notice: WorkspaceNotice;
 }
 
-/** 创建 active 删除警告。 */
+/** 创建 active 提醒：说明占用、关闭时机、其他 Agent 占用与关闭延迟。 */
 export function createActiveWorkspaceNotice(
   serverName: string,
   workspace: string,
@@ -40,9 +40,10 @@ export function createActiveWorkspaceNotice(
     workspace,
     state: 'active',
     detail:
-      'When this MCP server runs on Windows, its process uses this workspace as its cwd and can occupy the folder. ' +
-      `Set '${serverName}' inactive before deleting the folder. ` +
-      'Other active Agents sharing this workspace may also occupy the folder.',
+      'Its process uses this workspace as its cwd and occupies the folder while it runs. ' +
+      'It closes when this Agent sets it inactive or the current turn ends, unless other Agents still have it active in this workspace; those Agents keep the folder occupied. ' +
+      'Closing can take several seconds or fail to confirm. ' +
+      'Before deleting the folder, set it inactive and confirm the result reports the instance as closed.',
   };
 }
 

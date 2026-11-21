@@ -18,7 +18,7 @@ export const zh = {
   workspace: '工作区级实例',
   workspaceHelp: '工作区级实例说明',
   workspaceHint:
-    '每个工作区使用独立实例，以工作区为 cwd；active 时连接，inactive 且无其他 active Agent 时断连。删除文件夹前必须 inactive。',
+    '每个工作区使用独立实例，以工作区为 cwd；active 时连接，inactive 或 Turn 结束且无其他 active Agent 时断连。删除文件夹前必须 inactive。',
   restart: '重连',
   restartAll: '全部重连',
   restartWorkspaceFor: '重连工作区 {name}',
@@ -102,7 +102,7 @@ export const en: Record<McpKey, string> = {
   workspace: 'Workspace instances',
   workspaceHelp: 'About workspace instances',
   workspaceHint:
-    'Each workspace gets its own instance and cwd. Active connects it; inactive closes it when no other active Agent uses it. Set it inactive before deleting the folder.',
+    'Each workspace gets its own instance and cwd. Active connects it; inactive or the end of a turn closes it when no other active Agent uses it. Set it inactive before deleting the folder.',
   restart: 'Reconnect',
   restartAll: 'Reconnect all',
   restartWorkspaceFor: 'Reconnect workspace {name}',

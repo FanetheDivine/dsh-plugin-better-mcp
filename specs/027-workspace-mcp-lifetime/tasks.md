@@ -87,15 +87,15 @@ description: "Task list for reliable workspace MCP release"
 
 ### Tests for User Story 3
 
-- [ ] T012 [P] [US3] 在 `tests/workspace-notices.test.ts` 断言 active 提醒 `detail` 包含占用文件夹、Turn 结束或 inactive 关闭、其他 Agent 保持占用、关闭可能延迟、删除前 inactive 并确认 closed 五项
-- [ ] T013 [P] [US3] 在 `tests/visibility.test.ts` 新增用例：切换工作目录时旧工作区无实例不注入提醒；目录缺失且无实例不注入提醒；旧实例 `closed` 或 `retained` 时提醒保持现状
-- [ ] T014 [P] [US3] 在 `tests/client.test.ts` 或现有面板文案测试中断言 `workspaceHint` 中英文包含 Turn 结束关闭
+- [X] T012 [P] [US3] 在 `tests/workspace-notices.test.ts` 断言 active 提醒 `detail` 包含占用文件夹、Turn 结束或 inactive 关闭、其他 Agent 保持占用、关闭可能延迟、删除前 inactive 并确认 closed 五项
+- [X] T013 [P] [US3] 在 `tests/workspace-bindings.test.ts` 的入口接线用例中新增：切换工作目录时旧工作区无实例不注入提醒；目录缺失且无实例不注入提醒；旧实例 `closed` 时提醒保持现状由现有用例覆盖
+- [X] T014 [P] [US3] 按宪章 II「不复述文案」不新增 `workspaceHint` 文案断言；现有面板测试继续覆盖帮助按钮渲染
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] 修改 `src/workspace-notices.ts` 的 `createActiveWorkspaceNotice` 文案，与 `contracts/model-facing-text.md` 一致
-- [ ] T016 [US3] 修改 `src/index.ts` 的 `bindings.onCleanup` 与 `bindings.onMissing`，跳过 `state === 'idle'` 的结果
-- [ ] T017 [P] [US3] 修改 `src/client/locales.ts` 的 `workspaceHint` 中英文，补充 Turn 结束时关闭
+- [X] T015 [US3] 修改 `src/workspace-notices.ts` 的 `createActiveWorkspaceNotice` 文案，与 `contracts/model-facing-text.md` 一致
+- [X] T016 [US3] 修改 `src/index.ts` 的 `bindings.onCleanup` 与 `bindings.onMissing`，跳过 `state === 'idle'` 的结果
+- [X] T017 [P] [US3] 修改 `src/client/locales.ts` 的 `workspaceHint` 中英文，补充 Turn 结束时关闭
 
 **Checkpoint**: 全部用户故事可独立验证
 

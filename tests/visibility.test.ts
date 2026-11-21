@@ -201,7 +201,7 @@ describe('工作区实例可见性', () => {
       ]),
     });
     expect(JSON.stringify(activeCatalog)).toContain('<system-reminder>');
-    expect(JSON.stringify(activeCatalog)).toMatch(/Windows.*cwd.*inactive.*other active Agents/is);
+    expect(JSON.stringify(activeCatalog)).toMatch(/cwd.*inactive.*other Agents/is);
 
     for (const message of agent._claim()) agent._commit(message);
     runtime.visibility.catalogFor(agent as never);
@@ -433,7 +433,9 @@ describe('工作区实例可见性', () => {
       ]),
     });
     expect(JSON.stringify(catalog?.content)).not.toContain('is connected');
-    expect(JSON.stringify(catalog?.content)).toMatch(/inactive.*before deleting/is);
+    expect(JSON.stringify(catalog?.content)).toMatch(
+      /Before deleting the folder, set it inactive/i,
+    );
   });
 
   it('恢复会话后的新 notice 不复用历史投影 id', async () => {
