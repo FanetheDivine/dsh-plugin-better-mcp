@@ -166,7 +166,7 @@ describe('apply 接线', () => {
     expect(agent.ctx.tools.get('mcp__serena__read')).toBeDefined();
     expect(agent._deny()).toContain(internalTool);
     expect(agent._resourceProviders.some((provider) => provider.server === 'serena')).toBe(true);
-    expect(JSON.stringify(agent.inbox.nextStep)).toContain('before deleting the folder');
+    expect(JSON.stringify(agent.inbox.nextStep)).toContain('Before deleting the folder');
 
     await manage?.execute({ server: 'serena', command: 'inactive' }, {
       agent,

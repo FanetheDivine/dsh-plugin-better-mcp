@@ -137,7 +137,8 @@ export function apply(ctx: Context, config?: unknown): void {
         onDeactivate: (agent, serverName) => visibility.setActive(agent, serverName, false),
       });
       bindings.onCleanup = (agent, oldWorkspace, newWorkspace, results) => {
-        for (const result of results) {
+        // 旧工作区没有实例时池返回 idle，不提醒。
+        for (const result of results.filter((candidate) => candidate.state !== 'idle')) {
           const notice = createWorkspaceCleanupNotice(result);
           const occupancy =
             result.state === 'retained'
@@ -152,7 +153,7 @@ export function apply(ctx: Context, config?: unknown): void {
         }
       };
       bindings.onMissing = (agent, workspace, results) => {
-        for (const result of results) {
+        for (const result of results.filter((candidate) => candidate.state !== 'idle')) {
           const notice = createWorkspaceCleanupNotice(result, 'workspace-missing');
           visibility.queueWorkspaceNotice(agent, {
             ...notice,

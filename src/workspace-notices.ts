@@ -27,7 +27,7 @@ export interface WorkspaceNoticeSource {
   readonly notice: WorkspaceNotice;
 }
 
-/** 创建 active 删除警告。 */
+/** 创建 active 提醒：说明占用、关闭时机、其他 Agent 占用与关闭延迟。 */
 export function createActiveWorkspaceNotice(
   serverName: string,
   workspace: string,
@@ -40,22 +40,10 @@ export function createActiveWorkspaceNotice(
     workspace,
     state: 'active',
     detail:
-      'When this MCP server runs on Windows, its process uses this workspace as its cwd and can occupy the folder. ' +
-      `Set '${serverName}' inactive before deleting the folder. ` +
-      'Other active Agents sharing this workspace may also occupy the folder.',
-  };
-}
-
-/** 创建 inactive 的共享占用或关闭结果提醒。 */
-export function createInactiveWorkspaceNotice(
-  result: WorkspaceCleanupResult,
-): WorkspaceNoticeDraft {
-  return {
-    kind: 'inactive',
-    serverName: result.serverName,
-    workspace: result.workspace,
-    state: result.state === 'idle' ? 'closed' : result.state,
-    detail: cleanupDetail(result),
+      'Its process uses this workspace as its cwd and occupies the folder while it runs. ' +
+      'It closes when this Agent sets it inactive or the current turn ends, unless other Agents still have it active in this workspace; those Agents keep the folder occupied. ' +
+      'Closing can take several seconds or fail to confirm. ' +
+      'Before deleting the folder, set it inactive and confirm the result reports the instance as closed.',
   };
 }
 
@@ -69,12 +57,15 @@ export function createWorkspaceCleanupNotice(
     serverName: result.serverName,
     workspace: result.workspace,
     state: result.state === 'idle' ? 'closed' : result.state,
-    detail: cleanupDetail(result, true),
+    detail: workspaceCleanupDetail(result, true),
   };
 }
 
-/** 关闭结果只说明插件直接子进程，不担保其他进程已经释放目录。 */
-function cleanupDetail(result: WorkspaceCleanupResult, binding = false): string {
+/**
+ * 清理结果说明，供切换与缺失提醒以及 inactive 工具结果复用。
+ * 关闭结果只说明插件直接子进程，不担保其他进程已经释放目录。
+ */
+export function workspaceCleanupDetail(result: WorkspaceCleanupResult, binding = false): string {
   if (result.state === 'retained') {
     if (binding) {
       return (

@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { catalogMessage, renderCatalog, renderCatalogUpdate, sameEntries } from '../src/catalog.ts';
+import { applyCatalogEvent, catalogProjection } from '../src/visibility.ts';
 import type { WorkspaceNotice } from '../src/workspace-notices.ts';
 
 const NOTICES: WorkspaceNotice[] = [
@@ -105,5 +106,18 @@ describe('catalogMessage', () => {
   it('sameEntries 比较完整目录', () => {
     expect(sameEntries(ENTRIES, [...ENTRIES])).toBe(true);
     expect(sameEntries(ENTRIES, [ENTRIES[0]] as typeof ENTRIES)).toBe(false);
+  });
+});
+
+describe('历史目录消息兼容', () => {
+  it('投影仍解析带 inactive 提醒的历史目录消息', () => {
+    const message = catalogMessage(renderCatalog(ENTRIES, NOTICES), ENTRIES, {}, false, NOTICES);
+    const state = applyCatalogEvent(catalogProjection.init(), {
+      type: 'user/message',
+      seq: 3,
+      data: message,
+    } as never);
+    expect(state.seq).toBe(3);
+    expect(state.notices).toEqual(NOTICES);
   });
 });
