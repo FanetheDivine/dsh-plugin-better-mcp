@@ -105,10 +105,10 @@ description: "Task list for reliable workspace MCP release"
 
 **Purpose**: 文档与实机验证
 
-- [ ] T018 [P] 更新 `docs/configuration.md` 工作区级实例一节：Turn 结束关闭、inactive 工具结果、删除前 inactive 并确认 closed、切换与缺失只在有实例时提醒
-- [ ] T019 [P] 更新 `docs/how-it-works.md`：生命周期中的 inactive 与 Turn 结束规则、notice 列表去掉 inactive、会话可见性表的 Turn 结束行
-- [ ] T020 运行 `pnpm format && pnpm full-check`
-- [ ] T021 按 `real-device-test` skill 与 `quickstart.md` 实机场景，在隔离 profile 用可报告 PID 的 stdio fixture 验证 Turn 结束关闭、共享保留与 inactive 结果，结果写入 `specs/027-workspace-mcp-lifetime/real-device-report.md`
+- [X] T018 [P] 更新 `docs/configuration.md` 工作区级实例一节：Turn 结束关闭、inactive 工具结果、删除前 inactive 并确认 closed、切换与缺失只在有实例时提醒
+- [X] T019 [P] 更新 `docs/how-it-works.md`：生命周期中的 inactive 与 Turn 结束规则、notice 列表去掉 inactive、会话可见性表的 Turn 结束行
+- [X] T020 运行 `pnpm format && pnpm full-check`
+- [X] T021 按 `real-device-test` skill 与 `quickstart.md` 实机场景，在隔离 profile 用可报告 PID 的 stdio fixture 验证 Turn 结束关闭、共享保留与 inactive 结果，结果写入 `specs/027-workspace-mcp-lifetime/real-device-report.md`
 
 ---
 

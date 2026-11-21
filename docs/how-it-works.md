@@ -72,8 +72,8 @@
 
 - Agent 创建时只建立目录绑定，不启动实例。
 - `mcp_manage` active 检查目录并注册实例，等待当前 generation 变为 `connected` 后才开放代理并返回成功；最终失败或取消时释放 active 引用。
-- inactive 立即移除当前 Agent 的代理与 resources。没有其他 active Agent 时关闭实例，否则保留并提醒共享占用。
-- Turn 结束的自动 inactive 使用同一引用规则。
+- inactive 立即移除当前 Agent 的代理与 resources。没有其他 active Agent 时关闭实例，否则保留；清理结果写入工具结果。
+- Turn 结束按实例池记录的 active 引用释放该 Agent 的全部实例，规则与 inactive 相同。宿主投影先于插件折叠 `turn/end`，此时可见性已重置，所以不以可见性判断释放对象。
 - Agent 释放只移除引用，保留实例供后续会话使用。
 - 目录切换在提交新目录后释放旧绑定。旧工作区没有其他绑定 Agent 时，等待全部旧实例清理完成再让切换工具返回。
 - 下一步与 active 前检查目录是否存在，缺失时关闭对应实例。
@@ -86,7 +86,7 @@
 
 `WorkspacePresentationRuntime` 过滤其他工作区的 instructions，并将内部显示名还原为公开配置名。资源服务器提示只显示当前 Agent 的 active 公开名称。
 
-`WorkspaceBindings` 管理目录引用与关闭屏障。active、inactive、共享占用、目录切换、目录缺失和清理结果以 notice 形式并入 catalog 的 `<system-reminder>`，由会话投影确认并去重。
+`WorkspaceBindings` 管理目录引用与关闭屏障。active、目录切换和目录缺失以 notice 形式并入 catalog 的 `<system-reminder>`，由会话投影确认并去重。切换与缺失只在旧工作区有实例时提醒。投影仍接受历史日志中的 `inactive` notice。
 
 ### 会话可见性
 
@@ -99,7 +99,7 @@
 | 工具归属 | 按最长服务器名匹配 `mcp__<server>__` 前缀 |
 | 默认值 | 会话首个 Turn 未显式选择时取 `!lazy` |
 | 显式选择 | `mcp_manage` 写入内存待定表，下一步的目录消息把它记入 `source.overrides` |
-| Turn 结束 | 目录消息早于最近 `turn/end` 时全部服务器按 inactive 计算；工作区实例异步释放 active 引用 |
+| Turn 结束 | 目录消息早于最近 `turn/end` 时全部服务器按 inactive 计算；工作区实例按实例池引用异步释放 |
 | 读取历史 | 宿主私有投影 `better-mcp-catalog` 折叠最近一条目录消息与最近 `turn/end` 的 seq |
 
 限制在以下时刻重算：

@@ -6,7 +6,9 @@
 
 **Rationale**:
 
-- 宿主的 `session-projection` 服务先于插件订阅 `session/event`。同一个 `turn/end` 事件上，目录投影先写入 `turnEndSeq`，插件读取 `isActive` 时全部服务器已是 inactive，待释放列表为空。
+- 宿主的 `session-projection` 服务先于插件订阅 `session/event`。同一个 `turn/end` 事件上，目录投影先写入 `turnEndSeq`，插件读取 `isActive` 时投影记录的选择已重置为 inactive。
+- 只有 active 选择仍留在内存待定表时，`isActive` 才为 true。待定表在 active 写入目录消息后的下一次读取时清除，所以 active 之后同一 Turn 还有后续步骤时，待释放列表为空。
+- 实机对照：修复前的构建中，active 后 Turn 只有一步回复时实例关闭；active 后还有工具调用步骤时实例泄漏。修复后两种情况都关闭，见 [real-device-report.md](./real-device-report.md)。
 - 实例池的 `activeAgents` 是 active 引用的唯一事实来源，与可见性重置时序无关。
 - 每个引用自带实例键，Turn 内切换过工作目录时也释放正确的实例。
 
