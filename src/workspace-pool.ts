@@ -468,6 +468,14 @@ export class WorkspacePool {
     return this.closeState(state);
   }
 
+  /** 释放 Agent 持有的全部 active 引用，逐个实例键按 releaseActive 规则保留或关闭。 */
+  async releaseAgentActive(agent: Agent): Promise<WorkspaceCleanupResult[]> {
+    const held = [...this.states.values()].filter((state) => state.activeAgents.has(agent));
+    return Promise.all(
+      held.map((state) => this.releaseActive(agent, state.serverName, state.workspaceKey)),
+    );
+  }
+
   /** 释放目录绑定及其 active 引用；仍有其他绑定 Agent 时保留。 */
   async releaseBinding(
     agent: Agent,

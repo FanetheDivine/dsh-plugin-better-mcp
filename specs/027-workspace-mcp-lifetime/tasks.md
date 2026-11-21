@@ -33,8 +33,8 @@ description: "Task list for reliable workspace MCP release"
 
 **⚠️ CRITICAL**: 本阶段完成前不开始用户故事
 
-- [ ] T003 在 `tests/workspace-pool.test.ts` 新增测试：单 Agent 持有两个实例键的 active 引用时全部释放并返回每个键的清理结果；共享键返回 `retained`；没有引用时返回空数组；只释放 `activeAgents`，保留 `boundAgents`
-- [ ] T004 在 `src/workspace-pool.ts` 新增按 Agent 释放全部 active 引用的方法，遍历 `activeAgents` 含该 Agent 的状态并逐个调用 `releaseActive`，返回 `WorkspaceCleanupResult[]`
+- [X] T003 在 `tests/workspace-pool.test.ts` 新增测试：单 Agent 持有两个实例键的 active 引用时全部释放并返回每个键的清理结果；共享键返回 `retained`；没有引用时返回空数组；只释放 `activeAgents`，保留 `boundAgents`
+- [X] T004 在 `src/workspace-pool.ts` 新增按 Agent 释放全部 active 引用的方法，遍历 `activeAgents` 含该 Agent 的状态并逐个调用 `releaseActive`，返回 `WorkspaceCleanupResult[]`
 
 **Checkpoint**: 实例池原语可用
 

@@ -488,3 +488,43 @@ describe('WorkspacePool generation、重启与状态', () => {
     expect(ctx._managerRegistered.has(before.internalName)).toBe(true);
   });
 });
+
+describe('WorkspacePool 按 Agent 释放 active 引用', () => {
+  it('释放该 Agent 的全部 active 引用并逐键返回清理结果，保留目录绑定', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent('one'));
+    const other = asAgent(makeAgent('two'));
+    await pool.acquireActive(agent, 'serena', '/tmp/one');
+    await pool.acquireActive(agent, 'serena', '/tmp/two');
+    await pool.acquireActive(other, 'serena', '/tmp/two');
+
+    const results = await pool.releaseAgentActive(agent);
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ workspace: '/tmp/one', state: 'closed' }),
+        expect.objectContaining({ workspace: '/tmp/two', state: 'retained' }),
+      ]),
+    );
+    expect(results).toHaveLength(2);
+    expect(ctx._managerRegistered.has(workspaceInternalName('serena', '/tmp/one'))).toBe(false);
+    const shared = pool.list().find((instance) => instance.workspaceKey === '/tmp/two');
+    expect(shared?.activeAgents).toEqual(new Set([other]));
+    expect(shared?.boundAgents.has(agent)).toBe(true);
+  });
+
+  it('没有 active 引用时返回空数组且不关闭仅绑定的实例', async () => {
+    const ctx = makeCtx();
+    const config = settings();
+    const { pool } = makePool(ctx, () => config);
+    const agent = asAgent(makeAgent('one'));
+    const other = asAgent(makeAgent('two'));
+    pool.bind(agent, 'serena', '/tmp/project');
+    await pool.acquireActive(other, 'serena', '/tmp/project');
+
+    await expect(pool.releaseAgentActive(agent)).resolves.toEqual([]);
+    expect(ctx._managerRegistered.size).toBe(1);
+  });
+});
