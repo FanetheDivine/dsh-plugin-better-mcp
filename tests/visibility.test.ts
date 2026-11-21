@@ -569,6 +569,7 @@ async function setupWorkspaceRuntime() {
     ctx,
     config,
     agent,
+    logger,
     pool,
     proxy,
     visibility,
@@ -584,38 +585,46 @@ async function setupWorkspaceRuntime() {
   };
 }
 
+/** 模拟一次模型步骤：提交待处理消息并按 pre-step 读取目录，清除已记录的待定选择。 */
+function commitStep(
+  runtime: Awaited<ReturnType<typeof setupWorkspaceRuntime>>,
+  agent: FakeAgent = runtime.agent,
+): void {
+  for (const message of agent._claim()) agent._commit(message);
+  runtime.visibility.catalogFor(agent as never);
+}
+
+/** 按宿主顺序结束 Turn：先由投影折叠 turn/end，再由插件监听释放。 */
+function endTurn(runtime: Awaited<ReturnType<typeof setupWorkspaceRuntime>>): void {
+  runtime.ctx._endTurn(runtime.agent);
+  runtime.visibility.deactivateAfterTurn(runtime.agent as never);
+}
+
 describe('Turn 结束自动停用', () => {
-  it('对所有当前 active 工作区服务器释放引用，并在异步关闭后留下目录提醒', async () => {
+  it('按宿主顺序先折叠 turn/end 再释放，关闭全部 active 工作区实例且不注入提醒', async () => {
     const runtime = await setupWorkspaceRuntime();
     const { agent, ctx, visibility } = runtime;
     await runtime.manage('serena', 'active');
     await runtime.manage('project', 'active');
-    agent._claim();
+    commitStep(runtime);
 
-    visibility.deactivateAfterTurn(agent);
+    endTurn(runtime);
 
     expect(visibility.isActive(agent, 'serena')).toBe(false);
     expect(visibility.isActive(agent, 'project')).toBe(false);
-    await vi.waitFor(() => {
-      expect(ctx._managerRegistered.size).toBe(0);
-      const catalog = agent.inbox.nextStep.findLast(
-        (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
-      );
-      expect(catalog?.source).toMatchObject({
-        notices: expect.arrayContaining([
-          expect.objectContaining({ serverName: 'serena', state: 'closed' }),
-          expect.objectContaining({ serverName: 'project', state: 'closed' }),
-        ]),
-      });
-    });
-    expect(ctx._managerDisposals).toEqual([
-      workspaceInternalName('serena', 'D:/Git/One'),
-      workspaceInternalName('project', 'D:/Git/One'),
-    ]);
+    await vi.waitFor(() => expect(ctx._managerRegistered.size).toBe(0));
+    expect([...ctx._managerDisposals].sort()).toEqual(
+      [
+        workspaceInternalName('serena', 'D:/Git/One'),
+        workspaceInternalName('project', 'D:/Git/One'),
+      ].sort(),
+    );
+    expect(runtime.pool.list()).toEqual([]);
+    expect(agent.inbox.nextStep).toHaveLength(0);
     expect(agent.inbox.nextTurn).toHaveLength(0);
   });
 
-  it('Turn 结束遇到其他 active Agent 时保留共享实例并提醒', async () => {
+  it('Turn 结束遇到其他 active Agent 时保留共享实例且其路由可用', async () => {
     const runtime = await setupWorkspaceRuntime();
     const other = makeAgent('two', 'D:/Git/One');
     runtime.ctx._agents.push(other);
@@ -626,20 +635,47 @@ describe('Turn 结束自动停用', () => {
       agent: other,
       signal: new AbortController().signal,
     } as never);
-    runtime.agent._claim();
+    runtime.ctx._registeredTools.push(
+      mcpTool(`mcp__${workspaceInternalName('serena', 'D:/Git/One')}__read`),
+    );
+    runtime.visibility.syncAll();
+    commitStep(runtime);
 
-    runtime.visibility.deactivateAfterTurn(runtime.agent);
+    endTurn(runtime);
 
-    await vi.waitFor(() => {
-      const catalog = runtime.agent.inbox.nextStep.findLast(
-        (message) => (message.source as { kind?: unknown }).kind === 'better-mcp-catalog',
-      );
-      expect(catalog?.source).toMatchObject({
-        notices: expect.arrayContaining([expect.objectContaining({ state: 'retained' })]),
-      });
-    });
+    await vi.waitFor(() => expect(runtime.pool.list()[0]?.activeAgents).toEqual(new Set([other])));
     expect(runtime.ctx._managerRegistered.size).toBe(1);
-    expect(runtime.pool.list()[0]?.activeAgents.has(other as never)).toBe(true);
+    expect(runtime.agent.ctx.tools.get('mcp__serena__read')).toBeUndefined();
+    expect(other.ctx.tools.get('mcp__serena__read')).toBeDefined();
+    expect(runtime.agent.inbox.nextStep).toHaveLength(0);
+  });
+
+  it('Turn 内 active 后 inactive，Turn 结束不重复关闭也不告警', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    await runtime.manage('serena', 'active');
+    await runtime.manage('serena', 'inactive');
+    commitStep(runtime);
+    const disposals = runtime.ctx._managerDisposals.length;
+
+    endTurn(runtime);
+    await Promise.resolve();
+
+    expect(runtime.ctx._managerDisposals).toHaveLength(disposals);
+    expect(runtime.logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('Turn 内切换工作目录后 Turn 结束只释放仍持有的引用', async () => {
+    const runtime = await setupWorkspaceRuntime();
+    await runtime.manage('serena', 'active');
+    await runtime.pool.releaseBinding(runtime.agent as never, 'serena', 'D:/Git/One');
+    runtime.ctx._setWorkingDirectory(runtime.agent, 'D:/Git/Two');
+    await runtime.manage('project', 'active');
+    commitStep(runtime);
+
+    endTurn(runtime);
+
+    await vi.waitFor(() => expect(runtime.ctx._managerRegistered.size).toBe(0));
+    expect(runtime.ctx._managerDisposals).toContain(workspaceInternalName('project', 'D:/Git/Two'));
   });
 
   it('重置默认 active 与手动 active 的服务器，且不注入唤醒消息', async () => {

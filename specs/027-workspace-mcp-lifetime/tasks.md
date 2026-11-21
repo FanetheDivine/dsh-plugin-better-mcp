@@ -48,11 +48,11 @@ description: "Task list for reliable workspace MCP release"
 
 ### Tests for User Story 1
 
-- [ ] T005 [US1] 在 `tests/visibility.test.ts` 用 `ctx._endTurn` 改写 Turn 结束测试并确认在当前实现下失败：单 Agent active 后 Turn 结束实例关闭；另一 Agent 同工作区 active 时实例保留且其路由仍可用；Turn 内 active 后 inactive 再 Turn 结束只关闭一次且无告警；Turn 内切换工作目录后 Turn 结束只释放仍持有的引用；Turn 结束不注入 `inactive` 提醒；共享服务器的 Turn 结束隐藏行为不变
+- [X] T005 [US1] 在 `tests/visibility.test.ts` 用 `ctx._endTurn` 改写 Turn 结束测试并确认在当前实现下失败：单 Agent active 后 Turn 结束实例关闭；另一 Agent 同工作区 active 时实例保留且其路由仍可用；Turn 内 active 后 inactive 再 Turn 结束只关闭一次且无告警；Turn 内切换工作目录后 Turn 结束只释放仍持有的引用；Turn 结束不注入 `inactive` 提醒；共享服务器的 Turn 结束隐藏行为不变
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] 修改 `src/visibility.ts` 的 `deactivateAfterTurn`：清除待定选择并同步限制后，调用 T004 的方法释放引用，失败只记录告警；删除对 `isActive`、当前工作目录与 `createInactiveWorkspaceNotice` 的使用
+- [X] T006 [US1] 修改 `src/visibility.ts` 的 `deactivateAfterTurn`：清除待定选择并同步限制后，调用 T004 的方法释放引用，失败只记录告警；删除对 `isActive`、当前工作目录与 `createInactiveWorkspaceNotice` 的使用
 
 **Checkpoint**: Turn 结束释放可独立验证
 

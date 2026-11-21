@@ -18,7 +18,6 @@ import type {
 import { isRecord } from './utils.ts';
 import {
   createActiveWorkspaceNotice,
-  createInactiveWorkspaceNotice,
   type WorkspaceNotice,
   type WorkspaceNoticeDraft,
 } from './workspace-notices.ts';
@@ -354,29 +353,17 @@ export class VisibilityRuntime {
     return [...remaining];
   }
 
-  /** Turn 结束后立即隐藏，并释放全部当前 active 工作区引用。 */
+  /** Turn 结束后立即隐藏，并按实例池记录释放该 Agent 的全部 active 工作区引用。 */
   deactivateAfterTurn(agent: Agent): void {
-    const workspaceKey = this.workspace?.currentWorkspaceKey(agent);
-    const activeWorkspaceServers = Object.keys(this.getSettings().servers).filter(
-      (serverName) =>
-        this.getSettings().servers[serverName]?.workspace === true &&
-        this.isActive(agent, serverName),
-    );
     this.pending.delete(agent);
     this.sync(agent);
-    if (this.workspace === undefined || workspaceKey === undefined) return;
-    for (const serverName of activeWorkspaceServers) {
-      void this.workspace.pool
-        .releaseActive(agent, serverName, workspaceKey)
-        .then((result) => {
-          this.queueWorkspaceNotice(agent, createInactiveWorkspaceNotice(result));
-        })
-        .catch((error: unknown) => {
-          this.logger.warn(
-            `better-mcp: could not release workspace MCP '${serverName}' after turn: ${String(error)}`,
-          );
-        });
-    }
+    if (this.workspace === undefined) return;
+    // 宿主投影先于本监听折叠 turn/end，可见性此时已重置，只能以实例池引用为准。
+    void this.workspace.pool.releaseAgentActive(agent).catch((error: unknown) => {
+      this.logger.warn(
+        `better-mcp: could not release workspace MCP instances after turn: ${String(error)}`,
+      );
+    });
   }
 
   /** 按当前可见性重算一个 Agent 的工具限制。 */
