@@ -66,14 +66,14 @@ description: "Task list for reliable workspace MCP release"
 
 ### Tests for User Story 2
 
-- [ ] T007 [P] [US2] 在 `tests/workspace-notices.test.ts` 删除 `createInactiveWorkspaceNotice` 用例，新增导出的清理说明函数用例：`closed`、`retained`（inactive 共享占用）、`failed`、`cleanup-unknown` 文本，后两者明确不得删除
-- [ ] T008 [P] [US2] 在 `tests/visibility.test.ts` 新增 `mcp_manage` inactive 用例：结果文本第二行为 `Workspace instance at '<workspace>': <state>. <cleanup detail>`，覆盖四种状态；未 active 直接 inactive 时无第二行；inactive 后目录消息不含 `inactive` 提醒；共享服务器 inactive 文本不变
-- [ ] T009 [P] [US2] 在 `tests/catalog.test.ts` 保留并确认带 `kind: 'inactive'` 的历史目录消息仍能被投影解析
+- [X] T007 [P] [US2] 在 `tests/workspace-notices.test.ts` 删除 `createInactiveWorkspaceNotice` 用例，新增导出的清理说明函数用例：`closed`、`retained`（inactive 共享占用）、`failed`、`cleanup-unknown` 文本，后两者明确不得删除
+- [X] T008 [P] [US2] 在 `tests/visibility.test.ts` 新增 `mcp_manage` inactive 用例：结果文本第二行为 `Workspace instance at '<workspace>': <state>. <cleanup detail>`，覆盖四种状态；未 active 直接 inactive 时无第二行；inactive 后目录消息不含 `inactive` 提醒；共享服务器 inactive 文本不变
+- [X] T009 [P] [US2] 在 `tests/catalog.test.ts` 保留并确认带 `kind: 'inactive'` 的历史目录消息仍能被投影解析
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] 修改 `src/workspace-notices.ts`：导出清理说明函数，删除 `createInactiveWorkspaceNotice`，`WorkspaceNotice['kind']` 保留 `inactive`
-- [ ] T011 [US2] 修改 `src/tools.ts`：`ManageResult` 增加可选工作区清理结果；inactive 分支不再排队提醒；`renderManageResult` 按 `contracts/model-facing-text.md` 为工作区 inactive 追加实例结果行，`idle` 不追加
+- [X] T010 [US2] 修改 `src/workspace-notices.ts`：导出清理说明函数，删除 `createInactiveWorkspaceNotice`，`WorkspaceNotice['kind']` 保留 `inactive`
+- [X] T011 [US2] 修改 `src/tools.ts`：`ManageResult` 增加可选工作区清理结果；inactive 分支不再排队提醒；`renderManageResult` 按 `contracts/model-facing-text.md` 为工作区 inactive 追加实例结果行，`idle` 不追加
 
 **Checkpoint**: inactive 结果可独立验证
 

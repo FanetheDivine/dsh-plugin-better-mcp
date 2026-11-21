@@ -46,19 +46,6 @@ export function createActiveWorkspaceNotice(
   };
 }
 
-/** 创建 inactive 的共享占用或关闭结果提醒。 */
-export function createInactiveWorkspaceNotice(
-  result: WorkspaceCleanupResult,
-): WorkspaceNoticeDraft {
-  return {
-    kind: 'inactive',
-    serverName: result.serverName,
-    workspace: result.workspace,
-    state: result.state === 'idle' ? 'closed' : result.state,
-    detail: cleanupDetail(result),
-  };
-}
-
 /** 创建目录切换或缺失时的清理提醒，供 bindings 排队。 */
 export function createWorkspaceCleanupNotice(
   result: WorkspaceCleanupResult,
@@ -69,12 +56,15 @@ export function createWorkspaceCleanupNotice(
     serverName: result.serverName,
     workspace: result.workspace,
     state: result.state === 'idle' ? 'closed' : result.state,
-    detail: cleanupDetail(result, true),
+    detail: workspaceCleanupDetail(result, true),
   };
 }
 
-/** 关闭结果只说明插件直接子进程，不担保其他进程已经释放目录。 */
-function cleanupDetail(result: WorkspaceCleanupResult, binding = false): string {
+/**
+ * 清理结果说明，供切换与缺失提醒以及 inactive 工具结果复用。
+ * 关闭结果只说明插件直接子进程，不担保其他进程已经释放目录。
+ */
+export function workspaceCleanupDetail(result: WorkspaceCleanupResult, binding = false): string {
   if (result.state === 'retained') {
     if (binding) {
       return (

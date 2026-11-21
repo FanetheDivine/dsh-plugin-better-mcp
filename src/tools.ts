@@ -7,8 +7,8 @@ import type { ServerManager, StatusView } from './servers.ts';
 import type { Agent, SettingsReader, ToolDefinition, ToolRunContext } from './types.ts';
 import { isRecord } from './utils.ts';
 import type { VisibilityRuntime } from './visibility.ts';
-import { createInactiveWorkspaceNotice } from './workspace-notices.ts';
-import type { WorkspacePool } from './workspace-pool.ts';
+import { workspaceCleanupDetail } from './workspace-notices.ts';
+import type { WorkspaceCleanupResult, WorkspacePool } from './workspace-pool.ts';
 
 /** 一次 `mcp_manage` 的已校验参数。 */
 export interface ManageArgs {
@@ -30,6 +30,8 @@ export interface ManageResult {
   toolCount?: number;
   /** 未连接时的原因。 */
   detail?: string;
+  /** 工作区级 inactive 的实例清理结果；没有实例时省略。 */
+  workspace?: WorkspaceCleanupResult;
 }
 
 /** 校验 `mcp_manage` 参数；不合法时抛错。 */
@@ -50,7 +52,13 @@ export function parseManageArgs(raw: unknown, available: readonly string[]): Man
 /** 把返回值渲染为给模型的一行说明。 */
 export function renderManageResult(result: ManageResult): string {
   const { server } = result;
-  if (!result.active) return `${server} is now inactive. Do not call mcp__${server}__ tools.`;
+  if (!result.active) {
+    const head = `${server} is now inactive. Do not call mcp__${server}__ tools.`;
+    const cleanup = result.workspace;
+    if (cleanup === undefined) return head;
+    return `${head}
+Workspace instance at '${cleanup.workspace}': ${cleanup.state}. ${workspaceCleanupDetail(cleanup)}`;
+  }
   if (result.state === 'connected') {
     return `${server} is now active. Its ${result.toolCount ?? 0} tools are available as mcp__${server}__<tool> from the next step until the current turn ends.`;
   }
@@ -103,6 +111,7 @@ export function buildManageTool(
       const active = parsed.command === 'active';
       const definition = getSettings().servers[parsed.server];
       let status: StatusView;
+      let workspaceCleanup: WorkspaceCleanupResult | undefined;
       if (definition?.workspace === true) {
         if (workspace === undefined) {
           throw new Error(`Workspace MCP server '${parsed.server}' needs a workspace pool.`);
@@ -125,17 +134,11 @@ export function buildManageTool(
         } else {
           visibility.setActive(agent, parsed.server, false);
           const cleanup = await workspace.pool.releaseActive(agent, parsed.server, workspaceKey);
-          visibility.queueWorkspaceNotice(agent, createInactiveWorkspaceNotice(cleanup));
-          status =
-            cleanup.state === 'retained'
-              ? {
-                  ...workspace.pool.status(parsed.server, workspaceKey),
-                  error: 'Other active Agents still occupy this workspace.',
-                }
-              : {
-                  state: cleanup.state,
-                  ...(cleanup.error === undefined ? {} : { error: cleanup.error }),
-                };
+          status = {
+            state: cleanup.state,
+            ...(cleanup.error === undefined ? {} : { error: cleanup.error }),
+          };
+          if (cleanup.state !== 'idle') workspaceCleanup = cleanup;
         }
       } else {
         visibility.setActive(agent, parsed.server, active);
@@ -147,6 +150,7 @@ export function buildManageTool(
         state: status.state,
         ...(status.toolCount === undefined ? {} : { toolCount: status.toolCount }),
         ...(status.error === undefined ? {} : { detail: status.error }),
+        ...(workspaceCleanup === undefined ? {} : { workspace: workspaceCleanup }),
       };
       return result as never;
     },
